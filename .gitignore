@@ -1,0 +1,11 @@
+backend/node_modules/
+backend/dist/
+backend/.env
+backend/tsconfig.tsbuildinfo
+reference/
+app/screenshots_test/goldens/
+backend/backups/
+.DS_Store
+**/.DS_Store
+app/build/
+app/.dart_tool/

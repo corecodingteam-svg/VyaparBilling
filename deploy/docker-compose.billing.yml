@@ -1,0 +1,83 @@
+# Adds the billing app to the advaitamaa.com stack (the InventorySystems repo's deploy/ folder).
+# This repo is cloned into that checkout as ./billing, i.e. next to its deploy/ folder:
+#   <checkout>/deploy/docker-compose.yml        the existing stack (Postgres, Caddy, ...)
+#   <checkout>/billing/deploy/this file
+# Compose resolves every relative path from the first -f file's folder (<checkout>/deploy), so the
+# paths below start with ../billing. Run it through ./setup-billing.sh.
+
+services:
+  caddy:
+    environment:
+      BILLING_DOMAIN: ${BILLING_DOMAIN}
+    volumes:
+      # The stack's own Caddyfile stays untouched; Caddy loads one that imports it and adds billing.
+      - ./Caddyfile:/etc/caddy/Caddyfile.main:ro
+      - ../billing/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - billing-web
+      - billing-backend
+
+  billing-web:
+    build:
+      context: ../billing/app
+      dockerfile: Dockerfile.web
+      args:
+        API_BASE_URL: https://${BILLING_DOMAIN}/api/v1
+    restart: unless-stopped
+
+  billing-backend:
+    build:
+      context: ../billing/backend
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing
+      JWT_SECRET: ${BILLING_JWT_SECRET}
+      BACKUP_DIR: /var/lib/billing/backups
+      APP_URL: https://${BILLING_DOMAIN}
+      PUBLIC_API_URL: https://${BILLING_DOMAIN}
+      # Optional: copy backups to Google Drive (see README).
+      GOOGLE_CLIENT_ID: ${BILLING_GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${BILLING_GOOGLE_CLIENT_SECRET:-}
+    volumes:
+      - billing_backups:/var/lib/billing/backups
+    depends_on:
+      billing-migrate:
+        condition: service_completed_successfully
+
+  # One-shot: creates the "billing" database on the shared Postgres server if it is missing.
+  billing-db-init:
+    image: postgres:16-alpine
+    restart: 'no'
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    command:
+      - sh
+      - -c
+      - >
+        psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -tAc "SELECT 1 FROM pg_database WHERE datname = 'billing'" | grep -q 1
+        || psql -h postgres -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "CREATE DATABASE billing"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot: applies billing database migrations on every deploy.
+  billing-migrate:
+    build:
+      context: ../billing/backend
+      target: production
+    restart: 'no'
+    working_dir: /app
+    command: ['npx', 'node-pg-migrate', 'up', '-m', '/database/migrations', '-j', 'js']
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing
+    volumes:
+      - ../billing/database/migrations:/database/migrations:ro
+    depends_on:
+      billing-db-init:
+        condition: service_completed_successfully
+
+volumes:
+  billing_backups:

@@ -1,0 +1,177 @@
+import {
+  BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
+import { Transaction } from 'kysely';
+import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_UNITS } from '../common/default-units';
+import { Db, KYSELY } from '../database/database.module';
+import { Database } from '../database/schema';
+import { AddMemberDto, ChangePasswordDto, CreateFirmDto, LoginDto, RegisterDto, UpdateMemberDto } from './dto/auth.dto';
+import { JwtPayload } from './jwt.strategy';
+
+// Compared against when the email is unknown, so response time doesn't reveal which emails exist.
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
+
+/** A new company with the starter units and expense categories every company gets. */
+export async function createFirm(trx: Transaction<Database>, values: { name: string; state_code: string | null; email?: string | null }) {
+  const firm = await trx.insertInto('firms').values(values).returning('id').executeTakeFirstOrThrow();
+  await trx.insertInto('units').values(DEFAULT_UNITS.map(([name, short_name]) => ({ firm_id: firm.id, name, short_name }))).execute();
+  await trx.insertInto('expense_categories').values(DEFAULT_EXPENSE_CATEGORIES.map((name) => ({ firm_id: firm.id, name }))).execute();
+  return firm.id;
+}
+
+@Injectable()
+export class AuthService {
+  constructor(
+    @Inject(KYSELY) private readonly db: Db,
+    private readonly jwt: JwtService,
+  ) {}
+
+  async register(dto: RegisterDto) {
+    const existing = await this.db.selectFrom('users').select('id').where('email', '=', dto.email).executeTakeFirst();
+    if (existing) throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' });
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const user = await this.db.transaction().execute(async (trx) => {
+      const firmId = await createFirm(trx, { name: dto.firmName, state_code: dto.stateCode, email: dto.email });
+      const created = await trx
+        .insertInto('users')
+        .values({ firm_id: firmId, email: dto.email, password_hash: passwordHash, full_name: dto.fullName })
+        .returning(['id', 'firm_id', 'email'])
+        .executeTakeFirstOrThrow();
+      await trx.insertInto('firm_members').values({ firm_id: firmId, user_id: created.id, role: 'owner' }).execute();
+      return created;
+    });
+    return this.issue(user.id, user.firm_id);
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.db
+      .selectFrom('users')
+      .select(['id', 'firm_id', 'password_hash'])
+      .where('email', '=', dto.email)
+      .executeTakeFirst();
+    const ok = await bcrypt.compare(dto.password, user?.password_hash ?? DUMMY_HASH);
+    if (!user || !ok) {
+      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' });
+    }
+    // Open the company they last used, or any company they still belong to.
+    const memberships = await this.db.selectFrom('firm_members').select('firm_id').where('user_id', '=', user.id).orderBy('created_at').execute();
+    const firmId = memberships.find((m) => m.firm_id === user.firm_id)?.firm_id ?? memberships[0]?.firm_id;
+    if (!firmId) throw new UnauthorizedException({ code: 'NO_ACCESS', message: 'This login no longer has access to any company.' });
+    return this.issue(user.id, firmId);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
+    if (!user || !(await bcrypt.compare(dto.currentPassword, user.password_hash))) {
+      throw new UnauthorizedException({ code: 'WRONG_PASSWORD', message: 'Current password is incorrect.' });
+    }
+    await this.db.updateTable('users').set({ password_hash: await bcrypt.hash(dto.newPassword, 10) }).where('id', '=', userId).execute();
+  }
+
+  async me(userId: string, firmId: string) {
+    const row = await this.db
+      .selectFrom('firm_members as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .innerJoin('firms as f', 'f.id', 'm.firm_id')
+      .select(['u.id', 'u.email', 'u.full_name', 'm.role', 'f.id as firm_id', 'f.name as firm_name', 'f.state_code', 'f.gstin'])
+      .where('m.user_id', '=', userId)
+      .where('m.firm_id', '=', firmId)
+      .executeTakeFirst();
+    if (!row) throw new NotFoundException();
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name,
+      role: row.role,
+      firm: { id: row.firm_id, name: row.firm_name, stateCode: row.state_code, gstin: row.gstin },
+    };
+  }
+
+  /** A token for [userId] working in [firmId]; that company is remembered as their current one. */
+  async issue(userId: string, firmId: string) {
+    const user = await this.me(userId, firmId);
+    await this.db.updateTable('users').set({ firm_id: firmId }).where('id', '=', userId).execute();
+    const payload: Omit<JwtPayload, 'role'> = { sub: userId, firmId, email: user.email };
+    return { accessToken: await this.jwt.signAsync(payload), user };
+  }
+
+  // ---------------------------------------------------------------- companies
+
+  async firms(user: JwtPayload) {
+    const rows = await this.db
+      .selectFrom('firm_members as m')
+      .innerJoin('firms as f', 'f.id', 'm.firm_id')
+      .select(['f.id', 'f.name', 'm.role'])
+      .where('m.user_id', '=', user.sub)
+      .orderBy('m.created_at')
+      .execute();
+    return rows.map((r) => ({ id: r.id, name: r.name, role: r.role, current: r.id === user.firmId }));
+  }
+
+  /** Creates another company owned by this login. Call switchFirm to start working in it. */
+  async createFirm(user: JwtPayload, dto: CreateFirmDto) {
+    const firmId = await this.db.transaction().execute(async (trx) => {
+      const id = await createFirm(trx, { name: dto.firmName, state_code: dto.stateCode, email: user.email });
+      await trx.insertInto('firm_members').values({ firm_id: id, user_id: user.sub, role: 'owner' }).execute();
+      return id;
+    });
+    return { id: firmId, name: dto.firmName, role: 'owner' as const, current: false };
+  }
+
+  async switchFirm(user: JwtPayload, firmId: string) {
+    const member = await this.db.selectFrom('firm_members').select('role').where('user_id', '=', user.sub).where('firm_id', '=', firmId).executeTakeFirst();
+    if (!member) throw new ForbiddenException({ code: 'NO_ACCESS', message: 'You do not have access to that company.' });
+    return this.issue(user.sub, firmId);
+  }
+
+  // ---------------------------------------------------------------- people in the current company
+
+  async members(firmId: string) {
+    const rows = await this.db
+      .selectFrom('firm_members as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .select(['u.id', 'u.full_name', 'u.email', 'm.role'])
+      .where('m.firm_id', '=', firmId)
+      .orderBy('m.created_at')
+      .execute();
+    return rows.map((r) => ({ id: r.id, fullName: r.full_name, email: r.email, role: r.role }));
+  }
+
+  async addMember(firmId: string, dto: AddMemberDto) {
+    let user = await this.db.selectFrom('users').select('id').where('email', '=', dto.email).executeTakeFirst();
+    if (user) {
+      const already = await this.db.selectFrom('firm_members').select('role').where('firm_id', '=', firmId).where('user_id', '=', user.id).executeTakeFirst();
+      if (already) throw new ConflictException({ code: 'ALREADY_MEMBER', message: 'This person already has access to this company.' });
+    } else {
+      // Their login lands in this company; the password given here is theirs to change.
+      user = await this.db
+        .insertInto('users')
+        .values({ firm_id: firmId, email: dto.email, password_hash: await bcrypt.hash(dto.password, 10), full_name: dto.fullName })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+    }
+    await this.db.insertInto('firm_members').values({ firm_id: firmId, user_id: user.id, role: dto.role }).execute();
+    return (await this.members(firmId)).find((m) => m.id === user!.id);
+  }
+
+  async updateMember(firmId: string, userId: string, dto: UpdateMemberDto) {
+    await this.assertNotOwner(firmId, userId);
+    await this.db.updateTable('firm_members').set({ role: dto.role }).where('firm_id', '=', firmId).where('user_id', '=', userId).execute();
+    return (await this.members(firmId)).find((m) => m.id === userId);
+  }
+
+  async removeMember(actor: JwtPayload, userId: string) {
+    if (userId === actor.sub) throw new BadRequestException({ code: 'CANNOT_REMOVE_SELF', message: 'You cannot remove yourself.' });
+    await this.assertNotOwner(actor.firmId, userId);
+    await this.db.deleteFrom('firm_members').where('firm_id', '=', actor.firmId).where('user_id', '=', userId).execute();
+  }
+
+  private async assertNotOwner(firmId: string, userId: string) {
+    const member = await this.db.selectFrom('firm_members').select('role').where('firm_id', '=', firmId).where('user_id', '=', userId).executeTakeFirst();
+    if (!member) throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'This person is not in this company.' });
+    if (member.role === 'owner') throw new ForbiddenException({ code: 'OWNER_PROTECTED', message: "The owner's access cannot be changed." });
+  }
+}

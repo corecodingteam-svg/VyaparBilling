@@ -1,0 +1,16 @@
+# Caddy config used when the billing overlay is on: the stack's own Caddyfile (mounted as
+# Caddyfile.main, global options first), followed by the billing site.
+import Caddyfile.main
+
+{$BILLING_DOMAIN} {
+	encode gzip zstd
+
+	# Swagger is for development; do not expose it publicly.
+	@docs path /api/docs*
+	respond @docs 404
+
+	@api path /api/* /health /ready
+	reverse_proxy @api billing-backend:3000
+
+	reverse_proxy billing-web:80
+}

@@ -1,0 +1,129 @@
+import 'package:equatable/equatable.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../../../core/api_client.dart';
+import '../../../core/status.dart';
+import '../../../data/models/party.dart';
+import '../../../data/repositories/parties_repository.dart';
+import '../../../shared/format.dart';
+
+enum PartyFormResult { none, saved, savedAndNew, deleted }
+
+/// Non-text state of the add/edit party dialog. Text fields live in controllers owned by the widget.
+class PartyFormState extends Equatable {
+  const PartyFormState({
+    required this.gstType,
+    required this.stateCode,
+    required this.shippingEnabled,
+    required this.toReceive,
+    required this.asOf,
+    required this.customLimit,
+    this.status = SubmitStatus.idle,
+    this.result = PartyFormResult.none,
+    this.error,
+  });
+
+  factory PartyFormState.from(Party? p) => PartyFormState(
+        gstType: p?.gstType ?? 'unregistered',
+        stateCode: p?.stateCode,
+        shippingEnabled: (p?.shippingAddress ?? '').isNotEmpty,
+        toReceive: (p?.openingBalance ?? 0) >= 0,
+        asOf: p?.openingBalanceDate ?? isoDate(DateTime.now()),
+        customLimit: p?.creditLimit != null,
+      );
+
+  final String gstType;
+  final String? stateCode;
+  final bool shippingEnabled;
+  final bool toReceive;
+  final String asOf;
+  final bool customLimit;
+  final SubmitStatus status;
+  final PartyFormResult result;
+  final String? error;
+
+  PartyFormState copyWith({
+    String? gstType,
+    String? Function()? stateCode,
+    bool? shippingEnabled,
+    bool? toReceive,
+    String? asOf,
+    bool? customLimit,
+    SubmitStatus? status,
+    PartyFormResult? result,
+    String? error,
+  }) =>
+      PartyFormState(
+        gstType: gstType ?? this.gstType,
+        stateCode: stateCode != null ? stateCode() : this.stateCode,
+        shippingEnabled: shippingEnabled ?? this.shippingEnabled,
+        toReceive: toReceive ?? this.toReceive,
+        asOf: asOf ?? this.asOf,
+        customLimit: customLimit ?? this.customLimit,
+        status: status ?? this.status,
+        result: result ?? this.result,
+        error: error,
+      );
+
+  @override
+  List<Object?> get props => [gstType, stateCode, shippingEnabled, toReceive, asOf, customLimit, status, result, error];
+}
+
+class PartyFormCubit extends Cubit<PartyFormState> {
+  PartyFormCubit(this._repo, this.party) : super(PartyFormState.from(party));
+
+  final PartiesRepository _repo;
+  final Party? party;
+
+  bool get editing => party != null;
+
+  void gstTypeChanged(String v) => emit(state.copyWith(gstType: v));
+  void stateChanged(String? v) => emit(state.copyWith(stateCode: () => v));
+  void shippingToggled(bool v) => emit(state.copyWith(shippingEnabled: v));
+  void balanceDirectionChanged(bool toReceive) => emit(state.copyWith(toReceive: toReceive));
+  void asOfChanged(String v) => emit(state.copyWith(asOf: v));
+  void creditLimitToggled(bool v) => emit(state.copyWith(customLimit: v));
+
+  /// A valid GSTIN implies a registered party in the GSTIN's state.
+  void gstinRecognised(String stateCode) => emit(state.copyWith(
+        stateCode: () => stateCode,
+        gstType: state.gstType == 'unregistered' ? 'regular' : state.gstType,
+      ));
+
+  /// [fields] holds the text-field values; the cubit adds its own selections.
+  Future<void> save(Map<String, dynamic> fields, {required bool andNew}) async {
+    if (state.status == SubmitStatus.submitting) return;
+    emit(state.copyWith(status: SubmitStatus.submitting, result: PartyFormResult.none));
+    final opening = (fields.remove('openingAmount') as num?) ?? 0;
+    final limit = fields.remove('creditLimitAmount') as num?;
+    try {
+      await _repo.save(party?.id, {
+        ...fields,
+        'gstType': state.gstType,
+        'stateCode': state.stateCode,
+        'shippingAddress': state.shippingEnabled ? fields['shippingAddress'] : '',
+        'openingBalance': state.toReceive ? opening : -opening,
+        'openingBalanceDate': state.asOf,
+        'creditLimit': state.customLimit ? limit : null,
+      });
+      if (andNew) {
+        // Fresh form for the next party.
+        emit(PartyFormState.from(null).copyWith(status: SubmitStatus.success, result: PartyFormResult.savedAndNew));
+      } else {
+        emit(state.copyWith(status: SubmitStatus.success, result: PartyFormResult.saved));
+      }
+    } catch (e) {
+      emit(state.copyWith(status: SubmitStatus.failure, error: ApiException.from(e).message));
+    }
+  }
+
+  Future<void> delete() async {
+    emit(state.copyWith(status: SubmitStatus.submitting, result: PartyFormResult.none));
+    try {
+      await _repo.delete(party!.id);
+      emit(state.copyWith(status: SubmitStatus.success, result: PartyFormResult.deleted));
+    } catch (e) {
+      emit(state.copyWith(status: SubmitStatus.failure, error: ApiException.from(e).message));
+    }
+  }
+}
