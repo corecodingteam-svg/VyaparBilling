@@ -9,17 +9,36 @@ import '../../shared/widgets.dart';
 import '../auth/bloc/auth_bloc.dart';
 import '../lock/lock_cubit.dart';
 import '../lock/lock_screen.dart';
+import '../../shell/nav.dart' show settingsGroups;
 import 'settings_cubit.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class _SettingsGroup extends InheritedWidget {
+  const _SettingsGroup(this.group, {required super.child});
+  final String group;
+
+  static String of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_SettingsGroup>()?.group ?? 'general';
 
   @override
-  Widget build(BuildContext context) => BlocProvider(create: (ctx) => SettingsCubit(ctx.read())..load(), child: const _SettingsView());
+  bool updateShouldNotify(_SettingsGroup old) => old.group != group;
+}
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key, this.group = 'general'});
+  final String group;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = settingsGroups.any((g) => g.$1 == group) ? group : 'general';
+    return BlocProvider(
+      create: (ctx) => SettingsCubit(ctx.read())..load(),
+      child: _SettingsGroup(current, child: _SettingsView(group: current)),
+    );
+  }
 }
 
 class _SettingsView extends StatelessWidget {
-  const _SettingsView();
+  const _SettingsView({required this.group});
+  final String group;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +50,7 @@ class _SettingsView extends StatelessWidget {
       },
       builder: (context, state) {
         final cubit = context.read<SettingsCubit>();
-        if (state.loadStatus == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (state.loadStatus == LoadStatus.loading) return const LoadingView();
         if (state.loadStatus == LoadStatus.failure) return ErrorRetry(error: state.error ?? 'Could not load', onRetry: cubit.load);
         final s = state.draft;
         final busy = state.status == SubmitStatus.submitting;
@@ -55,9 +74,9 @@ class _SettingsView extends StatelessWidget {
           int min = 0,
           int max = 9999,
         }) => Padding(
-          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.sm),
           child: SizedBox(
-            width: 320,
+            width: AppSize.fieldLg,
             child: TextFormField(
               key: ValueKey('$key-${state.rev}'),
               initialValue: '$value',
@@ -81,17 +100,18 @@ class _SettingsView extends StatelessWidget {
         );
         final user = context.select((AuthBloc b) => b.state.user);
 
-        return Column(
+        final title = settingsGroups.firstWhere((g) => g.$1 == group).$2;
+        final content = Column(
           children: [
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.md),
                 children: [
-                  const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 12),
+                  Text(title, style: AppText.title),
+                  const SizedBox(height: AppSpace.md),
                   // Salesmen cannot change business settings; they only get their own account below.
                   if (!(user?.isSalesman ?? false)) ...[
-                    _Section('Taxes & GST', [
+                    _Section('Taxes & GST', 'tax', [
                       toggle(
                         'Enable GST',
                         'Show tax rate and tax columns on invoices, estimates, bills and expenses.',
@@ -99,21 +119,21 @@ class _SettingsView extends StatelessWidget {
                         (v) => s.copyWith(gstEnabled: v),
                       ),
                     ]),
-                    _Section('Transactions', [
+                    _Section('Transactions', 'transaction', [
                       const Text('Number prefixes', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.xs),
                       const Text(
                         'Put before the running number of new documents, e.g. INV-1. Letters, digits, - and / only.',
-                        style: TextStyle(color: Colors.black54),
+                        style: TextStyle(color: AppColors.textMuted),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       Wrap(
                         spacing: 12,
                         runSpacing: 12,
                         children: [
                           for (final e in prefixTypes.entries)
                             SizedBox(
-                              width: 200,
+                              width: AppSize.fieldSm,
                               child: TextFormField(
                                 key: ValueKey('prefix-${e.key}-${state.rev}'),
                                 initialValue: s.prefixFor(e.key),
@@ -129,7 +149,7 @@ class _SettingsView extends StatelessWidget {
                             ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       toggle(
                         'Round off totals by default',
                         'New invoices start with "Round Off" ticked.',
@@ -171,17 +191,17 @@ class _SettingsView extends StatelessWidget {
                           max: 365,
                         ),
                     ]),
-                    _Section('Print', [
+                    _Section('Print', 'print', [
                       const Text('Invoice theme', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<String>(
                         segments: [for (final e in invoiceThemes.entries) ButtonSegment(value: e.key, label: Text(e.value))],
                         selected: {s.invoiceTheme},
                         onSelectionChanged: (v) => cubit.change((d) => d.copyWith(invoiceTheme: v.first)),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       const Text('Accent colour (Modern and Minimal themes)', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
@@ -193,14 +213,14 @@ class _SettingsView extends StatelessWidget {
                               child: CircleAvatar(
                                 radius: 16,
                                 backgroundColor: colorFromHex(hex),
-                                child: s.themeColor.toUpperCase() == hex ? const Icon(Icons.check, size: 18, color: Colors.white) : null,
+                                child: s.themeColor.toUpperCase() == hex ? const Icon(Icons.check, size: AppIconSize.sm, color: AppColors.onPrimary) : null,
                               ),
                             ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpace.lg),
                       const Text('Thermal receipt paper', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<int>(
                         segments: const [
                           ButtonSegment(value: 58, label: Text('58 mm (2 inch)')),
@@ -209,7 +229,7 @@ class _SettingsView extends StatelessWidget {
                         selected: {s.thermalWidth},
                         onSelectionChanged: (v) => cubit.change((d) => d.copyWith(thermalWidth: v.first)),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpace.lg),
                       TextFormField(
                         key: ValueKey('terms-${state.rev}'),
                         initialValue: s.invoiceTerms,
@@ -224,9 +244,9 @@ class _SettingsView extends StatelessWidget {
                           alignLabelWithHint: true,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       SizedBox(
-                        width: 320,
+                        width: AppSize.fieldLg,
                         child: TextFormField(
                           key: ValueKey('sign-${state.rev}'),
                           initialValue: s.signatureLabel,
@@ -236,7 +256,7 @@ class _SettingsView extends StatelessWidget {
                         ),
                       ),
                     ]),
-                    _Section('Party', [
+                    _Section('Party', 'party', [
                       toggle(
                         'Shipping address',
                         'Keep a shipping address for parties and print it on sale documents.',
@@ -260,18 +280,18 @@ class _SettingsView extends StatelessWidget {
                           max: 365,
                           helper: 'With a due date, that date is used instead.',
                         ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       const Text('Additional party fields', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      const Text('Your own fields on every party, e.g. "Drug licence no." Up to four.', style: TextStyle(color: Colors.black54)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.xs),
+                      const Text('Your own fields on every party, e.g. "Drug licence no." Up to four.', style: TextStyle(color: AppColors.textMuted)),
+                      const SizedBox(height: AppSpace.sm),
                       for (var i = 0; i < s.partyFields.length; i++)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: AppSpace.sm),
                           child: Row(
                             children: [
                               SizedBox(
-                                width: 260,
+                                width: AppSize.fieldMd,
                                 child: TextFormField(
                                   key: ValueKey('pf-$i-${state.rev}-${s.partyFields.length}'),
                                   initialValue: s.partyFields[i].name,
@@ -287,7 +307,7 @@ class _SettingsView extends StatelessWidget {
                                   decoration: InputDecoration(labelText: 'Field ${i + 1} name', counterText: ''),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: AppSpace.sm),
                               Checkbox(
                                 value: s.partyFields[i].showInPrint,
                                 onChanged: (v) => cubit.change(
@@ -302,7 +322,7 @@ class _SettingsView extends StatelessWidget {
                               const Flexible(child: Text('Print on invoices')),
                               IconButton(
                                 tooltip: 'Remove field',
-                                icon: const Icon(Icons.close, size: 18),
+                                icon: const Icon(Icons.close, size: AppIconSize.sm),
                                 onPressed: () => cubit.change((d) => d.copyWith(partyFields: [...d.partyFields]..removeAt(i))),
                               ),
                             ],
@@ -318,7 +338,7 @@ class _SettingsView extends StatelessWidget {
                           ),
                         ),
                     ]),
-                    _Section('Item', [
+                    _Section('Item', 'item', [
                       toggle(
                         'Stock maintenance',
                         'Show stock quantities and low-stock alerts for products.',
@@ -337,14 +357,14 @@ class _SettingsView extends StatelessWidget {
                         s.wholesalePriceEnabled,
                         (v) => s.copyWith(wholesalePriceEnabled: v),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       Wrap(
                         spacing: 12,
                         runSpacing: 12,
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           SizedBox(
-                            width: 260,
+                            width: AppSize.fieldMd,
                             child: DropdownButtonFormField<int>(
                               key: ValueKey('qd-${s.quantityDecimals}'),
                               initialValue: s.quantityDecimals,
@@ -359,7 +379,7 @@ class _SettingsView extends StatelessWidget {
                             ),
                           ),
                           SizedBox(
-                            width: 260,
+                            width: AppSize.fieldMd,
                             child: TextFormField(
                               key: ValueKey('unit-${state.rev}'),
                               initialValue: s.defaultUnit,
@@ -372,7 +392,7 @@ class _SettingsView extends StatelessWidget {
                         ],
                       ),
                     ]),
-                    _Section('Stock', [
+                    _Section('Stock', 'item', [
                       toggle(
                         'Godowns (several stores)',
                         'Every stock movement belongs to a store; transfer stock between them. Stock without a store is in the main store.',
@@ -394,7 +414,7 @@ class _SettingsView extends StatelessWidget {
                       toggle('MRP', 'Keep the maximum retail price on items and lines.', s.mrpEnabled, (v) => s.copyWith(mrpEnabled: v)),
                       link(Icons.warehouse_outlined, 'Godowns', 'Add stores and transfer stock between them.', '/godowns'),
                     ]),
-                    _Section('Taxes and charges', [
+                    _Section('Taxes and charges', 'tax', [
                       toggle(
                         'Compensation cess',
                         'A cess rate per item, charged on the taxable value next to GST.',
@@ -415,9 +435,9 @@ class _SettingsView extends StatelessWidget {
                       ),
                       if (s.additionalChargesEnabled)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: AppSpace.sm),
                           child: SizedBox(
-                            width: 420,
+                            width: AppSize.dialogMd,
                             child: TextFormField(
                               key: ValueKey('charges-${state.rev}'),
                               initialValue: s.chargeNames.join(', '),
@@ -442,7 +462,7 @@ class _SettingsView extends StatelessWidget {
                         (v) => s.copyWith(tdsEnabled: v),
                       ),
                     ]),
-                    _Section('Loyalty points', [
+                    _Section('Loyalty points', 'party', [
                       toggle(
                         'Loyalty points',
                         'Customers earn points on sales and redeem them against later bills.',
@@ -470,7 +490,7 @@ class _SettingsView extends StatelessWidget {
                         ),
                       ],
                     ]),
-                    _Section('Salesmen', [
+                    _Section('Salesmen', 'general', [
                       toggle(
                         'Salesmen see only their own',
                         'A salesman sees the parties assigned to them and the documents they entered. Off: they see everyone\'s.',
@@ -493,24 +513,24 @@ class _SettingsView extends StatelessWidget {
                       ),
                       if (s.partyGroupsEnabled) link(Icons.folder_outlined, 'Party groups', 'Add and rename groups.', '/party-groups'),
                     ]),
-                    _Section('Credit limit and item pictures', [
+                    _Section('Credit limit and item pictures', 'transaction', [
                       const Text('When a sale would take a customer past their credit limit', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<String>(
                         segments: const [ButtonSegment(value: 'warn', label: Text('Warn and ask')), ButtonSegment(value: 'block', label: Text('Refuse the sale'))],
                         selected: {s.creditLimitMode},
                         onSelectionChanged: (v) => cubit.change((d) => d.copyWith(creditLimitMode: v.first)),
                       ),
                       const Padding(
-                        padding: EdgeInsets.only(top: 6, bottom: 8),
-                        child: Text('Applies to credit sales, sale orders and delivery challans. A sale paid in full is always allowed.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        padding: EdgeInsets.only(top: AppSpace.sm, bottom: AppSpace.sm),
+                        child: Text('Applies to credit sales, sale orders and delivery challans. A sale paid in full is always allowed.', style: AppText.helper),
                       ),
                       toggle('Item pictures on invoices', 'Print each item\'s picture next to its name.', s.itemImagesOnInvoice, (v) => s.copyWith(itemImagesOnInvoice: v)),
                     ]),
-                    _Section('Messages, e-invoice and online payments', [
+                    _Section('Messages, e-invoice and online payments', 'message', [
                       link(Icons.hub_outlined, 'Integrations', 'Connect WhatsApp, SMS, the e-invoice portal, Razorpay and Google.', '/integrations'),
                       const Text('Send new sale invoices to the customer automatically', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(value: 'off', label: Text('Off')),
@@ -520,9 +540,9 @@ class _SettingsView extends StatelessWidget {
                         selected: {s.autoSendInvoices},
                         onSelectionChanged: (v) => cubit.change((d) => d.copyWith(autoSendInvoices: v.first)),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       const Text('Send a receipt for each Payment-In', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(value: 'off', label: Text('Off')),
@@ -532,14 +552,14 @@ class _SettingsView extends StatelessWidget {
                         selected: {s.autoSendPayments},
                         onSelectionChanged: (v) => cubit.change((d) => d.copyWith(autoSendPayments: v.first)),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       for (final (key, label, value, set) in <(String, String, String, FirmSettings Function(String))>[
                         ('invoiceMsg', 'Invoice message', s.invoiceMessage, (v) => s.copyWith(invoiceMessage: v)),
                         ('paymentMsg', 'Receipt message', s.paymentMessage, (v) => s.copyWith(paymentMessage: v)),
                         ('reminderMsg', 'Reminder message', s.reminderMessage, (v) => s.copyWith(reminderMessage: v)),
                       ])
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.only(bottom: AppSpace.sm),
                           child: TextFormField(
                             key: ValueKey('$key-${state.rev}'),
                             initialValue: value,
@@ -558,9 +578,9 @@ class _SettingsView extends StatelessWidget {
                       ),
                       toggle('E-way bill', 'Ask for transport details and make e-way bills.', s.ewayEnabled, (v) => s.copyWith(ewayEnabled: v)),
                       Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                        padding: const EdgeInsets.only(top: AppSpace.xs, bottom: AppSpace.sm),
                         child: SizedBox(
-                          width: 320,
+                          width: AppSize.fieldLg,
                           child: TextFormField(
                             key: ValueKey('upi-${state.rev}'),
                             initialValue: s.upiId,
@@ -576,9 +596,9 @@ class _SettingsView extends StatelessWidget {
                         (v) => s.copyWith(upiQrOnInvoice: v),
                       ),
                     ]),
-                    _Section('Backup', [
+                    _Section('Backup', 'general', [
                       const Text('Automatic backup', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(value: 'off', label: Text('Off')),
@@ -591,19 +611,28 @@ class _SettingsView extends StatelessWidget {
                       if (s.autoBackup != 'off')
                         number('keep', 'Keep the latest', s.autoBackupKeep, (v) => s.copyWith(autoBackupKeep: v), suffix: 'backups', min: 1, max: 60),
                     ]),
-                    _Section('More features', [
+                    _Section('Accounting', 'accounting', [
                       toggle(
                         'Accounting (journal entries)',
                         'Your own ledger accounts and journal entries, included in the Profit & Loss, Balance Sheet and Trial Balance.',
                         s.accountingEnabled,
                         (v) => s.copyWith(accountingEnabled: v),
                       ),
+                      if (s.accountingEnabled) ...[
+                        link(Icons.account_tree_outlined, 'Accounts', 'Your own ledger accounts.', '/ledger-accounts'),
+                        link(Icons.menu_book_outlined, 'Journal entries', 'Capital, assets, depreciation and corrections.', '/journals'),
+                      ],
+                    ]),
+                    _Section('Service reminders', 'service', [
                       toggle(
                         'Service reminders',
                         'Set a follow-up period on a service and get reminded after each sale of it.',
                         s.serviceRemindersEnabled,
                         (v) => s.copyWith(serviceRemindersEnabled: v),
                       ),
+                      if (s.serviceRemindersEnabled) link(Icons.build_circle_outlined, 'Service reminders', 'Follow-ups due or overdue.', '/service-reminders'),
+                    ]),
+                    _Section('Multi currency', 'currency', [
                       link(
                         Icons.currency_exchange,
                         'Currencies',
@@ -613,12 +642,25 @@ class _SettingsView extends StatelessWidget {
                     ]),
                   ],
                   if (user?.isAdmin ?? false)
-                    _Section('Company', [
+                    _Section('Company', 'general', [
                       link(Icons.group_outlined, 'Users', 'Give your accountant or salesmen their own login.', '/users'),
                       link(Icons.business_outlined, 'Companies', 'Switch company, add another one or restore a backup.', '/companies'),
                       link(Icons.backup_outlined, 'Backup', 'Backups on the server, Google Drive, download and restore.', '/backup'),
                     ]),
-                  _Section('Account', [
+                  _Section('Keyboard Navigation', 'keyboard', [
+                    BlocBuilder<KeyboardNavCubit, bool>(
+                      builder: (context, enabled) => SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: const Icon(Icons.keyboard_return),
+                        title: const Text('Enter Key Navigation'),
+                        subtitle: const Text('Press Enter to move to the next input field, like Tab. Multiline boxes, search boxes and fields that submit a form keep their own Enter. Saved for your login on this device.'),
+                        value: enabled,
+                        onChanged: context.read<KeyboardNavCubit>().set,
+                      ),
+                    ),
+                  ]),
+                  const _Section('Theme', 'theme', [_ThemeManager()]),
+                  _Section('Account', 'general', [
                     BlocBuilder<LockCubit, AppLockState>(
                       builder: (context, lock) => ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -664,16 +706,16 @@ class _SettingsView extends StatelessWidget {
             ),
             if (state.dirty)
               Material(
-                color: Colors.white,
+                color: AppColors.onPrimary,
                 elevation: 8,
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppSpace.md),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       const Expanded(child: Text('You have unsaved changes.')),
                       TextButton(onPressed: busy ? null : cubit.discard, child: const Text('Discard')),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppSpace.sm),
                       FilledButton(onPressed: busy ? null : cubit.save, child: const Text('Save Settings')),
                     ],
                   ),
@@ -681,27 +723,29 @@ class _SettingsView extends StatelessWidget {
               ),
           ],
         );
+        return content;
       },
     );
   }
 }
 
 class _Section extends StatelessWidget {
-  const _Section(this.title, this.children);
+  const _Section(this.title, this.group, this.children);
   final String title;
+  final String group;
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
+  Widget build(BuildContext context) => group != _SettingsGroup.of(context) ? const SizedBox.shrink() : Padding(
+    padding: const EdgeInsets.only(bottom: AppSpace.md),
     child: Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
+            Text(title, style: AppText.subtitle),
+            const SizedBox(height: AppSpace.sm),
             ...children,
           ],
         ),
@@ -738,7 +782,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   }
 
   void _submit() {
-    if (_formKey.currentState!.validate()) context.read<ChangePasswordCubit>().submit(current: _current.text, next: _next.text);
+    if (validateForm(context, _formKey, report: showError)) context.read<ChangePasswordCubit>().submit(current: _current.text, next: _next.text);
   }
 
   @override
@@ -753,10 +797,10 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       },
       builder: (context, s) => AlertDialog(
         title: const Text('Change Password'),
-        content: Form(
+        content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: _formKey,
           child: SizedBox(
-            width: 360,
+            width: AppSize.dialogSm,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -765,21 +809,21 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
                   obscureText: true,
                   autofocus: true,
                   decoration: const InputDecoration(labelText: 'Current password'),
-                  validator: (v) => (v ?? '').isEmpty ? 'Enter your current password' : null,
+                  validator: Validators.required('Current password'),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 TextFormField(
                   controller: _next,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'New password', helperText: 'At least 8 characters'),
-                  validator: (v) => (v ?? '').length < 8 ? 'Use at least 8 characters' : null,
+                  validator: Validators.minLength('Password', 8),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 TextFormField(
                   controller: _confirm,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Confirm new password'),
-                  validator: (v) => v != _next.text ? 'Passwords do not match' : null,
+                  validator: Validators.matches('Passwords', () => _next.text),
                   onFieldSubmitted: (_) => _submit(),
                 ),
               ],
@@ -793,4 +837,93 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       ),
     );
   }
+}
+
+
+/// Settings › Theme: pick the accent colour. It applies at once and is remembered for this user on this device.
+class _ThemeManager extends StatefulWidget {
+  const _ThemeManager();
+
+  @override
+  State<_ThemeManager> createState() => _ThemeManagerState();
+}
+
+class _ThemeManagerState extends State<_ThemeManager> {
+  final _hex = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _hex.dispose();
+    super.dispose();
+  }
+
+  void _applyHex(ThemeCubit cubit) {
+    final c = parseAccent(_hex.text);
+    setState(() => _error = c == null ? 'Enter a colour like #7C3AED (6 hex digits)' : null);
+    if (c != null) cubit.choose(c);
+  }
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<ThemeCubit, Color>(
+        builder: (context, accent) {
+          final cubit = context.read<ThemeCubit>();
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Accent colour', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpace.xs),
+            const Text('Buttons, links, the active menu item and highlights use this colour. It is saved for your login on this device.', style: AppText.helper),
+            const SizedBox(height: AppSpace.md),
+            Wrap(spacing: AppSpace.md, runSpacing: AppSpace.md, children: [
+              for (final (name, color) in themeAccentChoices)
+                Tooltip(
+                  message: name,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => cubit.choose(color),
+                    child: CircleAvatar(
+                      radius: AppSpace.lg,
+                      backgroundColor: color,
+                      child: accent.toARGB32() == color.toARGB32() ? const Icon(Icons.check, color: AppColors.onPrimary, size: AppIconSize.md) : null,
+                    ),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: AppSpace.lg),
+            Wrap(spacing: AppSpace.sm, crossAxisAlignment: WrapCrossAlignment.start, runSpacing: AppSpace.sm, children: [
+              SizedBox(
+                width: AppSize.fieldMd,
+                child: TextField(
+                  controller: _hex,
+                  onSubmitted: (_) => _applyHex(cubit),
+                  decoration: InputDecoration(
+                    labelText: 'Custom colour',
+                    hintText: accentHex(accent),
+                    errorText: _error,
+                    prefixIcon: Padding(padding: const EdgeInsets.all(AppSpace.md), child: DecoratedBox(decoration: BoxDecoration(color: accent, shape: BoxShape.circle))),
+                  ),
+                ),
+              ),
+              OutlinedButton(onPressed: () => _applyHex(cubit), child: const Text('Apply')),
+              TextButton(
+                onPressed: () {
+                  _hex.clear();
+                  setState(() => _error = null);
+                  cubit.reset();
+                },
+                child: const Text('Reset to default'),
+              ),
+            ]),
+            const SizedBox(height: AppSpace.lg),
+            const Text('Preview', style: TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: AppSpace.sm),
+            Wrap(spacing: AppSpace.sm, runSpacing: AppSpace.sm, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              FilledButton(onPressed: () {}, child: const Text('Primary')),
+              FilledButton(style: AppButtons.tonal, onPressed: () {}, child: const Text('Tonal')),
+              OutlinedButton(onPressed: () {}, child: const Text('Outlined')),
+              const StatusBadge('Badge', tone: BadgeTone.brand),
+              SizedBox(width: AppSize.fieldXs, child: LinearProgressIndicator(value: 0.6, borderRadius: AppRadius.smAll)),
+            ]),
+          ]);
+        },
+      );
 }

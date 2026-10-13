@@ -15,6 +15,7 @@ import '../../../data/repositories/firm_repository.dart';
 import '../../../data/models/invoice.dart' show paymentModes;
 import '../../../shared/format.dart';
 import '../../invoices/bloc/invoice_form_cubit.dart' show PartDraft;
+import '../../../shared/theme.dart';
 
 num _r2(num v) => (v * 100).round() / 100;
 
@@ -81,6 +82,7 @@ class ExpenseFormState extends Equatable {
     this.result = ExpenseFormResult.none,
     this.savedId,
     this.error,
+    this.issue,
   });
 
   final LoadStatus loadStatus;
@@ -120,6 +122,9 @@ class ExpenseFormState extends Equatable {
   final String? savedId;
   final String? error;
 
+  /// Which part of the form [error] is about, so the screen can outline it.
+  final FormIssue? issue;
+
   num amountOf(ExpenseLineDraft l) => l.amount(pricesIncludeTax);
   num get taxTotal => _r2(lines.fold<num>(0, (s, l) => s + l.tax(pricesIncludeTax)));
   num get taxableTotal => _r2(lines.fold<num>(0, (s, l) => s + l.taxable(pricesIncludeTax)));
@@ -152,6 +157,7 @@ class ExpenseFormState extends Equatable {
     ExpenseFormResult? result,
     String? savedId,
     String? error,
+    FormIssue? issue,
   }) => ExpenseFormState(
     loadStatus: loadStatus ?? this.loadStatus,
     categories: categories ?? this.categories,
@@ -175,6 +181,7 @@ class ExpenseFormState extends Equatable {
     result: result ?? this.result,
     savedId: savedId ?? this.savedId,
     error: error,
+    issue: issue,
   );
 
   @override
@@ -201,6 +208,7 @@ class ExpenseFormState extends Equatable {
     result,
     savedId,
     error,
+    issue,
   ];
 }
 
@@ -371,35 +379,42 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
   }
 
   /// Returns a message for the first problem, or null when the expense can be saved.
-  String? validate() {
+  /// The first problem and which part of the form it is about, or null when the form can be saved.
+  FormIssue? firstIssue() {
     final s = state;
-    if (s.categoryId == null) return 'Select an expense category.';
+    if (s.categoryId == null) return FormIssue('category', 'Select an expense category.');
     final filled = s.lines.where((l) => !l.isBlank).toList();
-    if (filled.isEmpty) return 'Add at least one item.';
+    if (filled.isEmpty) return FormIssue('items', 'Add at least one item.');
     for (final l in filled) {
       final row = s.lines.indexOf(l) + 1;
-      if (l.name.trim().isEmpty) return 'Row $row: enter the item name.';
+      if (l.name.trim().isEmpty) return FormIssue('row:${l.uid}', 'Row $row: enter the item name.');
       final qty = parseNum(l.qty);
-      if (qty == null || qty <= 0) return 'Row $row: enter a quantity greater than 0.';
+      if (qty == null || qty <= 0) return FormIssue('row:${l.uid}', 'Row $row: enter a quantity greater than 0.');
       final price = parseNum(l.price);
-      if (price == null || price < 0) return 'Row $row: enter a valid price.';
+      if (price == null || price < 0) return FormIssue('row:${l.uid}', 'Row $row: enter a valid price.');
     }
     for (final p in s.extraParts) {
-      if (p.value <= 0) return 'Enter the amount of each payment type, or remove the empty one.';
+      if (p.value <= 0) return FormIssue('payments', 'Enter the amount of each payment type, or remove the empty one.');
       final problem = bankAccountProblem(p.mode, p.bankAccountId, s.bankAccounts);
-      if (problem != null) return problem;
+      if (problem != null) return FormIssue('payments', problem);
     }
     if (s.extraParts.isNotEmpty && s.extraPartsTotal >= s.total) {
-      return 'The other payment types add up to the whole amount; remove one or lower them.';
+      return FormIssue('payments', 'The other payment types add up to the whole amount; remove one or lower them.');
     }
-    return bankAccountProblem(s.paymentMode, s.bankAccountId, s.bankAccounts);
+    final bank = bankAccountProblem(s.paymentMode, s.bankAccountId, s.bankAccounts);
+    return bank == null ? null : FormIssue('payments', bank);
   }
+
+  /// The message for the first problem, or null when the form can be saved.
+  String? validate() => firstIssue()?.message;
+
 
   Future<void> save({required bool andNew}) async {
     if (state.submitStatus == SubmitStatus.submitting) return;
-    final problem = validate();
-    if (problem != null) {
-      emit(state.copyWith(submitStatus: SubmitStatus.failure, result: ExpenseFormResult.none, error: problem));
+    final issue = firstIssue();
+    final problem = issue?.message;
+    if (issue != null) {
+      emit(state.copyWith(submitStatus: SubmitStatus.failure, result: ExpenseFormResult.none, error: problem, issue: issue));
       return;
     }
     emit(state.copyWith(submitStatus: SubmitStatus.submitting, result: ExpenseFormResult.none));

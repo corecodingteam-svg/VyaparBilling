@@ -10,6 +10,7 @@ import '../../core/api_client.dart';
 import '../../core/status.dart';
 import '../../shared/widgets.dart';
 import 'thermal/direct_print.dart';
+import '../../shared/theme.dart';
 
 class PdfPreviewState extends Equatable {
   const PdfPreviewState({this.status = LoadStatus.loading, this.bytes, this.fileName = 'document.pdf', this.layout, this.error});
@@ -95,8 +96,6 @@ class PdfPreviewScreen extends StatelessWidget {
       child: BlocBuilder<PdfPreviewCubit, PdfPreviewState>(
         builder: (context, state) => Scaffold(
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
             leading: IconButton(
               tooltip: 'Close',
               icon: const Icon(Icons.close),
@@ -110,19 +109,19 @@ class PdfPreviewScreen extends StatelessWidget {
                   child: DropdownButton<String>(
                     value: layouts.any((l) => l.$1 == state.layout) ? state.layout : null,
                     hint: const Text('Layout'),
-                    icon: const Icon(Icons.style_outlined, size: 20),
+                    icon: const Icon(Icons.style_outlined, size: AppIconSize.md),
                     items: [for (final (id, label) in layouts) DropdownMenuItem(value: id, child: Text(label))],
                     onChanged: (v) => context.read<PdfPreviewCubit>().layoutChanged(v!),
                   ),
                 ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.sm),
               if (editPath != null)
                 TextButton.icon(
                   onPressed: () => context.pushReplacement(editPath!),
                   icon: const Icon(Icons.edit_outlined),
                   label: const Text('Edit'),
                 ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpace.sm),
             ],
           ),
           body: switch (state.status) {
@@ -134,7 +133,7 @@ class PdfPreviewScreen extends StatelessWidget {
               canChangeOrientation: false,
               canDebug: false,
             ),
-            _ => const Center(child: CircularProgressIndicator()),
+            _ => const LoadingView(),
           },
         ),
       ),

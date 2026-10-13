@@ -109,7 +109,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
   }
 
   void _save({required bool andNew}) {
-    if (!_formKey.currentState!.validate()) {
+    if (!validateForm(context, _formKey, report: showError)) {
       // Jump to the stock tab if that is where the error is.
       final stockInvalid = [_openingQty, _openingPrice, _minStock].any((c) => _amount(c.text) != null);
       if (_cubit.state.isProduct && stockInvalid) _tabs.animateTo(1);
@@ -159,7 +159,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     }
   }
 
-  String? _amount(String? v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid number' : null;
+  String? _amount(String? v, [String label = 'This amount']) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? '$label must be a number' : null;
 
   @override
   Widget build(BuildContext context) {
@@ -169,7 +169,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
       listener: _onResult,
       builder: (context, state) {
         final catalog = context.watch<CatalogCubit>().state;
-        return Form(
+        return Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: _formKey,
           child: Column(
             children: [
@@ -177,7 +177,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
               const Divider(),
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(AppSpace.xl),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -186,17 +186,17 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
                           controller: _name,
                           autofocus: !_cubit.editing,
                           decoration: InputDecoration(labelText: state.isProduct ? 'Item Name *' : 'Service Name *'),
-                          validator: (v) => (v ?? '').trim().isEmpty ? 'Name is required' : null,
+                          validator: Validators.required('Item name'),
                         ),
                         TextFormField(
                           controller: _hsn,
                           keyboardType: TextInputType.number,
                           decoration: InputDecoration(labelText: state.isProduct ? 'Item HSN' : 'Service SAC'),
-                          validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[0-9]{4,8}$').hasMatch(v!.trim()) ? null : '4 to 8 digits',
+                          validator: Validators.hsn(),
                         ),
                         _unitField(state, catalog.units),
                       ]),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: AppSpace.md),
                       _row(narrow, [
                         _categoryField(state, catalog.categories),
                         _codeField(),
@@ -212,21 +212,21 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
                             validator: (v) {
                               final t = (v ?? '').trim();
                               final n = int.tryParse(t);
-                              return t.isEmpty || (n != null && n >= 1 && n <= 3650) ? null : 'Enter 1 to 3650 days';
+                              return t.isEmpty || (n != null && n >= 1 && n <= 3650) ? null : 'Service reminder must be a whole number of days, from 1 to 3650';
                             },
                           )
                         else
                           const SizedBox.shrink(),
                       ]),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: AppSpace.md),
                       ImageSlot(
                         label: state.isProduct ? 'Item image' : 'Service image',
                         fileId: state.imageFileId,
                         onChanged: _cubit.imageChanged,
-                        width: 120,
+                        width: AppSize.fieldXs,
                         height: 90,
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpace.lg),
                       if (state.isProduct)
                         TabBar(
                           controller: _tabs,
@@ -238,11 +238,11 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
                           ],
                         )
                       else
-                        const Text(
+                        Text(
                           'Pricing',
-                          style: TextStyle(fontWeight: FontWeight.w600, color: brandBlue),
+                          style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary),
                         ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: AppSpace.xl),
                       AnimatedBuilder(
                         animation: _tabs,
                         builder: (_, _) => IndexedStack(
@@ -265,16 +265,16 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     if (narrow) return Dialog.fullscreen(child: content);
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 720), child: content),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: AppSize.dialogForm, maxHeight: AppSize.dialogMaxHeight), child: content),
     );
   }
 
   Widget _header(ItemFormState state) => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
+    padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.md, AppSpace.sm, AppSpace.md),
     child: Row(
       children: [
-        Text(_cubit.editing ? 'Edit Item' : 'Add Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-        const SizedBox(width: 20),
+        Text(_cubit.editing ? 'Edit Item' : 'Add Item', style: AppText.title),
+        const SizedBox(width: AppSpace.xl),
         SegmentedButton<String>(
           showSelectedIcon: false,
           segments: const [
@@ -295,12 +295,12 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
 
   Widget _row(bool narrow, List<Widget> children) => narrow
       ? Column(
-          children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c)],
+          children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: AppSpace.md), child: c)],
         )
       : Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: 16), Expanded(child: children[i])],
+            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: AppSpace.lg), Expanded(child: children[i])],
           ],
         );
 
@@ -314,9 +314,9 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     items: [
       const DropdownMenuItem(value: null, child: Text('None')),
       for (final u in units) DropdownMenuItem(value: u.shortName, child: Text('${u.name} (${u.shortName})')),
-      const DropdownMenuItem(
+      DropdownMenuItem(
         value: _addNew,
-        child: Text('+ Add new unit', style: TextStyle(color: brandBlue)),
+        child: Text('+ Add new unit', style: TextStyle(color: AppColors.primary)),
       ),
     ],
     onChanged: (v) async {
@@ -334,9 +334,9 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     items: [
       const DropdownMenuItem(value: null, child: Text('None')),
       for (final c in cats) DropdownMenuItem(value: c.id, child: Text(c.name)),
-      const DropdownMenuItem(
+      DropdownMenuItem(
         value: _addNew,
-        child: Text('+ Add new category', style: TextStyle(color: brandBlue)),
+        child: Text('+ Add new category', style: TextStyle(color: AppColors.primary)),
       ),
     ],
     onChanged: (v) async {
@@ -351,7 +351,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     decoration: InputDecoration(
       labelText: 'Item Code',
       suffixIcon: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(AppSpace.sm),
         child: TextButton(
           // Random 11-digit numeric code, suitable for barcodes.
           onPressed: () {
@@ -368,7 +368,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     key: ValueKey('tax-$value'),
     initialValue: value,
     isExpanded: true,
-    decoration: const InputDecoration(filled: true, fillColor: Colors.white),
+    decoration: const InputDecoration(),
     items: const [
       DropdownMenuItem(value: false, child: Text('Without Tax')),
       DropdownMenuItem(value: true, child: Text('With Tax')),
@@ -377,13 +377,13 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
   );
 
   Widget _section(String title, Widget child) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(color: pageBg, borderRadius: BorderRadius.circular(10)),
+    padding: const EdgeInsets.all(AppSpace.lg),
+    decoration: BoxDecoration(color: AppColors.background, borderRadius: AppRadius.lgAll),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         child,
       ],
     ),
@@ -395,11 +395,11 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
         child: TextFormField(
           controller: c,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: label, prefixText: '₹ ', filled: true, fillColor: Colors.white),
-          validator: _amount,
+          decoration: InputDecoration(labelText: label, prefixText: '₹ '),
+          validator: (v) => _amount(v, label),
         ),
       ),
-      const SizedBox(width: 8),
+      const SizedBox(width: AppSpace.sm),
       Expanded(child: _taxToggle(incl, setIncl)),
     ],
   );
@@ -418,22 +418,22 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
                   child: TextFormField(
                     controller: _discount,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: 'Disc. On Sale Price', filled: true, fillColor: Colors.white),
+                    decoration: const InputDecoration(labelText: 'Disc. On Sale Price'),
                     validator: (v) {
-                      final err = _amount(v);
+                      final err = _amount(v, 'Discount');
                       if (err != null) return err;
                       final d = parseNum(v ?? '');
-                      return state.discountType == 'percent' && d != null && d > 100 ? 'Max 100%' : null;
+                      return state.discountType == 'percent' && d != null && d > 100 ? 'Discount cannot be more than 100%' : null;
                     },
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     key: ValueKey('disc-${state.discountType}'),
                     initialValue: state.discountType,
                     isExpanded: true,
-                    decoration: const InputDecoration(filled: true, fillColor: Colors.white),
+                    decoration: const InputDecoration(),
                     items: const [
                       DropdownMenuItem(value: 'percent', child: Text('Percentage')),
                       DropdownMenuItem(value: 'amount', child: Text('Amount')),
@@ -444,25 +444,23 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
               ],
             ),
           ]),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           if (state.wholesale)
             _row(narrow, [
               TextFormField(
                 controller: _wholesalePrice,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Wholesale Price', prefixText: '₹ ', filled: true, fillColor: Colors.white),
-                validator: (v) => parseNum(v ?? '') == null ? 'Enter wholesale price' : null,
+                decoration: const InputDecoration(labelText: 'Wholesale Price', prefixText: '₹ '),
+                validator: Validators.number('Wholesale price', required: true),
               ),
               TextFormField(
                 controller: _wholesaleQty,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Minimum Wholesale Qty',
-                  filled: true,
-                  fillColor: Colors.white,
-                  suffixIcon: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _cubit.wholesaleToggled(false)),
+                  suffixIcon: IconButton(icon: const Icon(Icons.close, size: AppIconSize.sm), onPressed: () => _cubit.wholesaleToggled(false)),
                 ),
-                validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter minimum quantity' : null,
+                validator: Validators.number('Minimum quantity', required: true, positive: true),
               ),
             ])
           else if (_cubit.settings.wholesalePriceEnabled)
@@ -479,7 +477,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
           DropdownButtonFormField<num?>(
             key: ValueKey('gst-${state.gstRate}'),
             initialValue: state.gstRate,
-            decoration: const InputDecoration(labelText: 'Tax Rate', filled: true, fillColor: Colors.white),
+            decoration: const InputDecoration(labelText: 'Tax Rate'),
             items: [
               const DropdownMenuItem(value: null, child: Text('None')),
               for (final r in gstRateOptions) DropdownMenuItem(value: r, child: Text('GST@${numText(r)}%')),
@@ -487,12 +485,12 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
             onChanged: _cubit.gstRateChanged,
           ),
           if (showCess) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             TextFormField(
               controller: _cess,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Compensation Cess %', filled: true, fillColor: Colors.white),
-              validator: (v) => (v ?? '').trim().isEmpty || ((parseNum(v!) ?? -1) >= 0 && parseNum(v)! <= 300) ? null : '0 to 300',
+              decoration: const InputDecoration(labelText: 'Compensation Cess %'),
+              validator: Validators.number('Cess rate', nonNegative: true, max: 300),
             ),
           ],
         ],
@@ -500,16 +498,16 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     );
     final mrp = _cubit.settings.mrpEnabled || _cubit.item?.mrp != null
         ? Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.only(bottom: AppSpace.md),
             child: Align(
               alignment: Alignment.centerLeft,
               child: SizedBox(
-                width: 260,
+                width: AppSize.fieldMd,
                 child: TextFormField(
                   controller: _mrp,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'MRP', prefixText: '₹ '),
-                  validator: _amount,
+                  validator: (v) => _amount(v, 'MRP'),
                 ),
               ),
             ),
@@ -518,7 +516,7 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     return Column(
       children: [
         sale,
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         mrp,
         _row(narrow, [purchase, taxes]),
       ],
@@ -534,23 +532,23 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
             controller: _openingQty,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(labelText: 'Opening Quantity', suffixText: unit),
-            validator: _amount,
+            validator: (v) => _amount(v, 'Opening quantity'),
           ),
           TextFormField(
             controller: _openingPrice,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
-            validator: _amount,
+            validator: (v) => _amount(v, 'At price'),
           ),
           DateField(label: 'As Of Date', value: state.openingDate, onChanged: _cubit.openingDateChanged),
         ]),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         _row(narrow, [
           TextFormField(
             controller: _minStock,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(labelText: 'Min Stock To Maintain', suffixText: unit, helperText: 'Shows a low-stock alert at or below this'),
-            validator: _amount,
+            validator: (v) => _amount(v, 'Minimum stock'),
           ),
           TextFormField(
             controller: _location,
@@ -565,23 +563,23 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
   Widget _footer(ItemFormState state) {
     final busy = state.status == SubmitStatus.submitting;
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (_cubit.editing)
             OutlinedButton(
               onPressed: busy ? null : _delete,
-              style: OutlinedButton.styleFrom(foregroundColor: payRed),
+              style: AppButtons.destructiveOutlined,
               child: const Text('Delete'),
             )
           else
             OutlinedButton(onPressed: busy ? null : () => _save(andNew: true), child: const Text('Save & New')),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.md),
           FilledButton(
             onPressed: busy ? null : () => _save(andNew: false),
             child: busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const InlineSpinner()
                 : Text(_cubit.editing ? 'Update' : 'Save'),
           ),
         ],

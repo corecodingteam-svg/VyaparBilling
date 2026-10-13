@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/status.dart';
 import '../../data/models/invoice.dart' show paymentModes;
 import '../../data/models/payment.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/period.dart';
 import '../../shared/theme.dart';
@@ -46,48 +48,54 @@ class _PaymentsView extends StatelessWidget {
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
         final bloc = context.read<PaymentsBloc>();
-        return ListView(
-          padding: const EdgeInsets.all(12),
+        return PullToRefresh(onRefresh: () => context.reloadBloc<PaymentsBloc, PaymentsEvent, PaymentsState>(const PaymentsRequested()), child: ListView(
+          padding: const EdgeInsets.all(AppSpace.md),
           children: [
             Row(
               children: [
                 Expanded(
-                  child: Text(kind.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                  child: Text(kind.title, style: AppText.title),
                 ),
+                ExportMenu(table: () => TableExport(
+                  title: kind.title,
+                  subtitle: '${displayDate(state.range.from)} to ${displayDate(state.range.to)}',
+                  headers: ['Date', 'Number', 'Party', 'Mode', kind.amountLabel],
+                  rows: [for (final p in state.visible) [displayDate(p.paymentDate), p.number, p.partyName, p.paymentMode, p.amount]],
+                )),
+                const SizedBox(width: AppSpace.sm),
                 FilledButton.icon(
                   onPressed: () => showPaymentForm(context, kind),
-                  style: FilledButton.styleFrom(backgroundColor: payRed),
                   icon: const Icon(Icons.add),
                   label: Text('Add ${kind.title}'),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             PeriodFilterBar(range: state.range, onChanged: (r) => bloc.add(PaymentsPeriodChanged(r))),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 380),
+                constraints: const BoxConstraints(maxWidth: AppSize.dialogSm),
                 child: AmountSummaryCard(title: 'Total Amount', amount: money(state.total), details: {kind.amountLabel: money(state.total)}),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Card(
               clipBehavior: Clip.antiAlias,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
                     child: Row(
                       children: [
                         const Expanded(
-                          child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          child: Text('Transactions', style: AppText.subtitle),
                         ),
                         SizedBox(
-                          width: 240,
-                          child: TextField(
+                          width: AppSize.fieldMd,
+                          child: TextField(textInputAction: TextInputAction.search, 
                             onChanged: (v) => bloc.add(PaymentsSearchChanged(v)),
                             decoration: const InputDecoration(hintText: 'Search party or number', prefixIcon: Icon(Icons.search)),
                           ),
@@ -100,7 +108,7 @@ class _PaymentsView extends StatelessWidget {
               ),
             ),
           ],
-        );
+        ));
       },
     );
   }
@@ -108,20 +116,20 @@ class _PaymentsView extends StatelessWidget {
   Widget _body(BuildContext context, PaymentsState state) {
     if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
       return const Padding(
-        padding: EdgeInsets.all(40),
-        child: Center(child: CircularProgressIndicator()),
+        padding: EdgeInsets.all(AppSpace.huge),
+        child: LoadingView(),
       );
     }
     if (state.status == LoadStatus.failure && state.payments.isEmpty) {
       return SizedBox(
-        height: 260,
+        height: AppSize.stateHeight,
         child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => context.read<PaymentsBloc>().add(const PaymentsRequested())),
       );
     }
     final rows = state.visible;
     if (rows.isEmpty) {
       return SizedBox(
-        height: 280,
+        height: AppSize.stateHeight,
         child: EmptyState(
           icon: Icons.payments_outlined,
           title: state.payments.isEmpty ? 'No transactions to show' : 'No matching transactions',
@@ -153,59 +161,48 @@ class _PaymentsView extends StatelessWidget {
         ],
       );
     }
-    return LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: c.maxWidth),
-          child: DataTable(
-            headingRowColor: const WidgetStatePropertyAll(pageBg),
-            showCheckboxColumn: false,
-            columns: [
-              const DataColumn(label: Text('Date')),
-              const DataColumn(label: Text('Ref. no.')),
-              const DataColumn(label: Text('Party Name')),
-              DataColumn(label: Text(kind.amountLabel), numeric: true),
-              const DataColumn(label: Text('Linked to invoices'), numeric: true),
-              const DataColumn(label: Text('Payment Type')),
-              const DataColumn(label: Text('Actions')),
-            ],
-            rows: [
-              for (final p in rows)
-                DataRow(
-                  onSelectChanged: (_) => showPaymentForm(context, kind, payment: p),
-                  cells: [
-                    DataCell(Text(displayDate(p.paymentDate))),
-                    DataCell(Text(p.number)),
-                    DataCell(Text(p.partyName)),
-                    DataCell(Text(money(p.amount))),
-                    DataCell(Text(p.linkedAmount == 0 ? '-' : (p.unlinkedAmount == 0 ? 'Fully' : money(p.linkedAmount)))),
-                    DataCell(Text(paymentModes[p.paymentMode] ?? p.paymentMode)),
-                    DataCell(
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            tooltip: 'Receipt / Print',
-                            icon: const Icon(Icons.print_outlined, size: 20),
-                            onPressed: () => context.push('${kind.basePath}/${p.id}/receipt'),
-                          ),
-                          _menu(context, p),
-                        ],
-                      ),
-                    ),
-                  ],
+    return PagedDataTable(
+      searchable: false, // this page has its own search box above
+      initialSortColumn: 0,
+      initialSortAscending: false,
+      columns: [
+        const TableColumnSpec('Date'),
+        const TableColumnSpec('Ref. no.'),
+        const TableColumnSpec('Party Name'),
+        TableColumnSpec(kind.amountLabel, numeric: true),
+        const TableColumnSpec('Linked to invoices', numeric: true),
+        const TableColumnSpec('Payment Type'),
+        const TableColumnSpec('Actions', sortable: false),
+      ],
+      rows: [
+        for (final p in rows)
+          TableRowData(
+            onTap: () => showPaymentForm(context, kind, payment: p),
+            sort: [p.paymentDate, int.tryParse(p.number) ?? p.number, p.partyName, p.amount, p.linkedAmount, paymentModes[p.paymentMode] ?? p.paymentMode, null],
+            cells: [
+              Text(displayDate(p.paymentDate)),
+              Text(p.number),
+              Text(p.partyName),
+              Text(money(p.amount)),
+              Text(p.linkedAmount == 0 ? '-' : (p.unlinkedAmount == 0 ? 'Fully' : money(p.linkedAmount))),
+              Text(paymentModes[p.paymentMode] ?? p.paymentMode),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: 'Receipt / Print',
+                  icon: const Icon(Icons.print_outlined, size: AppIconSize.md),
+                  onPressed: () => context.push('${kind.basePath}/${p.id}/receipt'),
                 ),
+                _menu(context, p),
+              ]),
             ],
           ),
-        ),
-      ),
+      ],
     );
   }
 
   Widget _menu(BuildContext context, Payment p) => PopupMenuButton<String>(
     tooltip: 'More',
-    icon: const Icon(Icons.more_vert, size: 20),
+    icon: const Icon(Icons.more_vert, size: AppIconSize.md),
     onSelected: (v) => switch (v) {
       'edit' => showPaymentForm(context, kind, payment: p),
       'receipt' => context.push('${kind.basePath}/${p.id}/receipt'),

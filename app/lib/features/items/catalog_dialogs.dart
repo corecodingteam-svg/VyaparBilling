@@ -8,6 +8,7 @@ import '../../shared/format.dart';
 import '../../shared/submit_dialog.dart';
 import '../../shared/widgets.dart';
 import 'bloc/adjust_stock_cubit.dart';
+import '../../shared/theme.dart';
 
 // The small dialogs below don't dispose their controllers: the dialog's exit animation can still
 // reference them after the future completes, and an unlistened controller is simply garbage-collected.
@@ -25,7 +26,7 @@ Future<Category?> showCategoryDialog(BuildContext context, {Category? category})
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Category Name'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+        validator: Validators.required('Name'),
         onFieldSubmitted: (_) => submit(),
       ),
     ],
@@ -45,14 +46,14 @@ Future<Unit?> showUnitDialog(BuildContext context) {
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Unit Name', hintText: 'e.g. Kilograms'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+        validator: Validators.required('Name'),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       TextFormField(
         controller: short,
         textCapitalization: TextCapitalization.characters,
         decoration: const InputDecoration(labelText: 'Short Name', hintText: 'e.g. KG'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a short name' : null,
+        validator: Validators.required('Short name'),
         onFieldSubmitted: (_) => submit(),
       ),
     ],
@@ -93,7 +94,7 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<AdjustStockCubit>().submit(quantity: parseNum(_qty.text)!, pricePerUnit: parseNum(_price.text), notes: _notes.text.trim());
   }
 
@@ -111,17 +112,17 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
       },
       builder: (context, s) => AlertDialog(
         title: const Text('Stock Adjustment'),
-        content: Form(
+        content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: _formKey,
           child: SizedBox(
-            width: 420,
+            width: AppSize.dialogMd,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('${widget.item.name} · current stock ${qty(widget.item.stockQty)} $unit'),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.lg),
                   SegmentedButton<String>(
                     segments: const [
                       ButtonSegment(value: 'add', label: Text('Add Stock'), icon: Icon(Icons.add)),
@@ -130,24 +131,24 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
                     selected: {s.type},
                     onSelectionChanged: (v) => cubit.typeChanged(v.first),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.lg),
                   DateField(label: 'Adjustment Date', value: s.date, onChanged: cubit.dateChanged),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(
                     controller: _qty,
                     autofocus: true,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(labelText: 'Total Qty *', suffixText: unit),
-                    validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter a quantity greater than 0' : null,
+                    validator: Validators.number('Quantity', required: true, positive: true),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(
                     controller: _price,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
-                    validator: (v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid price' : null,
+                    validator: Validators.number('Price', nonNegative: true),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(
                     controller: _notes,
                     decoration: const InputDecoration(labelText: 'Details'),

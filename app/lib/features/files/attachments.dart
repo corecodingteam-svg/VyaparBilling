@@ -8,6 +8,7 @@ import '../../core/api_client.dart';
 import '../../data/repositories/files_repository.dart';
 import '../../shared/file_io.dart';
 import '../../shared/widgets.dart';
+import '../../shared/theme.dart';
 
 /// A file on a transaction. [attachmentId] is null until the transaction itself has been saved.
 class AttachmentDraft extends Equatable {
@@ -126,7 +127,7 @@ class AttachmentsField extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(a.name, overflow: TextOverflow.ellipsis),
-        content: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 640, maxHeight: 520), child: InteractiveViewer(child: Image.memory(bytes))),
+        content: ConstrainedBox(constraints: const BoxConstraints(maxWidth: AppSize.dialogXl, maxHeight: AppSize.popoverHeight), child: InteractiveViewer(child: Image.memory(bytes))),
         actions: [
           TextButton(onPressed: () => saveBytesFile(a.name, bytes, mimeType: a.mimeType), child: const Text('Download')),
           FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
@@ -147,15 +148,15 @@ class AttachmentsField extends StatelessWidget {
         children: [
           for (final a in s.items)
             InputChip(
-              avatar: Icon(a.mimeType.startsWith('image/') ? Icons.image_outlined : Icons.picture_as_pdf_outlined, size: 18),
-              label: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 180), child: Text(a.name, overflow: TextOverflow.ellipsis)),
+              avatar: Icon(a.mimeType.startsWith('image/') ? Icons.image_outlined : Icons.picture_as_pdf_outlined, size: AppIconSize.sm),
+              label: ConstrainedBox(constraints: const BoxConstraints(maxWidth: AppSize.fieldSm), child: Text(a.name, overflow: TextOverflow.ellipsis)),
               onPressed: () => _open(context, a),
               onDeleted: () => context.read<AttachmentsCubit>().remove(a),
               deleteButtonTooltipMessage: 'Remove',
             ),
           OutlinedButton.icon(
             onPressed: s.busy ? null : () => _pick(context),
-            icon: s.busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.attach_file, size: 18),
+            icon: s.busy ? const InlineSpinner() : const Icon(Icons.attach_file, size: AppIconSize.sm),
             label: Text(s.items.isEmpty ? label : 'Add another'),
           ),
         ],
@@ -221,23 +222,23 @@ class ImageSlot extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: muted)),
-        const SizedBox(height: 6),
+        Text(label, style: TextStyle(fontSize: AppFont.small, color: muted)),
+        const SizedBox(height: AppSpace.sm),
         InkWell(
           onTap: () => _pick(context),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppRadius.mdAll,
           child: Container(
             width: width,
             height: height,
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(border: Border.all(color: const Color(0xFFCBD5E1)), borderRadius: BorderRadius.circular(8), color: Colors.white),
+            padding: const EdgeInsets.all(AppSpace.sm),
+            decoration: BoxDecoration(border: Border.all(color: AppColors.borderStrong), borderRadius: AppRadius.mdAll, color: AppColors.onPrimary),
             child: StoredImage(
               fileId: fileId,
               placeholder: Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(icon, color: muted),
-                  const SizedBox(height: 4),
-                  Text(fileId == null ? 'Upload' : 'Loading…', style: TextStyle(fontSize: 12, color: muted)),
+                  const SizedBox(height: AppSpace.xs),
+                  Text(fileId == null ? 'Upload' : 'Loading…', style: TextStyle(fontSize: AppFont.small, color: muted)),
                 ]),
               ),
             ),

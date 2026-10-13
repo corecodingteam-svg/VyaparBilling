@@ -24,9 +24,9 @@ Future<void> _saveCsv(BuildContext context, String fileName, String csv) async {
   }
 }
 
-Widget _page(String title, List<Widget> children) => ListView(padding: const EdgeInsets.all(12), children: [
-      Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 12),
+Widget _page(String title, List<Widget> children) => ListView(padding: const EdgeInsets.all(AppSpace.md), children: [
+      Text(title, style: AppText.title),
+      const SizedBox(height: AppSpace.md),
       ...children,
     ]);
 
@@ -67,14 +67,14 @@ class _ImportView extends StatelessWidget {
           builder: (ctx, s) => AlertDialog(
             title: const Text('Match columns'),
             content: SizedBox(
-              width: 460,
+              width: AppSize.dialogMd,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('For each thing the import needs, choose the column of your file that holds it.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                  const SizedBox(height: 8),
+                  const Text('For each thing the import needs, choose the column of your file that holds it.', style: AppText.helper),
+                  const SizedBox(height: AppSpace.sm),
                   for (final h in cubit.spec.headers)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: AppSpace.sm),
                       child: DropdownButtonFormField<int?>(
                         key: ValueKey('$h-${s.mapping[h]}'),
                         initialValue: s.mapping[h],
@@ -87,7 +87,7 @@ class _ImportView extends StatelessWidget {
                         onChanged: (v) => cubit.mappingChanged(h, v),
                       ),
                     ),
-                  if (s.fileError != null) Text(s.fileError!, style: const TextStyle(color: payRed)),
+                  if (s.fileError != null) Text(s.fileError!, style: const TextStyle(color: AppColors.dangerText)),
                 ]),
               ),
             ),
@@ -109,85 +109,85 @@ class _ImportView extends StatelessWidget {
         return _page(spec.title, [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.lg),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 const Text('1. These are the columns the import fills in', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 Wrap(spacing: 6, runSpacing: 6, children: [
                   for (final h in spec.headers)
-                    Chip(label: Text(h == spec.headers.first ? '$h *' : h), visualDensity: VisualDensity.compact, backgroundColor: pageBg, side: BorderSide.none),
+                    Chip(label: Text(h == spec.headers.first ? '$h *' : h), visualDensity: VisualDensity.compact, backgroundColor: AppColors.background, side: BorderSide.none),
                 ]),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 TextButton.icon(
                   onPressed: () => _saveCsv(context, spec.fileName, cubit.sampleCsv),
                   icon: const Icon(Icons.download_outlined),
                   label: const Text('Download sample file'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpace.md),
                 const Text('2. Choose your file', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 const Text(
                   'A CSV, an Excel workbook (.xlsx — for example Vyapar\'s export) or a Tally XML export. Columns with other names are matched for you; you can change the match.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                  style: AppText.helper,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 Wrap(spacing: 8, children: [
                   FilledButton.icon(onPressed: () => _pick(context), icon: const Icon(Icons.upload_file_outlined), label: const Text('Choose file')),
                   if (state.sourceHeaders.isNotEmpty) OutlinedButton.icon(onPressed: () => _match(context, state), icon: const Icon(Icons.swap_horiz), label: const Text('Match columns')),
                   if (state.fromTally) OutlinedButton.icon(onPressed: cubit.swapBalances, icon: const Icon(Icons.compare_arrows), label: const Text('Swap receive / pay')),
                   if (state.rows.isNotEmpty || state.fileError != null) TextButton(onPressed: cubit.reset, child: const Text('Clear')),
                 ]),
-                if (state.note != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(state.note!, style: const TextStyle(fontSize: 13))),
+                if (state.note != null) Padding(padding: const EdgeInsets.only(top: AppSpace.md), child: Text(state.note!, style: AppText.body)),
                 if (state.fileError != null)
-                  Padding(padding: const EdgeInsets.only(top: 10), child: Text(state.fileError!, style: const TextStyle(color: payRed))),
+                  Padding(padding: const EdgeInsets.only(top: AppSpace.md), child: Text(state.fileError!, style: const TextStyle(color: AppColors.dangerText))),
               ]),
             ),
           ),
           if (state.rows.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Card(
               clipBehavior: Clip.antiAlias,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: 8, children: [
                     Text.rich(TextSpan(children: [
                       const TextSpan(text: '3. Review   ', style: TextStyle(fontWeight: FontWeight.w600)),
-                      TextSpan(text: '${state.valid.length} ready', style: const TextStyle(color: receiveGreen, fontWeight: FontWeight.w600)),
+                      TextSpan(text: '${state.valid.length} ready', style: const TextStyle(color: AppColors.successText, fontWeight: FontWeight.w600)),
                       if (state.invalid.isNotEmpty)
-                        TextSpan(text: '   ${state.invalid.length} with problems (skipped)', style: const TextStyle(color: payRed, fontWeight: FontWeight.w600)),
+                        TextSpan(text: '   ${state.invalid.length} with problems (skipped)', style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.w600)),
                     ])),
                     if (!state.done)
                       FilledButton(
                         onPressed: state.valid.isEmpty || state.status == SubmitStatus.submitting ? null : cubit.import,
                         child: state.status == SubmitStatus.submitting
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const InlineSpinner()
                             : Text('Import ${state.valid.length} ${state.valid.length == 1 ? spec.noun : (spec.noun == 'party' ? 'parties' : '${spec.noun}s')}'),
                       ),
                   ]),
                 ),
                 if (state.done)
                   Container(
-                    color: receiveGreen.withValues(alpha: 0.08),
-                    padding: const EdgeInsets.all(16),
+                    color: AppColors.successText.withValues(alpha: 0.08),
+                    padding: const EdgeInsets.all(AppSpace.lg),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('${state.created} imported${state.serverErrors.isEmpty ? '' : ', ${state.serverErrors.length} rejected'}.',
                           style: const TextStyle(fontWeight: FontWeight.w600)),
                       for (final (line, name, message) in state.serverErrors)
-                        Padding(padding: const EdgeInsets.only(top: 4), child: Text('Line $line · $name: $message', style: const TextStyle(color: payRed))),
+                        Padding(padding: const EdgeInsets.only(top: AppSpace.xs), child: Text('Line $line · $name: $message', style: const TextStyle(color: AppColors.dangerText))),
                     ]),
                   ),
                 const Divider(),
                 for (final r in state.rows.take(200))
                   ListTile(
                     dense: true,
-                    leading: Icon(r.error == null ? Icons.check_circle_outline : Icons.error_outline, color: r.error == null ? receiveGreen : payRed, size: 20),
+                    leading: Icon(r.error == null ? Icons.check_circle_outline : Icons.error_outline, color: r.error == null ? AppColors.success : AppColors.danger, size: AppIconSize.md),
                     title: Text(r.name.isEmpty ? '(no name)' : r.name),
-                    subtitle: r.error == null ? null : Text(r.error!, style: const TextStyle(color: payRed)),
-                    trailing: Text('Line ${r.line}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                    subtitle: r.error == null ? null : Text(r.error!, style: const TextStyle(color: AppColors.dangerText)),
+                    trailing: Text('Line ${r.line}', style: AppText.helper),
                   ),
                 if (state.rows.length > 200)
-                  Padding(padding: const EdgeInsets.all(12), child: Text('… and ${state.rows.length - 200} more rows', style: const TextStyle(color: Colors.black54))),
+                  Padding(padding: const EdgeInsets.all(AppSpace.md), child: Text('… and ${state.rows.length - 200} more rows', style: const TextStyle(color: AppColors.textMuted))),
               ]),
             ),
           ],
@@ -225,12 +225,12 @@ class ExportItemsScreen extends StatelessWidget {
   Widget build(BuildContext context) => _page('Export Items', [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(AppSpace.xl),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Text('Download all your products and services as a CSV file that opens in Excel or Google Sheets.'),
-              const SizedBox(height: 6),
-              const Text('The "Opening Stock" column holds each item\'s current stock.', style: TextStyle(color: Colors.black54)),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.sm),
+              const Text('The "Opening Stock" column holds each item\'s current stock.', style: TextStyle(color: AppColors.textMuted)),
+              const SizedBox(height: AppSpace.lg),
               FilledButton.icon(onPressed: () => _export(context), icon: const Icon(Icons.download_outlined), label: const Text('Export Items')),
             ]),
           ),
@@ -253,7 +253,7 @@ class BulkUpdateItemsScreen extends StatelessWidget {
 class _BulkUpdateView extends StatelessWidget {
   const _BulkUpdateView();
 
-  static const _cell = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10));
+  static const _cell = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.md));
 
   @override
   Widget build(BuildContext context) {
@@ -265,13 +265,13 @@ class _BulkUpdateView extends StatelessWidget {
       },
       builder: (context, state) {
         final cubit = context.read<BulkUpdateCubit>();
-        if (state.loadStatus == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (state.loadStatus == LoadStatus.loading) return const LoadingView();
         if (state.loadStatus == LoadStatus.failure) return ErrorRetry(error: state.error ?? 'Could not load', onRetry: cubit.load);
         final changed = state.changed.length;
         final busy = state.status == SubmitStatus.submitting;
 
         Widget number(Item i, String field, String value, ItemEdit Function(ItemEdit, String) set) => SizedBox(
-              width: 110,
+              width: AppSize.fieldXs,
               child: TextFormField(
                 key: ValueKey('${i.id}-$field-${state.rev}'),
                 initialValue: value,
@@ -285,17 +285,17 @@ class _BulkUpdateView extends StatelessWidget {
         return Column(children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+            padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.md, AppSpace.md, 0),
             child: Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: 8, children: [
               // Full-width row on wide screens so the title sits left and the actions right.
               SizedBox(
                 width: isWide(context) ? 260 : double.infinity,
-                child: const Text('Bulk Update Items', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                child: const Text('Bulk Update Items', style: AppText.title),
               ),
               Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 SizedBox(
-                  width: 240,
-                  child: TextField(onChanged: cubit.searchChanged, decoration: const InputDecoration(hintText: 'Search items', prefixIcon: Icon(Icons.search))),
+                  width: AppSize.fieldMd,
+                  child: TextField(textInputAction: TextInputAction.search, onChanged: cubit.searchChanged, decoration: const InputDecoration(hintText: 'Search items', prefixIcon: Icon(Icons.search))),
                 ),
                 if (changed > 0) TextButton(onPressed: busy ? null : cubit.discard, child: const Text('Discard')),
                 FilledButton(
@@ -309,7 +309,7 @@ class _BulkUpdateView extends StatelessWidget {
             child: state.items.isEmpty
                 ? const EmptyState(icon: Icons.inventory_2_outlined, title: 'No items to update')
                 : Padding(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(AppSpace.md),
                     child: Card(
                       clipBehavior: Clip.antiAlias,
                       child: SingleChildScrollView(
@@ -319,7 +319,7 @@ class _BulkUpdateView extends StatelessWidget {
                             child: ConstrainedBox(
                               constraints: BoxConstraints(minWidth: c.maxWidth),
                               child: DataTable(
-                                headingRowColor: const WidgetStatePropertyAll(pageBg),
+                                headingRowColor: const WidgetStatePropertyAll(AppColors.background),
                                 dataRowMinHeight: 56,
                                 dataRowMaxHeight: 56,
                                 columns: const [
@@ -332,13 +332,13 @@ class _BulkUpdateView extends StatelessWidget {
                                 rows: [
                                   for (final i in state.visible)
                                     DataRow(
-                                      color: state.changed.contains(i) ? WidgetStatePropertyAll(brandBlue.withValues(alpha: 0.06)) : null,
+                                      color: state.changed.contains(i) ? WidgetStatePropertyAll(AppColors.primary.withValues(alpha: 0.06)) : null,
                                       cells: [
                                         DataCell(Text(i.name)),
                                         DataCell(number(i, 'sale', state.editOf(i).salePrice, (e, v) => e.copyWith(salePrice: v))),
                                         DataCell(number(i, 'purchase', state.editOf(i).purchasePrice, (e, v) => e.copyWith(purchasePrice: v))),
                                         DataCell(SizedBox(
-                                          width: 130,
+                                          width: AppSize.fieldXs,
                                           child: DropdownButtonFormField<num?>(
                                             key: ValueKey('${i.id}-gst-${state.rev}-${state.editOf(i).gstRate}'),
                                             initialValue: gstRateOptions.contains(state.editOf(i).gstRate) ? state.editOf(i).gstRate : null,
@@ -353,7 +353,7 @@ class _BulkUpdateView extends StatelessWidget {
                                         )),
                                         DataCell(i.isProduct
                                             ? number(i, 'min', state.editOf(i).minStock, (e, v) => e.copyWith(minStock: v))
-                                            : const Text('-', style: TextStyle(color: Colors.black38))),
+                                            : const Text('-', style: TextStyle(color: AppColors.textSubtle))),
                                       ],
                                     ),
                                 ],
@@ -382,18 +382,18 @@ Future<pw.Document> buildBarcodeSheet(List<(Item, int)> labels, {required bool s
   ];
   doc.addPage(pw.MultiPage(
     pageFormat: PdfPageFormat.a4,
-    margin: const pw.EdgeInsets.all(24),
+    margin: const pw.EdgeInsets.all(AppSpace.xxl),
     build: (_) => [
       pw.Wrap(spacing: 8, runSpacing: 8, children: [
         for (final item in cells)
           pw.Container(
             width: 176,
             height: 84,
-            padding: const pw.EdgeInsets.all(6),
+            padding: const pw.EdgeInsets.all(AppSpace.sm),
             decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.grey400, width: 0.5)),
             child: pw.Column(children: [
               pw.Text(item.name, maxLines: 1, style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 3),
+              pw.SizedBox(height: AppSpace.xs),
               pw.Expanded(child: pw.BarcodeWidget(barcode: pw.Barcode.code128(), data: item.itemCode!, textStyle: const pw.TextStyle(fontSize: 8))),
               // "Rs." rather than the rupee sign: the built-in PDF font has no glyph for it.
               if (showPrice) pw.Text('Rs. ${item.salePrice.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 9)),
@@ -430,13 +430,13 @@ class _BarcodeView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<BarcodeCubit, BarcodeState>(builder: (context, state) {
       final cubit = context.read<BarcodeCubit>();
-      if (state.loadStatus == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+      if (state.loadStatus == LoadStatus.loading) return const LoadingView();
       if (state.loadStatus == LoadStatus.failure) return ErrorRetry(error: state.error ?? 'Could not load', onRetry: cubit.load);
       return _page('Barcode Generator', [
         if (state.items.isEmpty)
           const Card(
             child: SizedBox(
-              height: 280,
+              height: AppSize.stateHeight,
               child: EmptyState(
                 icon: Icons.qr_code_2,
                 title: 'No items with an item code',
@@ -449,7 +449,7 @@ class _BarcodeView extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.lg),
                 child: Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: 8, children: [
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     Checkbox(value: state.showPrice, onChanged: (v) => cubit.showPriceChanged(v!)),
@@ -457,7 +457,7 @@ class _BarcodeView extends StatelessWidget {
                   ]),
                   FilledButton.icon(
                     onPressed: state.total == 0 ? null : () => _preview(context, state),
-                    icon: const Icon(Icons.print_outlined, size: 18),
+                    icon: const Icon(Icons.print_outlined, size: AppIconSize.sm),
                     label: Text(state.total == 0 ? 'Enter label counts' : 'Preview ${state.total} labels'),
                   ),
                 ]),
@@ -468,7 +468,7 @@ class _BarcodeView extends StatelessWidget {
                   title: Text(i.name),
                   subtitle: Text('Code ${i.itemCode} · ${money(i.salePrice)}'),
                   trailing: SizedBox(
-                    width: 110,
+                    width: AppSize.fieldXs,
                     child: TextFormField(
                       key: ValueKey('labels-${i.id}'),
                       initialValue: state.labels[i.id]?.toString() ?? '',

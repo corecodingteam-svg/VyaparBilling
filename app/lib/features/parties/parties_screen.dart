@@ -8,6 +8,8 @@ import '../../data/models/invoice.dart';
 import '../../data/models/party.dart';
 import '../../data/models/payment.dart';
 import '../../data/repositories/payments_repository.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
@@ -62,28 +64,35 @@ class _PartiesView extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = isWide(context);
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpace.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Text('Parties', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+              const Text('Parties', style: AppText.title),
               const Spacer(),
+              BlocBuilder<PartiesBloc, PartiesState>(
+                builder: (context, state) => ExportMenu(table: () => TableExport(
+                  title: 'Parties',
+                  headers: ['Name', 'Phone', 'GSTIN', 'City', 'Group', 'Balance'],
+                  rows: [for (final x in state.visible) [x.name, x.phone, x.gstin, x.city, x.groupName, x.balance]],
+                )),
+              ),
+              const SizedBox(width: AppSpace.sm),
               FilledButton.icon(
                 onPressed: () => showPartyForm(context),
-                style: FilledButton.styleFrom(backgroundColor: payRed),
                 icon: const Icon(Icons.add),
                 label: const Text('Add Party'),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           Expanded(
             child: BlocBuilder<PartiesBloc, PartiesState>(
               builder: (context, state) {
                 if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const LoadingView();
                 }
                 if (state.status == LoadStatus.failure && state.parties.isEmpty) {
                   return ErrorRetry(error: state.error!, onRetry: () => context.read<PartiesBloc>().add(const PartiesRequested()));
@@ -107,8 +116,8 @@ class _PartiesView extends StatelessWidget {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 320, child: list),
-                    const SizedBox(width: 12),
+                    SizedBox(width: AppSize.listPane, child: list),
+                    const SizedBox(width: AppSpace.md),
                     const Expanded(child: PartyDetail()),
                   ],
                 );
@@ -136,15 +145,15 @@ class _PartyList extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
-            child: TextField(
+            padding: const EdgeInsets.all(AppSpace.md),
+            child: TextField(textInputAction: TextInputAction.search, 
               onChanged: (v) => context.read<PartiesBloc>().add(PartiesSearchChanged(v)),
               decoration: const InputDecoration(hintText: 'Search party name or phone', prefixIcon: Icon(Icons.search)),
             ),
           ),
           if (state.parties.any((p) => p.groupName != null))
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              padding: const EdgeInsets.fromLTRB(AppSpace.md, 0, AppSpace.md, AppSpace.sm),
               child: DropdownButtonFormField<String?>(
                 key: ValueKey('group-filter-${state.groupId}'),
                 initialValue: state.groupId,
@@ -161,29 +170,17 @@ class _PartyList extends StatelessWidget {
                 onChanged: (v) => context.read<PartiesBloc>().add(PartiesGroupChanged(v)),
               ),
             ),
-          Container(
-            color: pageBg,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: const Row(
-              children: [
-                Expanded(
-                  child: Text('Party Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                ),
-                Text('Amount', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-              ],
-            ),
-          ),
           Expanded(
-            child: shown.isEmpty
-                ? const Center(child: Text('No matching parties'))
-                : ListView.separated(
-                    itemCount: shown.length,
-                    separatorBuilder: (_, _) => const Divider(),
-                    itemBuilder: (_, i) {
-                      final p = shown[i];
+            child: PagedListPane<Party>(
+              items: shown,
+              headings: const ['Party Name', 'Amount'],
+              sortKeys: [(p) => p.name, (p) => p.balance.abs()],
+              emptyText: 'No matching parties',
+              onRefresh: () => context.reloadBloc<PartiesBloc, PartiesEvent, PartiesState>(const PartiesRequested()),
+              itemBuilder: (_, p) {
                       return ListTile(
                         selected: highlight && p.id == state.selectedId,
-                        selectedTileColor: brandBlue.withValues(alpha: 0.08),
+                        selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
                         title: Text(p.name, overflow: TextOverflow.ellipsis),
                         trailing: Text(
                           money(p.balance.abs()),
@@ -192,7 +189,7 @@ class _PartyList extends StatelessWidget {
                         onTap: () => onTap(p),
                       );
                     },
-                  ),
+            ),
           ),
         ],
       ),
@@ -228,40 +225,40 @@ class PartyDetail extends StatelessWidget {
       builder: (context, state) {
         final party = state.selected;
         if (party == null) return const SizedBox.shrink();
-        return ListView(
+        return PullToRefresh(onRefresh: () => context.reloadBloc<PartiesBloc, PartiesEvent, PartiesState>(const PartiesRequested()), child: ListView(
           padding: EdgeInsets.zero,
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
                         Expanded(
-                          child: Text(party.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                          child: Text(party.name, style: AppText.title),
                         ),
                         IconButton(
                           tooltip: 'Edit party',
-                          icon: const Icon(Icons.edit_outlined, color: brandBlue),
+                          icon: Icon(Icons.edit_outlined, color: AppColors.primary),
                           onPressed: () => showPartyForm(context, party: party),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: AppSpace.xs),
                         OutlinedButton.icon(
                           onPressed: () => showPaymentForm(context, PaymentKind.paymentIn, partyId: party.id),
-                          icon: const Icon(Icons.south_west, size: 16),
+                          icon: const Icon(Icons.south_west, size: AppIconSize.xs),
                           label: const Text('Payment-In'),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpace.sm),
                         OutlinedButton.icon(
                           onPressed: () => showPaymentForm(context, PaymentKind.paymentOut, partyId: party.id),
-                          icon: const Icon(Icons.north_east, size: 16),
+                          icon: const Icon(Icons.north_east, size: AppIconSize.xs),
                           label: const Text('Payment-Out'),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Wrap(
                       spacing: 40,
                       runSpacing: 12,
@@ -288,66 +285,66 @@ class PartyDetail extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Card(
               clipBehavior: Clip.antiAlias,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    padding: EdgeInsets.all(AppSpace.lg),
+                    child: Text('Transactions', style: AppText.subtitle),
                   ),
                   switch (state.txnStatus) {
                     LoadStatus.initial || LoadStatus.loading => const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
+                      padding: EdgeInsets.all(AppSpace.xxl),
+                      child: LoadingView(),
                     ),
                     LoadStatus.failure => ErrorRetry(
                       error: state.error ?? 'Could not load transactions',
                       onRetry: () => context.read<PartiesBloc>().add(const PartiesRequested()),
                     ),
                     LoadStatus.success when state.txns.isEmpty => const SizedBox(
-                      height: 260,
+                      height: AppSize.stateHeight,
                       child: EmptyState(
                         icon: Icons.receipt_outlined,
                         title: 'No transactions to show',
                         message: "You haven't added any transactions yet.",
                       ),
                     ),
-                    LoadStatus.success => SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: DataTable(
-                        headingRowColor: const WidgetStatePropertyAll(pageBg),
-                        showCheckboxColumn: false,
-                        columns: const [
-                          DataColumn(label: Text('Type')),
-                          DataColumn(label: Text('Number')),
-                          DataColumn(label: Text('Date')),
-                          DataColumn(label: Text('Total'), numeric: true),
-                          DataColumn(label: Text('Balance'), numeric: true),
-                        ],
-                        rows: [
-                          for (final t in state.txns)
-                            DataRow(
-                              onSelectChanged: t.id == null ? null : (_) => _openTxn(context, t),
-                              cells: [
-                                DataCell(Text(t.type)),
-                                DataCell(Text(t.number ?? '-')),
-                                DataCell(Text(displayDate(t.date))),
-                                DataCell(Text(money(t.total))),
-                                DataCell(Text(money(t.balance.abs()), style: TextStyle(color: balanceColor(t.balance)))),
-                              ],
-                            ),
-                        ],
-                      ),
+                    LoadStatus.success => PagedDataTable(
+                      searchHint: 'Search transactions',
+                      initialSortColumn: 2,
+                      initialSortAscending: false,
+                      columns: const [
+                        TableColumnSpec('Type'),
+                        TableColumnSpec('Number'),
+                        TableColumnSpec('Date'),
+                        TableColumnSpec('Total', numeric: true),
+                        TableColumnSpec('Balance', numeric: true),
+                      ],
+                      rows: [
+                        for (final t in state.txns)
+                          TableRowData(
+                            onTap: t.id == null ? null : () => _openTxn(context, t),
+                            search: '${t.type} ${t.number ?? ''} ${displayDate(t.date)}',
+                            sort: [t.type, int.tryParse(t.number ?? '') ?? t.number, t.date, t.total, t.balance.abs()],
+                            cells: [
+                              Text(t.type),
+                              Text(t.number ?? '-'),
+                              Text(displayDate(t.date)),
+                              Text(money(t.total)),
+                              Text(money(t.balance.abs()), style: TextStyle(color: balanceColor(t.balance))),
+                            ],
+                          ),
+                      ],
                     ),
                   },
                 ],
               ),
             ),
           ],
-        );
+        ));
       },
     );
   }

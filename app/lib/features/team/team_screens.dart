@@ -11,6 +11,7 @@ import '../../data/models/app_user.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/utilities_repository.dart';
 import '../../shared/file_io.dart';
+import '../../shared/export.dart';
 import '../../shared/page.dart';
 import '../../shared/submit_dialog.dart';
 import '../../shared/theme.dart';
@@ -43,15 +44,15 @@ Future<Company?> _showAddCompanyDialog(BuildContext context) {
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Business Name *'),
-        validator: (v) => (v ?? '').trim().length < 2 ? 'Enter the business name' : null,
+        validator: Validators.minLength('Business name', 2),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       DropdownButtonFormField<String?>(
         isExpanded: true,
         decoration: const InputDecoration(labelText: 'State *'),
         items: [for (final e in gstStates.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
         onChanged: (v) => stateCode = v,
-        validator: (v) => v == null ? 'Select the state' : null,
+        validator: Validators.choose('state'),
       ),
     ],
   );
@@ -92,7 +93,7 @@ class CompaniesScreen extends StatelessWidget {
           actions: [
             OutlinedButton.icon(
               onPressed: state.busy ? null : () => _restore(context),
-              icon: const Icon(Icons.restore, size: 18),
+              icon: const Icon(Icons.restore, size: AppIconSize.sm),
               label: Text(state.busy ? 'Restoring…' : 'Restore Backup'),
             ),
             FilledButton.icon(
@@ -106,13 +107,15 @@ class CompaniesScreen extends StatelessWidget {
           ],
           children: [
             RowsCard(
+              texts: [for (final c in state.items) c.name],
+              sorts: {'Name': [for (final c in state.items) c.name]},
               empty: const EmptyState(icon: Icons.business_outlined, title: 'No companies'),
               rows: [
                 for (final c in state.items)
                   ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: c.current ? brandBlue : brandBlue.withValues(alpha: 0.1),
-                      child: Text(c.name.characters.first.toUpperCase(), style: TextStyle(color: c.current ? Colors.white : brandBlue)),
+                      backgroundColor: c.current ? AppColors.primary : AppColors.primary.withValues(alpha: 0.1),
+                      child: Text(c.name.characters.first.toUpperCase(), style: TextStyle(color: c.current ? AppColors.onPrimary : AppColors.primary)),
                     ),
                     title: Text(c.name),
                     subtitle: Text('You are: ${roleLabels[c.role] ?? c.role}'),
@@ -121,7 +124,7 @@ class CompaniesScreen extends StatelessWidget {
                         : Row(mainAxisSize: MainAxisSize.min, children: [
                             OutlinedButton(onPressed: () => switchToCompany(context, c.id), child: const Text('Open')),
                             if (c.role == 'owner')
-                              IconButton(tooltip: 'Delete company', icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => _deleteCompany(context, c)),
+                              IconButton(tooltip: 'Delete company', icon: const Icon(Icons.delete_outline, size: AppIconSize.md), onPressed: () => _deleteCompany(context, c)),
                           ]),
                   ),
               ],
@@ -150,12 +153,12 @@ Future<void> _deleteCompany(BuildContext context, Company c) async {
         'Everything in this company is deleted for good: parties, items, invoices, payments, reports and its backups on the server. '
         'People whose only company this is can no longer sign in. Download a backup first if you may need it.',
       ),
-      const SizedBox(height: 12),
+      const SizedBox(height: AppSpace.md),
       TextFormField(
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Type the company name to confirm'),
-        validator: (v) => (v ?? '').trim().toLowerCase() == c.name.trim().toLowerCase() ? null : 'The name does not match',
+        validator: (v) => (v ?? '').trim().toLowerCase() == c.name.trim().toLowerCase() ? null : 'Type the company name exactly as shown',
         onFieldSubmitted: (_) => submit(),
       ),
     ],
@@ -186,23 +189,23 @@ Future<void> _showAddUserDialog(BuildContext context) {
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Full Name *'),
-        validator: (v) => (v ?? '').trim().length < 2 ? 'Enter their name' : null,
+        validator: Validators.minLength('Name', 2),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       TextFormField(
         controller: email,
         keyboardType: TextInputType.emailAddress,
         decoration: const InputDecoration(labelText: 'Email *', helperText: 'They sign in with this email'),
-        validator: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch((v ?? '').trim()) ? null : 'Enter a valid email',
+        validator: Validators.email(required: true),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       TextFormField(
         controller: password,
         obscureText: true,
         decoration: const InputDecoration(labelText: 'Password *', helperText: 'At least 8 characters. Not used if they already have a login.'),
-        validator: (v) => (v ?? '').length < 8 ? 'Use at least 8 characters' : null,
+        validator: Validators.minLength('Password', 8),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       DropdownButtonFormField<String>(
         initialValue: role,
         isExpanded: true,
@@ -210,11 +213,11 @@ Future<void> _showAddUserDialog(BuildContext context) {
         items: [for (final r in roleHints.keys) DropdownMenuItem(value: r, child: Text(roleLabels[r]!))],
         onChanged: (v) => role = v!,
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: AppSpace.md),
       for (final e in roleHints.entries)
         Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Text('${roleLabels[e.key]}: ${e.value}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          padding: const EdgeInsets.only(bottom: AppSpace.xs),
+          child: Text('${roleLabels[e.key]}: ${e.value}', style: AppText.helper),
         ),
     ],
   );
@@ -235,11 +238,14 @@ class UsersScreen extends StatelessWidget {
         return TitledPage(
           title: 'Users',
           subtitle: 'Give your accountant or salesmen their own login. Sales and payments record who entered them (see the "Sale by User" report).',
-          actions: [
+          actions: [ExportMenu(table: () => TableExport(title: 'Users', headers: ['Name', 'Email', 'Role'], rows: [for (final m in state.items) [m.fullName, m.email, roleLabels[m.role] ?? m.role]])),
+            
             FilledButton.icon(onPressed: () => _showAddUserDialog(context), icon: const Icon(Icons.person_add_alt), label: const Text('Add User')),
           ],
           children: [
             RowsCard(
+              texts: [for (final m in state.items) '${m.fullName} ${m.email} ${roleLabels[m.role] ?? m.role}'],
+              sorts: {'Name': [for (final m in state.items) m.fullName], 'Role': [for (final m in state.items) roleLabels[m.role] ?? m.role]},
               empty: const EmptyState(icon: Icons.group_outlined, title: 'No users'),
               rows: [
                 for (final m in state.items)
@@ -261,7 +267,7 @@ class UsersScreen extends StatelessWidget {
                               ),
                               IconButton(
                                 tooltip: 'Remove access',
-                                icon: const Icon(Icons.person_remove_outlined, size: 20),
+                                icon: const Icon(Icons.person_remove_outlined, size: AppIconSize.md),
                                 onPressed: () async {
                                   if (await confirmDelete(
                                     context,

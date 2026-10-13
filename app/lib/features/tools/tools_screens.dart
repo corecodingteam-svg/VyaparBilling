@@ -47,24 +47,24 @@ class SetupScreen extends StatelessWidget {
           subtitle: done == total ? 'All done. Your business is set up.' : '$done of $total steps done.',
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: AppRadius.smAll,
               child: LinearProgressIndicator(
                 value: total == 0 ? 0 : done / total,
                 minHeight: 8,
-                backgroundColor: const Color(0xFFE3E8EF),
-                color: receiveGreen,
+                backgroundColor: AppColors.border,
+                color: AppColors.successText,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             RowsCard(
               empty: const EmptyState(icon: Icons.checklist, title: 'Nothing to set up'),
               rows: [
                 for (final s in state.items)
                   ListTile(
-                    leading: Icon(s.done ? Icons.check_circle : Icons.radio_button_unchecked, color: s.done ? receiveGreen : Colors.black38),
+                    leading: Icon(s.done ? Icons.check_circle : Icons.radio_button_unchecked, color: s.done ? AppColors.success : AppColors.textSubtle),
                     title: Text(
                       s.title,
-                      style: TextStyle(decoration: s.done ? TextDecoration.lineThrough : null, color: s.done ? Colors.black54 : null),
+                      style: TextStyle(decoration: s.done ? TextDecoration.lineThrough : null, color: s.done ? AppColors.textMuted : null),
                     ),
                     subtitle: Text(s.hint),
                     trailing: s.done
@@ -96,7 +96,7 @@ class VerifyDataScreen extends StatelessWidget {
       listener: (context, s) => showSuccess(context, s.allOk ? 'Fixed. Everything adds up now.' : 'Fixed what could be fixed automatically.'),
       builder: (context, s) {
         final cubit = context.read<VerifyCubit>();
-        if (s.status == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (s.status == LoadStatus.loading) return const LoadingView();
         if (s.status == LoadStatus.failure) return ErrorRetry(error: s.error ?? 'Could not check', onRetry: cubit.check);
         return TitledPage(
           title: 'Verify My Data',
@@ -106,13 +106,13 @@ class VerifyDataScreen extends StatelessWidget {
           actions: [
             OutlinedButton.icon(
               onPressed: s.fixing ? null : cubit.check,
-              icon: const Icon(Icons.refresh, size: 18),
+              icon: const Icon(Icons.refresh, size: AppIconSize.sm),
               label: const Text('Check Again'),
             ),
             if (s.canFix)
               FilledButton.icon(
                 onPressed: s.fixing ? null : cubit.fix,
-                icon: const Icon(Icons.build_outlined, size: 18),
+                icon: const Icon(Icons.build_outlined, size: AppIconSize.sm),
                 label: Text(s.fixing ? 'Fixing…' : 'Fix'),
               ),
           ],
@@ -120,32 +120,32 @@ class VerifyDataScreen extends StatelessWidget {
             for (final c in s.checks) ...[
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(AppSpace.md),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(c.ok ? Icons.check_circle : Icons.error_outline, color: c.ok ? receiveGreen : payRed),
-                          const SizedBox(width: 10),
+                          Icon(c.ok ? Icons.check_circle : Icons.error_outline, color: c.ok ? AppColors.success : AppColors.danger),
+                          const SizedBox(width: AppSpace.md),
                           Expanded(
                             child: Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                           ),
-                          if (!c.ok) Text(c.fixable ? 'Can be fixed' : 'Needs a look', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                          if (!c.ok) Text(c.fixable ? 'Can be fixed' : 'Needs a look', style: AppText.helper),
                         ],
                       ),
                       for (final i in c.issues.take(20))
-                        Padding(padding: const EdgeInsets.only(left: 34, top: 6), child: Text('${i.label} — ${i.detail}')),
+                        Padding(padding: const EdgeInsets.only(left: AppSpace.xxxl, top: AppSpace.sm), child: Text('${i.label} — ${i.detail}')),
                       if (c.issues.length > 20)
                         Padding(
-                          padding: const EdgeInsets.only(left: 34, top: 6),
-                          child: Text('…and ${c.issues.length - 20} more', style: const TextStyle(color: Colors.black54)),
+                          padding: const EdgeInsets.only(left: AppSpace.xxxl, top: AppSpace.sm),
+                          child: Text('…and ${c.issues.length - 20} more', style: const TextStyle(color: AppColors.textMuted)),
                         ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.sm),
             ],
           ],
         );
@@ -207,7 +207,7 @@ class _CloseYearViewState extends State<_CloseYearView> {
       },
       builder: (context, s) {
         final cubit = context.read<CloseYearCubit>();
-        if (s.loadStatus == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (s.loadStatus == LoadStatus.loading) return const LoadingView();
         if (s.loadStatus == LoadStatus.failure) return ErrorRetry(error: s.error ?? 'Could not load', onRetry: cubit.load);
         final busy = s.status == SubmitStatus.submitting;
         final isAdmin = context.select((AuthBloc b) => b.state.user?.isAdmin ?? false);
@@ -217,35 +217,35 @@ class _CloseYearViewState extends State<_CloseYearView> {
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('1. Close the books', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
+                    const Text('1. Close the books', style: AppText.subtitle),
+                    const SizedBox(height: AppSpace.xs),
                     const Text(
                       'Nothing dated on or before the closing date can be added, changed or deleted afterwards — by anyone. '
                       'You can re-open the books whenever you need to correct something.',
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Row(
                       children: [
-                        Icon(s.lockDate == null ? Icons.lock_open_outlined : Icons.lock_outline, color: s.lockDate == null ? Colors.black54 : payRed),
-                        const SizedBox(width: 8),
+                        Icon(s.lockDate == null ? Icons.lock_open_outlined : Icons.lock_outline, color: s.lockDate == null ? AppColors.textMuted : AppColors.danger),
+                        const SizedBox(width: AppSpace.sm),
                         Text(
                           s.lockDate == null ? 'The books are open.' : 'Books are closed up to ${displayDate(s.lockDate)}.',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         SizedBox(
-                          width: 220,
+                          width: AppSize.fieldMd,
                           child: DateField(label: 'Close up to', value: s.lockUpTo, onChanged: cubit.lockUpToChanged),
                         ),
                         FilledButton(
@@ -265,38 +265,38 @@ class _CloseYearViewState extends State<_CloseYearView> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.lg),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('2. Start the new year with fresh books (optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
+                    const Text('2. Start the new year with fresh books (optional)', style: AppText.subtitle),
+                    const SizedBox(height: AppSpace.xs),
                     const Text(
                       'Creates a new company that opens with this one\'s position at the end of the day before the start date you pick: what each party owes, stock in hand, '
                       'bank and cash balances, outstanding loans and your own accounts. Parties, items, units, settings and users are copied. '
                       'Entries dated on or after the start date are not carried, so you can start a year late and re-enter them in the new company. '
                       'This company and all its transactions stay exactly as they are, and you can switch back to it at any time.',
                     ),
-                    const SizedBox(height: 4),
-                    const Text('Not carried over: open estimates and orders, and undeposited cheques.', style: TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.xs),
+                    const Text('Not carried over: open estimates and orders, and undeposited cheques.', style: TextStyle(color: AppColors.textMuted)),
+                    const SizedBox(height: AppSpace.md),
                     Wrap(
                       spacing: 12,
                       runSpacing: 12,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         SizedBox(
-                          width: 320,
+                          width: AppSize.fieldLg,
                           child: TextField(
                             controller: _name,
                             decoration: const InputDecoration(labelText: 'Name of the new company'),
                           ),
                         ),
                         SizedBox(
-                          width: 220,
+                          width: AppSize.fieldMd,
                           child: DateField(label: 'New books start on', value: s.newYearStart, onChanged: cubit.newYearStartChanged),
                         ),
                         FilledButton(
@@ -317,13 +317,13 @@ class _CloseYearViewState extends State<_CloseYearView> {
                       ],
                     ),
                     if (s.created != null) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       Row(
                         children: [
-                          const Icon(Icons.check_circle, color: receiveGreen),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.check_circle, color: AppColors.success),
+                          const SizedBox(width: AppSpace.sm),
                           Flexible(child: Text('"${s.created!.name}" has been created.')),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpace.md),
                           OutlinedButton(onPressed: () => switchToCompany(context, s.created!.id), child: const Text('Open It')),
                         ],
                       ),
@@ -441,37 +441,37 @@ class _BackupView extends StatelessWidget {
             children: [
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Backups on the server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      const Text('Backups on the server', style: AppText.subtitle),
+                      const SizedBox(height: AppSpace.xs),
                       Text(
                         settings.autoBackup == 'off'
                             ? 'Automatic backup is off. Turn it on under Settings → Backup, or back up now.'
                             : 'A backup is made ${settings.autoBackup == 'daily' ? 'every day' : 'every week'} and the latest ${settings.autoBackupKeep} are kept. '
                                   'Backups made by hand are kept until you delete them.',
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       FilledButton.icon(
                         onPressed: busy ? null : () => list.run(repo.createServerBackup),
                         icon: busy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.backup_outlined, size: 18),
+                            ? const InlineSpinner()
+                            : const Icon(Icons.backup_outlined, size: AppIconSize.sm),
                         label: Text(busy ? 'Working…' : 'Back Up Now'),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       if (backups.items.isEmpty)
                         const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Text('No backups yet.', style: TextStyle(color: Colors.black54)),
+                          padding: EdgeInsets.symmetric(vertical: AppSpace.md),
+                          child: Text('No backups yet.', style: TextStyle(color: AppColors.textMuted)),
                         )
                       else
                         for (final b in backups.items)
                           ListTile(
                             contentPadding: EdgeInsets.zero,
-                            leading: Icon(b.kind == 'auto' ? Icons.schedule : Icons.touch_app_outlined, color: Colors.black54),
+                            leading: Icon(b.kind == 'auto' ? Icons.schedule : Icons.touch_app_outlined, color: AppColors.textMuted),
                             title: Text(
                               '${displayDate(isoDate(b.createdAt))} ${DateFormat('h:mm a').format(b.createdAt)} · ${b.kind == 'auto' ? 'Automatic' : 'Manual'}',
                             ),
@@ -487,17 +487,17 @@ class _BackupView extends StatelessWidget {
                               children: [
                                 IconButton(
                                   tooltip: 'Download',
-                                  icon: const Icon(Icons.download_outlined, size: 20),
+                                  icon: const Icon(Icons.download_outlined, size: AppIconSize.md),
                                   onPressed: () => _download(context, b),
                                 ),
                                 IconButton(
                                   tooltip: 'Restore as a new company',
-                                  icon: const Icon(Icons.restore, size: 20),
+                                  icon: const Icon(Icons.restore, size: AppIconSize.md),
                                   onPressed: busy ? null : () => _restore(context, b),
                                 ),
                                 IconButton(
                                   tooltip: 'Delete',
-                                  icon: const Icon(Icons.delete_outline, size: 20),
+                                  icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
                                   onPressed: busy
                                       ? null
                                       : () async {
@@ -517,20 +517,20 @@ class _BackupView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: BlocBuilder<DriveCubit, DriveStatus?>(
                     builder: (context, drive) {
                       final cubit = context.read<DriveCubit>();
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Google Drive', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
+                          const Text('Google Drive', style: AppText.subtitle),
+                          const SizedBox(height: AppSpace.xs),
                           if (drive == null)
-                            const LinearProgressIndicator()
+                            const GradientProgressBar()
                           else if (!drive.configured)
                             const Text(
                               'Not set up on this server. Whoever runs the server adds a Google client ID and secret (see the deployment notes), '
@@ -540,16 +540,16 @@ class _BackupView extends StatelessWidget {
                             Text(
                               'Every backup is copied to the "Billing Backups" folder in ${drive.email ?? 'your Google Drive'}. The app can only see the files it puts there.',
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: AppSpace.md),
                             OutlinedButton(onPressed: cubit.disconnect, child: const Text('Disconnect Google Drive')),
                           ] else ...[
                             const Text(
                               'Copy every backup to your Google Drive too. You allow access on a Google page; the app can only see the files it puts there.',
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: AppSpace.md),
                             FilledButton.icon(
                               onPressed: () => _connect(context),
-                              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                              icon: const Icon(Icons.cloud_upload_outlined, size: AppIconSize.sm),
                               label: const Text('Connect Google Drive'),
                             ),
                           ],
@@ -559,39 +559,39 @@ class _BackupView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
               Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpace.lg),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Download a backup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      const Text('Download a backup', style: AppText.subtitle),
+                      const SizedBox(height: AppSpace.xs),
                       Text(
                         'Saves everything in "$firmName" — parties, items, every transaction, settings, logo and attachments — as one file you keep yourself. '
                         'Logins are not part of the backup.',
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpace.md),
                       FilledButton.icon(
                         onPressed: download.status == SubmitStatus.submitting ? null : () => context.read<BackupCubit>().create(firmName),
                         icon: download.status == SubmitStatus.submitting
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.download_outlined, size: 18),
+                            ? const InlineSpinner()
+                            : const Icon(Icons.download_outlined, size: AppIconSize.sm),
                         label: Text(download.status == SubmitStatus.submitting ? 'Preparing…' : 'Download Backup'),
                       ),
                       if (download.summary != null) ...[
-                        const SizedBox(height: 10),
-                        Text('Last download: ${download.fileName}\nContains ${download.summary}.', style: const TextStyle(color: Colors.black54)),
+                        const SizedBox(height: AppSpace.md),
+                        Text('Last download: ${download.fileName}\nContains ${download.summary}.', style: const TextStyle(color: AppColors.textMuted)),
                       ],
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpace.lg),
                       const Text('Restore from a file', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpace.xs),
                       const Text('A backup is restored as a new company next to your existing ones, so nothing you have now is overwritten.'),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       OutlinedButton.icon(
                         onPressed: () => context.go('/companies'),
-                        icon: const Icon(Icons.restore, size: 18),
+                        icon: const Icon(Icons.restore, size: AppIconSize.sm),
                         label: const Text('Go to Companies to Restore'),
                       ),
                     ],

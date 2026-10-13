@@ -5,9 +5,11 @@ import '../../core/change_bus.dart';
 import '../../core/list_cubit.dart';
 import '../../data/models/party.dart';
 import '../../data/repositories/parties_repository.dart';
+import '../../shared/export.dart';
 import '../../shared/page.dart';
 import '../../shared/submit_dialog.dart';
 import '../../shared/widgets.dart';
+import '../../shared/theme.dart';
 
 Future<void> _showGroupDialog(BuildContext context, {PartyGroup? group}) {
   final repo = context.read<PartiesRepository>();
@@ -26,7 +28,7 @@ Future<void> _showGroupDialog(BuildContext context, {PartyGroup? group}) {
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Group Name', hintText: 'e.g. Retailers, Wholesalers, Mumbai'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+        validator: Validators.required('Name'),
         onFieldSubmitted: (_) => submit(),
       ),
     ],
@@ -48,9 +50,12 @@ class PartyGroupsScreen extends StatelessWidget {
         return TitledPage(
           title: 'Party Groups',
           subtitle: 'Group parties (retailers, wholesalers, a city) and filter the party list by group.',
-          actions: [FilledButton.icon(onPressed: () => _showGroupDialog(context), icon: const Icon(Icons.add), label: const Text('Add Group'))],
+          actions: [ExportMenu(table: () => TableExport(title: 'Party Groups', headers: ['Group', 'Parties'], rows: [for (final g in state.items) [g.name, g.partyCount]])),
+            FilledButton.icon(onPressed: () => _showGroupDialog(context), icon: const Icon(Icons.add), label: const Text('Add Group'))],
           children: [
             RowsCard(
+              texts: [for (final g in state.items) g.name],
+              sorts: {'Name': [for (final g in state.items) g.name], 'Parties': [for (final g in state.items) g.partyCount]},
               empty: const EmptyState(icon: Icons.folder_outlined, title: 'No groups yet', message: 'Add a group, then pick it on a party.'),
               rows: [
                 for (final g in state.items)
@@ -62,12 +67,12 @@ class PartyGroupsScreen extends StatelessWidget {
                       children: [
                         IconButton(
                           tooltip: 'Rename',
-                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          icon: const Icon(Icons.edit_outlined, size: AppIconSize.sm),
                           onPressed: () => _showGroupDialog(context, group: g),
                         ),
                         IconButton(
                           tooltip: 'Delete',
-                          icon: const Icon(Icons.delete_outline, size: 20),
+                          icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
                           onPressed: () async {
                             if (await confirmDelete(
                               context,

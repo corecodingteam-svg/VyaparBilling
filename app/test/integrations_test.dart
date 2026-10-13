@@ -69,7 +69,7 @@ void main() {
       final before = c.state.info;
       repo.failure = Exception('x');
       await c.generate();
-      expect([c.state.error, c.state.info, c.state.busy], ['Something went wrong. Please try again.', before, false]);
+      expect([c.state.error, c.state.info, c.state.busy], [startsWith('Something went wrong (_Exception)'), before, false]);
       await c.close();
     });
 
@@ -134,7 +134,7 @@ void main() {
       await c.load();
       repo.failure = Exception('quota');
       await c.post('x', '');
-      expect([c.state.error, c.state.busy, c.state.stage], ['Something went wrong. Please try again.', false, GoogleStage.ready]);
+      expect([c.state.error, c.state.busy, c.state.stage], [startsWith('Something went wrong (_Exception)'), false, GoogleStage.ready]);
       await c.close();
     });
   });

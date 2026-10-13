@@ -3,6 +3,43 @@ import 'package:flutter/material.dart';
 import '../data/models/app_user.dart';
 import '../data/models/firm.dart';
 
+/// The settings pages, in the order of the sidebar's Settings group. `/settings?tab=<key>` opens one.
+const settingsGroups = <(String, String, IconData)>[
+  ('general', 'General', Icons.tune),
+  ('transaction', 'Transaction', Icons.receipt_long_outlined),
+  ('print', 'Print', Icons.print_outlined),
+  ('tax', 'Taxes & GST', Icons.percent),
+  ('message', 'Transaction message', Icons.chat_outlined),
+  ('party', 'Party', Icons.people_outline),
+  ('item', 'Item', Icons.inventory_2_outlined),
+  ('service', 'Service reminders', Icons.notifications_outlined),
+  ('accounting', 'Accounting', Icons.account_balance_outlined),
+  ('currency', 'Multi currency', Icons.currency_exchange),
+  ('keyboard', 'Keyboard', Icons.keyboard_outlined),
+  ('theme', 'Theme', Icons.palette_outlined),
+];
+
+/// Whether the sidebar entry [path] (which may carry `?tab=`) is the page at [location] (path and query).
+bool navActive(String location, String path) {
+  final loc = Uri.parse(location);
+  final target = Uri.parse(path);
+  if (target.path == '/') return loc.path == '/';
+  if (target.queryParameters.containsKey('tab')) {
+    final tab = loc.queryParameters['tab'] ?? 'general';
+    return loc.path == target.path && tab == target.queryParameters['tab'];
+  }
+  return loc.path.startsWith(target.path);
+}
+
+/// Icons for the report groups in the sidebar's Reports menu.
+const reportGroupIcons = {
+  'Transaction': Icons.receipt_long_outlined,
+  'Party': Icons.people_outline,
+  'GST': Icons.account_balance_outlined,
+  'Item / Stock': Icons.inventory_2_outlined,
+  'Business Status': Icons.insights_outlined,
+};
+
 class NavLeaf {
   const NavLeaf(this.label, this.path);
   final String label;
@@ -101,7 +138,11 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
           if (admin) const NavLeaf('Backup & Restore', '/backup'),
         ],
       ),
-    const NavSection('Settings', Icons.settings_outlined, path: '/settings'),
+    NavSection('Settings', Icons.settings_outlined, children: [
+      for (final g in settingsGroups)
+        // Salesmen cannot change business settings: only their account and theme.
+        if (!salesman || g.$1 == 'general' || g.$1 == 'keyboard' || g.$1 == 'theme') NavLeaf(g.$2, '/settings?tab=${g.$1}'),
+    ]),
   ];
 }
 

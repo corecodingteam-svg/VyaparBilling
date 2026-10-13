@@ -1,3 +1,4 @@
+import '../../shared/export.dart';
 import '../../data/models/report.dart';
 import '../../shared/format.dart';
 
@@ -21,3 +22,16 @@ String reportCsv(ReportData data) {
     for (final row in data.rows) data.columns.map((c) => esc(reportCell(row[c.key], c.type, plain: true))).join(','),
   ].join('\r\n');
 }
+
+/// The report as a table for Excel export: money, quantity and number cells stay numeric.
+TableExport reportTable(ReportData data) => TableExport(
+      title: data.title,
+      headers: [for (final c in data.columns) c.label],
+      rows: [
+        for (final row in data.rows)
+          [
+            for (final c in data.columns)
+              (c.type == 'money' || c.type == 'qty' || c.type == 'number') && row[c.key] is num ? row[c.key] : reportCell(row[c.key], c.type),
+          ],
+      ],
+    );

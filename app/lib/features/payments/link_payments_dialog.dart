@@ -117,7 +117,7 @@ Future<void> showLinkPaymentsDialog(BuildContext context, {required String invoi
         return AlertDialog(
           title: Text(title),
           content: SizedBox(
-            width: 460,
+            width: AppSize.dialogMd,
             child: switch (s.status) {
               LoadStatus.failure => Text(s.error ?? 'Could not load'),
               LoadStatus.success => Column(
@@ -125,11 +125,11 @@ Future<void> showLinkPaymentsDialog(BuildContext context, {required String invoi
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('To settle: ${money(s.due)}   ·   Linked: ${money(s.linked)}   ·   Left: ${money(s.remaining)}', style: const TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpace.sm),
                   if (s.payments.isEmpty)
                     const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('This party has no payment with an amount left to link. Record a payment first.', style: TextStyle(color: Colors.black54)),
+                      padding: EdgeInsets.symmetric(vertical: AppSpace.md),
+                      child: Text('This party has no payment with an amount left to link. Record a payment first.', style: TextStyle(color: AppColors.textMuted)),
                     ),
                   Flexible(
                     child: ListView(
@@ -137,12 +137,12 @@ Future<void> showLinkPaymentsDialog(BuildContext context, {required String invoi
                       children: [
                         for (final p in s.payments)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
                             child: Row(
                               children: [
-                                Expanded(child: Text('${p.number} · ${displayDate(p.date)}\n${money(p.amount)}, ${money(p.free)} free', style: const TextStyle(fontSize: 13))),
+                                Expanded(child: Text('${p.number} · ${displayDate(p.date)}\n${money(p.amount)}, ${money(p.free)} free', style: AppText.body)),
                                 SizedBox(
-                                  width: 130,
+                                  width: AppSize.fieldXs,
                                   child: TextFormField(
                                     key: ValueKey('${p.paymentId}-${s.amounts[p.paymentId] == null}'),
                                     initialValue: s.amounts[p.paymentId] ?? '',
@@ -158,10 +158,10 @@ Future<void> showLinkPaymentsDialog(BuildContext context, {required String invoi
                       ],
                     ),
                   ),
-                  if (s.problem != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(s.problem!, style: const TextStyle(color: payRed))),
+                  if (s.problem != null) Padding(padding: const EdgeInsets.only(top: AppSpace.sm), child: Text(s.problem!, style: const TextStyle(color: AppColors.dangerText))),
                 ],
               ),
-              _ => const Center(child: CircularProgressIndicator()),
+              _ => const LoadingView(),
             },
           ),
           actions: [

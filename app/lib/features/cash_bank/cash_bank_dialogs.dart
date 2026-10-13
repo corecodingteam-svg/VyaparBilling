@@ -51,7 +51,7 @@ class _BankAccountDialogState extends State<_BankAccountDialog> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<BankAccountFormCubit>().save({
       'name': _name.text.trim(),
       'openingBalance': parseNum(_opening.text) ?? 0,
@@ -77,60 +77,59 @@ class _BankAccountDialogState extends State<_BankAccountDialog> {
       },
       builder: (context, state) => AlertDialog(
         title: Text(cubit.editing ? 'Edit Bank Account' : 'Add Bank Account'),
-        content: Form(
+        content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: _formKey,
           child: SizedBox(
-            width: 520,
+            width: AppSize.dialogLg,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 TextFormField(
                   controller: _name,
                   autofocus: !cubit.editing,
                   decoration: const InputDecoration(labelText: 'Account Display Name *'),
-                  validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name for this account' : null,
+                  validator: Validators.required('Account name'),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: TextFormField(
                       controller: _opening,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                       decoration: const InputDecoration(labelText: 'Opening Balance', prefixText: '₹ '),
-                      validator: (v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid amount' : null,
+                      validator: Validators.number('Amount', nonNegative: false),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.md),
                   Expanded(child: DateField(label: 'As of Date', value: state.openingDate, onChanged: cubit.openingDateChanged)),
                 ]),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 if (!state.showMore)
                   Align(
                     alignment: Alignment.centerLeft,
                     child: TextButton.icon(onPressed: cubit.showMoreFields, icon: const Icon(Icons.add), label: const Text('Add more fields')),
                   )
                 else ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: AppSpace.sm),
                   Row(children: [
                     Expanded(child: TextFormField(controller: _number, decoration: const InputDecoration(labelText: 'Account Number'))),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.md),
                     Expanded(
                       child: TextFormField(
                         controller: _ifsc,
                         textCapitalization: TextCapitalization.characters,
                         decoration: const InputDecoration(labelText: 'IFSC Code'),
-                        validator: (v) =>
-                            (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{4}0[A-Za-z0-9]{6}$').hasMatch(v!.trim()) ? null : 'Enter a valid IFSC',
+                        validator: Validators.pattern('IFSC code', RegExp(r'^[A-Za-z]{4}0[A-Za-z0-9]{6}$'), '11 characters: 4 letters, a zero, then 6 letters or digits'),
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   Row(children: [
                     Expanded(child: TextFormField(controller: _bank, decoration: const InputDecoration(labelText: 'Bank Name'))),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.md),
                     Expanded(child: TextFormField(controller: _holder, decoration: const InputDecoration(labelText: 'Account Holder Name'))),
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(controller: _upi, decoration: const InputDecoration(labelText: 'UPI ID')),
                 ],
               ]),
@@ -140,7 +139,6 @@ class _BankAccountDialogState extends State<_BankAccountDialog> {
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: payRed),
             onPressed: state.status == SubmitStatus.submitting ? null : _save,
             child: const Text('Save Details'),
           ),
@@ -192,7 +190,7 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<AdjustmentFormCubit>().submit(amount: parseNum(_amount.text)!, description: _description.text);
   }
 
@@ -227,13 +225,13 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
 
         return AlertDialog(
           title: Text(cubit.editing ? 'Edit ${adjustmentKinds[s.kind] ?? 'Adjustment'}' : (cashOnly ? 'Adjust Cash' : 'Deposit / Withdraw / Transfer')),
-          content: Form(
+          content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
             key: _formKey,
             child: SizedBox(
-              width: 440,
+              width: AppSize.dialogMd,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpace.xs),
                   if (cashOnly)
                     SegmentedButton<String>(
                       segments: const [
@@ -252,7 +250,7 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
                       onChanged: (v) => cubit.kindChanged(v!),
                     ),
                   if (s.needsBank) ...[
-                    const SizedBox(height: 14),
+                    const SizedBox(height: AppSpace.md),
                     accountField(
                       switch (s.kind) { 'cash_to_bank' => 'To Account', 'bank_add' || 'bank_reduce' => 'Account', _ => 'From Account' },
                       s.bankAccountId,
@@ -260,10 +258,10 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
                     ),
                   ],
                   if (s.isTransfer) ...[
-                    const SizedBox(height: 14),
+                    const SizedBox(height: AppSpace.md),
                     accountField('To Account', s.toBankAccountId, cubit.toBankAccountChanged),
                   ],
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: TextFormField(
@@ -271,13 +269,13 @@ class _AdjustmentDialogState extends State<_AdjustmentDialog> {
                         autofocus: !cubit.editing,
                         keyboardType: _numeric,
                         decoration: const InputDecoration(labelText: 'Amount *', prefixText: '₹ '),
-                        validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter an amount greater than 0' : null,
+                        validator: Validators.number('Amount', required: true, positive: true),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: AppSpace.md),
                     Expanded(child: DateField(label: 'Date', value: s.date, onChanged: cubit.dateChanged)),
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(controller: _description, decoration: const InputDecoration(labelText: 'Description')),
                 ]),
               ),
@@ -312,14 +310,14 @@ Future<void> showChequeDepositDialog(BuildContext context, MoneyTxn cheque, List
     },
     fields: (_) => [
       Text('${cheque.type} · ${cheque.name} · ${money(cheque.amount.abs())}'),
-      const SizedBox(height: 16),
+      const SizedBox(height: AppSpace.lg),
       DropdownButtonFormField<String?>(
         initialValue: accountId,
         isExpanded: true,
         decoration: InputDecoration(labelText: cheque.amount >= 0 ? 'Deposit To' : 'Withdraw From'),
         items: [for (final a in accounts) DropdownMenuItem(value: a.id, child: Text(a.name))],
         onChanged: (v) => accountId = v,
-        validator: (v) => v == null ? 'Select a bank account' : null,
+        validator: Validators.choose('bank account'),
       ),
     ],
   );

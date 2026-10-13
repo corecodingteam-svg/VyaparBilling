@@ -11,6 +11,7 @@ import '../../data/models/extras.dart';
 import '../../data/models/invoice.dart';
 import '../../data/repositories/utilities_repository.dart';
 import '../../shared/theme.dart';
+import '../../shared/widgets.dart';
 
 class SearchState extends Equatable {
   const SearchState({this.query = '', this.loading = false, this.hits = const [], this.error});
@@ -87,14 +88,14 @@ class _QuickSearchDialog extends StatelessWidget {
     final cubit = context.read<SearchCubit>();
     return Dialog(
       alignment: Alignment.topCenter,
-      insetPadding: const EdgeInsets.fromLTRB(16, 70, 16, 24),
+      insetPadding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.huge, AppSpace.lg, AppSpace.xxl),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 520),
+        constraints: const BoxConstraints(maxWidth: AppSize.dialogXl, maxHeight: AppSize.popoverHeight),
         child: BlocBuilder<SearchCubit, SearchState>(
           builder: (context, s) => Column(mainAxisSize: MainAxisSize.min, children: [
             Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(AppSpace.md),
               child: TextField(
                 autofocus: true,
                 onChanged: cubit.queryChanged,
@@ -103,24 +104,24 @@ class _QuickSearchDialog extends StatelessWidget {
                 decoration: InputDecoration(
                   hintText: 'Search parties, items, invoice numbers…',
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon: s.loading ? const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))) : null,
+                  suffixIcon: s.loading ? const Padding(padding: EdgeInsets.all(AppSpace.md), child: InlineSpinner()) : null,
                 ),
               ),
             ),
             const Divider(),
             if (s.error != null)
-              Padding(padding: const EdgeInsets.all(20), child: Text(s.error!, style: const TextStyle(color: payRed)))
+              Padding(padding: const EdgeInsets.all(AppSpace.xl), child: Text(s.error!, style: const TextStyle(color: AppColors.dangerText)))
             else if (s.query.length < 2)
-              const Padding(padding: EdgeInsets.all(20), child: Text('Type at least 2 letters or digits.', style: TextStyle(color: Colors.black54)))
+              const Padding(padding: EdgeInsets.all(AppSpace.xl), child: Text('Type at least 2 letters or digits.', style: TextStyle(color: AppColors.textMuted)))
             else if (s.hits.isEmpty && !s.loading)
-              Padding(padding: const EdgeInsets.all(20), child: Text('Nothing found for "${s.query}".', style: const TextStyle(color: Colors.black54)))
+              Padding(padding: const EdgeInsets.all(AppSpace.xl), child: Text('Nothing found for "${s.query}".', style: const TextStyle(color: AppColors.textMuted)))
             else
               Flexible(
                 child: ListView(shrinkWrap: true, children: [
                   for (final h in s.hits)
                     ListTile(
                       dense: true,
-                      leading: Icon(_icons[h.kind], color: brandBlue),
+                      leading: Icon(_icons[h.kind], color: AppColors.primary),
                       title: Text(h.title, overflow: TextOverflow.ellipsis),
                       subtitle: Text(h.subtitle, overflow: TextOverflow.ellipsis),
                       onTap: () => Navigator.of(context).pop(h),

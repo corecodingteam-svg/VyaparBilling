@@ -37,7 +37,7 @@ class _PosView extends StatelessWidget {
         if (s.printAfterSave) context.push('${InvoiceKind.sale.basePath}/${s.savedId}/preview?layout=thermal');
       },
       builder: (context, state) {
-        if (state.loadStatus == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (state.loadStatus == LoadStatus.loading) return const LoadingView();
         if (state.loadStatus == LoadStatus.failure) {
           return ErrorRetry(error: state.error ?? 'Could not load', onRetry: context.read<PosCubit>().load);
         }
@@ -51,20 +51,20 @@ class _PosView extends StatelessWidget {
         }
         final wide = isWide(context);
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.md),
           child: wide
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(flex: 3, child: _ItemPicker(state: state)),
-                    const SizedBox(width: 12),
-                    SizedBox(width: 400, child: _Bill(state: state)),
+                    const SizedBox(width: AppSpace.md),
+                    SizedBox(width: AppSize.sidePanel, child: _Bill(state: state)),
                   ],
                 )
               : Column(
                   children: [
                     Expanded(flex: 5, child: _ItemPicker(state: state)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Expanded(flex: 6, child: _Bill(state: state)),
                   ],
                 ),
@@ -87,7 +87,7 @@ class _ItemPicker extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpace.md),
             child: TextField(
               autofocus: isWide(context),
               onChanged: cubit.searchChanged,
@@ -102,7 +102,7 @@ class _ItemPicker extends StatelessWidget {
             child: items.isEmpty
                 ? const Center(child: Text('No matching items'))
                 : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(AppSpace.md, 0, AppSpace.md, AppSpace.md),
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 190,
                       mainAxisExtent: 96,
@@ -128,16 +128,16 @@ class _ItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = inCart != null;
     return Material(
-      color: selected ? brandBlue.withValues(alpha: 0.08) : pageBg,
+      color: selected ? AppColors.primary.withValues(alpha: 0.08) : AppColors.background,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: selected ? brandBlue : const Color(0xFFE3E8EF)),
+        borderRadius: AppRadius.lgAll,
+        side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => context.read<PosCubit>().add(item),
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(AppSpace.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -154,17 +154,17 @@ class _ItemTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       money(CartLine(item, 1).unitPrice),
-                      style: const TextStyle(color: receiveGreen, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: AppColors.successText, fontWeight: FontWeight.w600),
                     ),
                   ),
                   if (selected)
                     CircleAvatar(
                       radius: 11,
-                      backgroundColor: brandBlue,
-                      child: Text(qty(inCart), style: const TextStyle(color: Colors.white, fontSize: 11)),
+                      backgroundColor: AppColors.primary,
+                      child: Text(qty(inCart), style: const TextStyle(color: AppColors.onPrimary, fontSize: AppFont.caption)),
                     )
                   else if (item.isProduct)
-                    Text('Stock ${qty(item.stockQty)}', style: TextStyle(fontSize: 11, color: item.stockQty <= 0 ? payRed : Colors.black54)),
+                    Text('Stock ${qty(item.stockQty)}', style: TextStyle(fontSize: AppFont.caption, color: item.stockQty <= 0 ? AppColors.moneyOut : AppColors.textMuted)),
                 ],
               ),
             ],
@@ -189,11 +189,11 @@ class _Bill extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.sm, AppSpace.sm),
             child: Row(
               children: [
                 Expanded(
-                  child: Text('Bill · ${qty(state.itemCount)} items', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  child: Text('Bill · ${qty(state.itemCount)} items', style: AppText.subtitle),
                 ),
                 if (state.cart.isNotEmpty) TextButton(onPressed: cubit.clear, child: const Text('Clear')),
               ],
@@ -211,7 +211,7 @@ class _Bill extends StatelessWidget {
                     itemBuilder: (_, i) {
                       final l = state.cart[i];
                       return Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.sm, AppSpace.sm, AppSpace.sm),
                         child: Row(
                           children: [
                             Expanded(
@@ -225,7 +225,7 @@ class _Bill extends StatelessWidget {
                                   ),
                                   Text(
                                     '${money(l.unitPrice)}${l.discount > 0 ? '  −${money(l.discount)}' : ''}',
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    style: AppText.helper,
                                   ),
                                 ],
                               ),
@@ -247,7 +247,7 @@ class _Bill extends StatelessWidget {
                             IconButton(
                               tooltip: 'More',
                               visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.add_circle_outline, color: brandBlue),
+                              icon: Icon(Icons.add_circle_outline, color: AppColors.primary),
                               onPressed: () => cubit.changeQty(l.item, 1),
                             ),
                             SizedBox(
@@ -270,7 +270,7 @@ class _Bill extends StatelessWidget {
             constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.5),
             child: SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpace.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -284,9 +284,9 @@ class _Bill extends StatelessWidget {
                             decoration: const InputDecoration(labelText: 'Customer (optional)'),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: AppSpace.md),
                         SizedBox(
-                          width: 130,
+                          width: AppSize.fieldXs,
                           child: DropdownButtonFormField<String>(
                             key: ValueKey('mode-${state.paymentMode}'),
                             initialValue: state.paymentMode,
@@ -299,7 +299,7 @@ class _Bill extends StatelessWidget {
                       ],
                     ),
                     if (modeUsesBank(state.paymentMode)) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: AppSpace.md),
                       BankAccountField(
                         accounts: [for (final a in state.bankAccounts) (a.id, a.name)],
                         value: state.bankAccountId,
@@ -317,25 +317,25 @@ class _Bill extends StatelessWidget {
                       onBank: cubit.partBankAccountChanged,
                       onAmount: cubit.partAmountChanged,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     if (state.roundOff != 0)
                       Row(
                         children: [
                           const Expanded(
-                            child: Text('Round off', style: TextStyle(color: Colors.black54)),
+                            child: Text('Round off', style: TextStyle(color: AppColors.textMuted)),
                           ),
-                          Text(numText(state.roundOff), style: const TextStyle(color: Colors.black54)),
+                          Text(numText(state.roundOff), style: const TextStyle(color: AppColors.textMuted)),
                         ],
                       ),
                     Row(
                       children: [
                         const Expanded(
-                          child: Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          child: Text('Total', style: AppText.title),
                         ),
-                        Text(money(state.total), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                        Text(money(state.total), style: AppText.headline),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     Row(
                       children: [
                         Expanded(
@@ -345,12 +345,12 @@ class _Bill extends StatelessWidget {
                             child: const Text('Save Bill'),
                           ),
                         ),
-                        const SizedBox(width: 10),
+                        const SizedBox(width: AppSpace.md),
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: busy ? null : () => cubit.save(print: true),
                             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
-                            icon: const Icon(Icons.print_outlined, size: 18),
+                            icon: const Icon(Icons.print_outlined, size: AppIconSize.sm),
                             label: const Text('Save & Print'),
                           ),
                         ),

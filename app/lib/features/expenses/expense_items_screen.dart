@@ -6,11 +6,13 @@ import '../../core/list_cubit.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/item.dart' show gstRateOptions;
 import '../../data/repositories/expenses_repository.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/page.dart';
 import '../../shared/submit_dialog.dart';
 import '../../shared/widgets.dart';
 import '../company/firm_cubit.dart';
+import '../../shared/theme.dart';
 
 /// Add or edit a reusable expense item.
 Future<void> showExpenseItemDialog(BuildContext context, {ExpenseItemDef? item}) {
@@ -31,9 +33,9 @@ Future<void> showExpenseItemDialog(BuildContext context, {ExpenseItemDef? item})
         controller: name,
         autofocus: item == null,
         decoration: const InputDecoration(labelText: 'Item Name *', hintText: 'e.g. Petrol, Tea, Courier'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+        validator: Validators.required('Name'),
       ),
-      const SizedBox(height: 14),
+      const SizedBox(height: AppSpace.md),
       TextFormField(
         controller: price,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -42,18 +44,18 @@ Future<void> showExpenseItemDialog(BuildContext context, {ExpenseItemDef? item})
           prefixText: '₹ ',
           helperText: 'Filled in when you pick this item; can be changed each time',
         ),
-        validator: (v) => (v ?? '').trim().isNotEmpty && (parseNum(v!) == null || parseNum(v)! < 0) ? 'Enter a valid price' : null,
+        validator: Validators.number('Price', nonNegative: true),
         onFieldSubmitted: (_) => submit(),
       ),
       if (gstEnabled || item?.gstRate != null) ...[
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         TextFormField(
           controller: hsn,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(labelText: 'HSN / SAC'),
-          validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[0-9]{4,8}$').hasMatch(v!.trim()) ? null : '4 to 8 digits',
+          validator: Validators.hsn(),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<num?>(
           initialValue: gstRateOptions.contains(gstRate) ? gstRate : null,
           decoration: const InputDecoration(labelText: 'GST Rate'),
@@ -83,11 +85,14 @@ class ExpenseItemsScreen extends StatelessWidget {
         return TitledPage(
           title: 'Expense Items',
           subtitle: 'Things you spend on again and again. Pick them while entering an expense to fill in the price and GST.',
-          actions: [
+          actions: [ExportMenu(table: () => TableExport(title: 'Expense Items', headers: ['Item', 'Price', 'HSN/SAC', 'GST %', 'Spent so far'], rows: [for (final d in state.items) [d.name, d.price, d.hsnCode, d.gstRate, d.total]])),
+            
             FilledButton.icon(onPressed: () => showExpenseItemDialog(context), icon: const Icon(Icons.add), label: const Text('Add Expense Item')),
           ],
           children: [
             RowsCard(
+              texts: [for (final d in state.items) '${d.name} ${d.hsnCode ?? ''}'],
+              sorts: {'Name': [for (final d in state.items) d.name], 'Price': [for (final d in state.items) d.price], 'Spent so far': [for (final d in state.items) d.total]},
               empty: const EmptyState(
                 icon: Icons.local_gas_station_outlined,
                 title: 'No expense items yet',
@@ -112,17 +117,17 @@ class ExpenseItemsScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(money(d.total), style: const TextStyle(fontWeight: FontWeight.w600)),
-                            const Text('spent so far', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                            const Text('spent so far', style: AppText.caption),
                           ],
                         ),
                         IconButton(
                           tooltip: 'Edit',
-                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          icon: const Icon(Icons.edit_outlined, size: AppIconSize.sm),
                           onPressed: () => showExpenseItemDialog(context, item: d),
                         ),
                         IconButton(
                           tooltip: 'Delete',
-                          icon: const Icon(Icons.delete_outline, size: 20),
+                          icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
                           onPressed: () async {
                             if (await confirmDelete(
                               context,

@@ -60,11 +60,13 @@ import 'features/pos/pos_screen.dart';
 import 'data/models/firm.dart';
 import 'features/printing/invoice_print.dart';
 import 'features/printing/pdf_documents.dart';
+import 'features/reports/report_cubit.dart';
 import 'features/reports/reports_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/utilities/import_spec.dart';
 import 'features/utilities/utilities_screens.dart';
 import 'features/printing/pdf_preview_screen.dart';
+import 'shell/sidebar_cubit.dart';
 import 'shared/theme.dart';
 import 'shell/app_shell.dart';
 import 'shell/nav_cubit.dart';
@@ -98,6 +100,15 @@ void main() {
       child: MultiBlocProvider(
         providers: [
           BlocProvider(create: (ctx) => AuthBloc(ctx.read())..add(const AuthStarted())),
+          BlocProvider(lazy: false, create: (_) => SidebarCubit()..load()),
+          BlocProvider(
+            lazy: false,
+            create: (ctx) => KeyboardNavCubit(userIds: ctx.read<AuthBloc>().stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.id : null).distinct())..loadFor(null),
+          ),
+          BlocProvider(
+            lazy: false,
+            create: (ctx) => ThemeCubit(userIds: ctx.read<AuthBloc>().stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.id : null).distinct())..loadFor(null),
+          ),
           // Not lazy: it must hear the sign-in that happens before any screen asks for it.
           BlocProvider(lazy: false, create: (_) => LockCubit(PasscodeStore())..load()),
           BlocProvider(lazy: false, create: (ctx) => FirmCubit(ctx.read(), ctx.read(), ctx.read<AuthBloc>())),
@@ -196,7 +207,7 @@ GoRouter buildRouter(AuthBloc auth) {
     routes: [
       GoRoute(
         path: '/splash',
-        builder: (_, _) => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        builder: (_, _) => const Scaffold(body: Align(alignment: Alignment.topCenter, child: GradientProgressBar())),
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
@@ -219,11 +230,13 @@ GoRouter buildRouter(AuthBloc auth) {
           builder: (context, firmId) => MultiBlocProvider(
             key: ValueKey('company-$firmId'),
             providers: [
-              BlocProvider(create: (_) => NavCubit(state.uri.path)),
+              BlocProvider(create: (_) => NavCubit(state.uri.toString())),
               BlocProvider(create: (ctx) => CatalogCubit(ctx.read(), ctx.read())..load()),
+              // The sidebar's Reports menu is built from this list.
+              BlocProvider(create: (ctx) => ReportCatalogCubit(ctx.read())..load()),
             ],
             child: AppShell(
-              location: state.uri.path,
+              location: state.uri.toString(),
               child: KeyedSubtree(key: ValueKey('page-$firmId'), child: child),
             ),
           ),
@@ -302,7 +315,7 @@ GoRouter buildRouter(AuthBloc auth) {
             builder: (_, state) => ReportViewScreen(key: ValueKey(state.pathParameters['id']), reportId: state.pathParameters['id']!),
           ),
           GoRoute(path: '/company', builder: (_, _) => const CompanyScreen()),
-          GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+          GoRoute(path: '/settings', builder: (_, state) => SettingsScreen(group: state.uri.queryParameters['tab'] ?? 'general')),
         ],
       ),
     ],
@@ -327,13 +340,17 @@ class _BillingAppState extends State<BillingApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp.router(
+  Widget build(BuildContext context) => BlocConsumer<ThemeCubit, Color>(
+    // Tokens are read when a widget builds, so a new accent needs every widget rebuilt (state is kept).
+    listener: (context, _) => WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildAll()),
+    builder: (context, _) => MaterialApp.router(
     title: 'Billing',
     debugShowCheckedModeBanner: false,
     theme: buildTheme(),
     routerConfig: _router,
     // The PIN lock covers everything once someone is signed in; the sign-in pages are not locked.
-    builder: (context, child) => BlocBuilder<AuthBloc, AuthState>(
+    builder: (context, child) => BlocBuilder<KeyboardNavCubit, bool>(
+      builder: (context, enterNav) => EnterKeyNavigation(enabled: enterNav, child: BlocBuilder<AuthBloc, AuthState>(
       builder: (context, auth) => auth.status == AuthStatus.signedIn
           ? AppLock(
               onForgot: () {
@@ -344,6 +361,16 @@ class _BillingAppState extends State<BillingApp> {
               child: child!,
             )
           : child!,
-    ),
-  );
+    ))),
+  ));
+}
+
+/// Marks every mounted widget dirty so it rebuilds with the current design tokens.
+void _rebuildAll() {
+  void visit(Element e) {
+    e.markNeedsBuild();
+    e.visitChildren(visit);
+  }
+
+  WidgetsBinding.instance.rootElement?.visitChildren(visit);
 }

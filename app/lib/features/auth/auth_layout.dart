@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/theme.dart';
 
 /// Two-pane layout on wide screens (brand panel + form), single column on phones.
 class AuthLayout extends StatelessWidget {
@@ -13,16 +14,16 @@ class AuthLayout extends StatelessWidget {
     final theme = Theme.of(context);
     final form = Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpace.xxl, vertical: AppSpace.xxxl),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: AppSize.dialogMd),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(title, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpace.sm),
               Text(subtitle, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 28),
+              const SizedBox(height: AppSpace.xxl),
               child,
             ],
           ),
@@ -51,18 +52,18 @@ class _BrandPanel extends StatelessWidget {
     final onPrimary = scheme.onPrimary;
     return Container(
       color: scheme.primary,
-      padding: const EdgeInsets.all(56),
+      padding: const EdgeInsets.all(AppSpace.huge),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_rounded, size: 56, color: onPrimary),
-          const SizedBox(height: 24),
-          Text('Billing', style: TextStyle(color: onPrimary, fontSize: 40, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 12),
+          Icon(Icons.receipt_long_rounded, size: AppIconSize.hero, color: onPrimary),
+          const SizedBox(height: AppSpace.xxl),
+          Text('Billing', style: TextStyle(color: onPrimary, fontSize: AppFont.hero, fontWeight: FontWeight.w700)),
+          const SizedBox(height: AppSpace.md),
           Text(
             'Invoices, parties, stock and payments for your business — in one place.',
-            style: TextStyle(color: onPrimary.withValues(alpha: 0.85), fontSize: 18, height: 1.4),
+            style: TextStyle(color: onPrimary.withValues(alpha: 0.85), fontSize: AppFont.title, height: 1.4),
           ),
         ],
       ),
@@ -79,12 +80,12 @@ class AuthErrorBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.all(AppSpace.md),
+      margin: const EdgeInsets.only(bottom: AppSpace.lg),
+      decoration: BoxDecoration(color: scheme.errorContainer, borderRadius: AppRadius.mdAll),
       child: Row(children: [
-        Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
-        const SizedBox(width: 10),
+        Icon(Icons.error_outline, color: scheme.onErrorContainer, size: AppIconSize.md),
+        const SizedBox(width: AppSpace.md),
         Expanded(child: Text(message, style: TextStyle(color: scheme.onErrorContainer))),
       ]),
     );
@@ -94,7 +95,7 @@ class AuthErrorBanner extends StatelessWidget {
 final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 String? validateEmail(String? v) {
-  if (v == null || v.trim().isEmpty) return 'Enter your email';
-  if (!_emailPattern.hasMatch(v.trim())) return 'Enter a valid email address';
+  if (v == null || v.trim().isEmpty) return 'Email is required';
+  if (!_emailPattern.hasMatch(v.trim())) return 'Email must be a valid address, like name@example.com';
   return null;
 }

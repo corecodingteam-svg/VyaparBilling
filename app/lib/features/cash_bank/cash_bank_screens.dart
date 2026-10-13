@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/status.dart';
 import '../../data/models/cash_bank.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
@@ -51,26 +53,31 @@ class _BankAccountsView extends StatelessWidget {
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
         if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingView();
         }
         if (state.status == LoadStatus.failure && state.accounts.isEmpty) {
           return ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => context.read<BankAccountsBloc>().add(const BankAccountsRequested()));
         }
         final header = Row(children: [
-          const Expanded(child: Text('Banks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
+          const Expanded(child: Text('Banks', style: AppText.title)),
+          ExportMenu(table: () => TableExport(
+            title: 'Banks',
+            headers: ['Account', 'Bank', 'Account number', 'IFSC', 'UPI', 'Balance'],
+            rows: [for (final a in state.visible) [a.name, a.bankName, a.accountNumber, a.ifsc, a.upiId, a.balance]],
+          )),
+          const SizedBox(width: AppSpace.sm),
           FilledButton.icon(
             onPressed: () => showBankAccountForm(context),
-            style: FilledButton.styleFrom(backgroundColor: payRed),
             icon: const Icon(Icons.add),
             label: const Text('Add Bank'),
           ),
         ]);
         if (state.accounts.isEmpty) {
           return Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpace.md),
             child: Column(children: [
               header,
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
               Expanded(
                 child: Card(
                   child: EmptyState(
@@ -86,15 +93,15 @@ class _BankAccountsView extends StatelessWidget {
         }
         final list = _AccountList(state: state, highlight: wide, onTap: (a) => _open(context, a));
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.md),
           child: Column(children: [
             header,
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Expanded(
               child: wide
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      SizedBox(width: 320, child: list),
-                      const SizedBox(width: 12),
+                      SizedBox(width: AppSize.listPane, child: list),
+                      const SizedBox(width: AppSpace.md),
                       const Expanded(child: _AccountDetail()),
                     ])
                   : list,
@@ -119,38 +126,30 @@ class _AccountList extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Column(children: [
         Padding(
-          padding: const EdgeInsets.all(12),
-          child: TextField(
+          padding: const EdgeInsets.all(AppSpace.md),
+          child: TextField(textInputAction: TextInputAction.search, 
             onChanged: (v) => context.read<BankAccountsBloc>().add(BankAccountsSearchChanged(v)),
             decoration: const InputDecoration(hintText: 'Search by account', prefixIcon: Icon(Icons.search)),
           ),
         ),
-        Container(
-          color: pageBg,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: const Row(children: [
-            Expanded(child: Text('Account Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-            Text('Amount', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-          ]),
-        ),
-        Expanded(
-          child: shown.isEmpty
-              ? const Center(child: Text('No matching accounts'))
-              : ListView.separated(
-                  itemCount: shown.length,
-                  separatorBuilder: (_, _) => const Divider(),
-                  itemBuilder: (_, i) {
-                    final a = shown[i];
+          Expanded(
+            child: PagedListPane<BankAccount>(
+              items: shown,
+              headings: const ['Account Name', 'Amount'],
+              sortKeys: [(a) => a.name, (a) => a.balance],
+              emptyText: 'No matching accounts',
+              onRefresh: () => context.reloadBloc<BankAccountsBloc, BankAccountsEvent, BankAccountsState>(const BankAccountsRequested()),
+              itemBuilder: (_, a) {
                     return ListTile(
                       selected: highlight && a.id == state.selectedId,
-                      selectedTileColor: brandBlue.withValues(alpha: 0.08),
+                      selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
                       title: Text(a.name, overflow: TextOverflow.ellipsis),
-                      trailing: Text(money(a.balance), style: TextStyle(color: a.balance < 0 ? payRed : receiveGreen, fontWeight: FontWeight.w600)),
+                      trailing: Text(money(a.balance), style: TextStyle(color: a.balance < 0 ? AppColors.moneyOut : AppColors.moneyIn, fontWeight: FontWeight.w600)),
                       onTap: () => onTap(a),
                     );
                   },
-                ),
-        ),
+            ),
+          ),
       ]),
     );
   }
@@ -170,22 +169,22 @@ class _AccountDetail extends StatelessWidget {
       final account = state.selected;
       if (account == null) return const SizedBox.shrink();
       final bloc = context.read<BankAccountsBloc>();
-      return ListView(padding: EdgeInsets.zero, children: [
+      return PullToRefresh(onRefresh: () => context.reloadBloc<BankAccountsBloc, BankAccountsEvent, BankAccountsState>(const BankAccountsRequested()), child: ListView(padding: EdgeInsets.zero, children: [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  Flexible(child: Text(account.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                  Flexible(child: Text(account.name, style: AppText.title, overflow: TextOverflow.ellipsis)),
                   IconButton(
                     tooltip: 'Edit account',
-                    icon: const Icon(Icons.edit_outlined, color: brandBlue, size: 20),
+                    icon: Icon(Icons.edit_outlined, color: AppColors.primary, size: AppIconSize.md),
                     onPressed: () => showBankAccountForm(context, account: account),
                   ),
                   IconButton(
                     tooltip: 'Delete account',
-                    icon: const Icon(Icons.delete_outline, size: 20),
+                    icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
                     onPressed: () => _deleteAccount(context, account),
                   ),
                 ]),
@@ -194,18 +193,18 @@ class _AccountDetail extends StatelessWidget {
                   onSelected: (kind) => showAdjustmentDialog(context, kinds: bankAdjustmentKinds, initialKind: kind, bankAccountId: account.id),
                   itemBuilder: (_) => [for (final k in bankAdjustmentKinds) PopupMenuItem(value: k, child: Text(adjustmentKinds[k]!))],
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                    decoration: BoxDecoration(border: Border.all(color: payRed), borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
+                    decoration: BoxDecoration(border: Border.all(color: AppColors.dangerText), borderRadius: AppRadius.pillAll),
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Text('Deposit / Withdraw', style: TextStyle(color: payRed, fontWeight: FontWeight.w600)),
-                      Icon(Icons.arrow_drop_down, color: payRed),
+                      Text('Deposit / Withdraw', style: TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.w600)),
+                      Icon(Icons.arrow_drop_down, color: AppColors.danger),
                     ]),
                   ),
                 ),
               ]),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.sm),
               Wrap(spacing: 40, runSpacing: 12, children: [
-                InfoField('Balance', money(account.balance), valueColor: account.balance < 0 ? payRed : receiveGreen),
+                InfoField('Balance', money(account.balance), valueColor: account.balance < 0 ? AppColors.moneyOut : AppColors.moneyIn),
                 if ((account.bankName ?? '').isNotEmpty) InfoField('Bank', account.bankName!),
                 if ((account.accountNumber ?? '').isNotEmpty) InfoField('Account Number', account.accountNumber!),
                 if ((account.ifsc ?? '').isNotEmpty) InfoField('IFSC', account.ifsc!),
@@ -215,19 +214,30 @@ class _AccountDetail extends StatelessWidget {
             ]),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
+              child: Row(children: [
+                const Expanded(child: Text('Transactions', style: AppText.subtitle)),
+                if (state.txns.isNotEmpty)
+                  ExportMenu(table: () => TableExport(
+                    title: '${account.name} transactions',
+                    headers: ['Date', 'Type', 'Name', 'Number', 'Mode', 'Amount'],
+                    rows: [for (final t in state.txns) [displayDate(t.date), t.type, t.name, t.number, t.paymentMode, t.amount]],
+                  )),
+              ]),
+            ),
             switch (state.txnStatus) {
-              LoadStatus.initial || LoadStatus.loading => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
+              LoadStatus.initial || LoadStatus.loading => const SizedBox(height: AppSize.stateHeight, child: LoadingView()),
               LoadStatus.failure => SizedBox(
-                  height: 240,
+                  height: AppSize.stateHeight,
                   child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => bloc.add(BankAccountSelected(account.id))),
                 ),
               LoadStatus.success when state.txns.isEmpty =>
-                const SizedBox(height: 240, child: EmptyState(icon: Icons.receipt_long_outlined, title: 'No transactions to show')),
+                const SizedBox(height: AppSize.stateHeight, child: EmptyState(icon: Icons.receipt_long_outlined, title: 'No transactions to show')),
               LoadStatus.success => MoneyTxnTable(
                   txns: state.txns,
                   onDeleteAdjustment: (t) async {
@@ -237,7 +247,7 @@ class _AccountDetail extends StatelessWidget {
             },
           ]),
         ),
-      ]);
+      ]));
     });
   }
 }
@@ -246,33 +256,45 @@ class _AccountDetail extends StatelessWidget {
 
 /// Header + card with a transaction table, driven by a [MoneyListState] cubit.
 class _MoneyListPage<C extends Cubit<MoneyListState>> extends StatelessWidget {
-  const _MoneyListPage({required this.header, required this.empty, required this.table, required this.onRetry});
+  const _MoneyListPage({required this.title, required this.header, required this.empty, required this.table, required this.onRetry});
+  final String title;
   final Widget Function(BuildContext, MoneyListState) header;
   final Widget empty;
   final Widget Function(BuildContext, MoneyListState) table;
-  final VoidCallback Function(BuildContext) onRetry;
+  final Future<void> Function() Function(BuildContext) onRetry;
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<C, MoneyListState>(
       listenWhen: (a, b) => b.error != null && a.error != b.error && b.status == LoadStatus.success,
       listener: (context, state) => showError(context, state.error!),
-      builder: (context, state) => ListView(padding: const EdgeInsets.all(12), children: [
+      builder: (context, state) => PullToRefresh(onRefresh: onRetry(context), child: ListView(padding: const EdgeInsets.all(AppSpace.md), children: [
         header(context, state),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
+              child: Row(children: [
+                const Expanded(child: Text('Transactions', style: AppText.subtitle)),
+                if (state.txns.isNotEmpty)
+                  ExportMenu(table: () => TableExport(
+                    title: title,
+                    headers: ['Date', 'Type', 'Name', 'Number', 'Mode', 'Amount'],
+                    rows: [for (final t in state.txns) [displayDate(t.date), t.type, t.name, t.number, t.paymentMode, t.amount]],
+                  )),
+              ]),
+            ),
             switch (state.status) {
-              LoadStatus.initial || LoadStatus.loading => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
-              LoadStatus.failure => SizedBox(height: 260, child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: onRetry(context))),
-              LoadStatus.success when state.txns.isEmpty => SizedBox(height: 300, child: empty),
+              LoadStatus.initial || LoadStatus.loading => const SizedBox(height: AppSize.stateHeight, child: LoadingView()),
+              LoadStatus.failure => SizedBox(height: AppSize.stateHeight, child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: onRetry(context))),
+              LoadStatus.success when state.txns.isEmpty => SizedBox(height: AppSize.stateHeight, child: empty),
               LoadStatus.success => table(context, state),
             },
           ]),
         ),
-      ]),
+      ])),
     );
   }
 }
@@ -286,18 +308,18 @@ class CashInHandScreen extends StatelessWidget {
   Widget build(BuildContext context) => BlocProvider(
         create: (ctx) => CashCubit(ctx.read(), ctx.read())..load(),
         child: _MoneyListPage<CashCubit>(
+          title: 'Cash in hand',
           onRetry: (ctx) => ctx.read<CashCubit>().load,
           header: (context, state) => Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, runSpacing: 8, children: [
             Row(mainAxisSize: MainAxisSize.min, children: [
-              const Text('Cash In Hand', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 16),
+              const Text('Cash In Hand', style: AppText.title),
+              const SizedBox(width: AppSpace.lg),
               Text(money(state.balance),
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: state.balance < 0 ? payRed : receiveGreen)),
+                  style: TextStyle(fontSize: AppFont.title, fontWeight: FontWeight.w700, color: state.balance < 0 ? AppColors.moneyOut : AppColors.moneyIn)),
             ]),
             FilledButton.icon(
               onPressed: () => showAdjustmentDialog(context, kinds: cashAdjustmentKinds),
-              style: FilledButton.styleFrom(backgroundColor: payRed),
-              icon: const Icon(Icons.tune, size: 18),
+              icon: const Icon(Icons.tune, size: AppIconSize.sm),
               label: const Text('Adjust Cash'),
             ),
           ]),
@@ -326,8 +348,9 @@ class ChequesScreen extends StatelessWidget {
   Widget build(BuildContext context) => BlocProvider(
         create: (ctx) => ChequesCubit(ctx.read(), ctx.read())..load(),
         child: _MoneyListPage<ChequesCubit>(
+          title: 'Cheques',
           onRetry: (ctx) => ctx.read<ChequesCubit>().load,
-          header: (context, state) => const Text('Cheque Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+          header: (context, state) => const Text('Cheque Details', style: AppText.title),
           empty: const EmptyState(
             icon: Icons.fact_check_outlined,
             title: 'No Cheques to Show',
@@ -340,9 +363,9 @@ class ChequesScreen extends StatelessWidget {
               build: (t) => Row(mainAxisSize: MainAxisSize.min, children: [
                     Text(
                       t.isOpenCheque ? 'Open' : 'Closed',
-                      style: TextStyle(color: t.isOpenCheque ? Colors.orange.shade800 : receiveGreen, fontWeight: FontWeight.w600, fontSize: 13),
+                      style: TextStyle(color: t.isOpenCheque ? AppColors.warningText : AppColors.successText, fontWeight: FontWeight.w600, fontSize: AppFont.body),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpace.sm),
                     if (t.isOpenCheque)
                       TextButton(
                         onPressed: state.accounts.isEmpty

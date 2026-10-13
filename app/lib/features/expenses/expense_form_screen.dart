@@ -65,9 +65,7 @@ class _ExpenseFormView extends StatelessWidget {
         final busy = state.submitStatus == SubmitStatus.submitting;
         return Scaffold(
           appBar: AppBar(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            shape: const Border(bottom: BorderSide(color: Color(0xFFE3E8EF))),
+            shape: const Border(bottom: BorderSide(color: AppColors.border)),
             leading: IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => _close(context)),
             titleSpacing: 0,
             title: const Text('Expense', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -75,28 +73,28 @@ class _ExpenseFormView extends StatelessWidget {
           body: switch (state.loadStatus) {
             LoadStatus.failure => ErrorRetry(error: state.error ?? 'Could not load', onRetry: cubit.load),
             LoadStatus.success => _Body(state: state),
-            _ => const Center(child: CircularProgressIndicator()),
+            _ => const LoadingView(),
           },
           bottomNavigationBar: state.loadStatus != LoadStatus.success
               ? null
               : Material(
-                  color: Colors.white,
+                  color: AppColors.onPrimary,
                   elevation: 8,
                   child: SafeArea(
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(AppSpace.md),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           if (!cubit.editing) ...[
                             OutlinedButton(onPressed: busy ? null : () => cubit.save(andNew: true), child: const Text('Save & New')),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: AppSpace.md),
                           ],
                           FilledButton(
                             onPressed: busy ? null : () => cubit.save(andNew: false),
                             style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
                             child: busy
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                ? const InlineSpinner()
                                 : Text(cubit.editing ? 'Update' : 'Save'),
                           ),
                         ],
@@ -119,16 +117,16 @@ class _Body extends StatelessWidget {
     final cubit = context.read<ExpenseFormCubit>();
     final wide = MediaQuery.sizeOf(context).width >= 900;
 
-    final category = DropdownButtonFormField<String?>(
+    final categoryField = DropdownButtonFormField<String?>(
       key: ValueKey('cat-${state.categoryId}-${state.categories.length}'),
       initialValue: state.categories.any((c) => c.id == state.categoryId) ? state.categoryId : null,
       isExpanded: true,
       decoration: const InputDecoration(labelText: 'Expense Category *'),
       items: [
         for (final c in state.categories) DropdownMenuItem(value: c.id, child: Text(c.name)),
-        const DropdownMenuItem(
+        DropdownMenuItem(
           value: _addNew,
-          child: Text('+ Add new category', style: TextStyle(color: brandBlue)),
+          child: Text('+ Add new category', style: TextStyle(color: AppColors.primary)),
         ),
       ],
       onChanged: (v) async {
@@ -137,6 +135,7 @@ class _Body extends StatelessWidget {
         cubit.categoryChanged(created?.id ?? state.categoryId);
       },
     );
+    final category = FieldHighlight(field: 'category', issue: state.issue, child: categoryField);
     final details = Column(
       children: [
         TextFormField(
@@ -144,7 +143,7 @@ class _Body extends StatelessWidget {
           onChanged: cubit.numberChanged,
           decoration: const InputDecoration(labelText: 'Expense No'),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         DateField(label: 'Date', value: state.date, onChanged: cubit.dateChanged),
       ],
     );
@@ -152,7 +151,7 @@ class _Body extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 220,
+          width: AppSize.fieldMd,
           child: DropdownButtonFormField<String>(
             key: ValueKey('mode-${state.paymentMode}'),
             initialValue: state.paymentMode,
@@ -163,9 +162,9 @@ class _Body extends StatelessWidget {
         ),
         if (modeUsesBank(state.paymentMode))
           Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(top: AppSpace.md),
             child: SizedBox(
-              width: 300,
+              width: AppSize.fieldLg,
               child: BankAccountField(
                 accounts: [for (final a in state.bankAccounts) (a.id, a.name)],
                 value: state.bankAccountId,
@@ -185,9 +184,9 @@ class _Body extends StatelessWidget {
           onAmount: cubit.partAmountChanged,
         ),
         if (state.gstEnabled) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
+            constraints: const BoxConstraints(maxWidth: AppSize.dialogMd),
             child: Row(
               children: [
                 Expanded(
@@ -199,7 +198,7 @@ class _Body extends StatelessWidget {
                     decoration: const InputDecoration(labelText: 'Supplier GSTIN (optional)'),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpace.md),
                 Expanded(
                   child: DropdownButtonFormField<String?>(
                     key: ValueKey('state-${state.supplierState}'),
@@ -217,9 +216,9 @@ class _Body extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: AppSize.dialogMd),
           child: TextFormField(
             initialValue: state.description,
             onChanged: cubit.descriptionChanged,
@@ -228,12 +227,12 @@ class _Body extends StatelessWidget {
             decoration: const InputDecoration(labelText: 'Description', alignLabelWithHint: true),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         const AttachmentsField(label: 'Attach the bill'),
       ],
     );
     Widget figure(String label, num value) => Padding(
-      padding: const EdgeInsets.only(bottom: 10, left: 12),
+      padding: const EdgeInsets.only(bottom: AppSpace.md, left: AppSpace.md),
       child: Row(
         children: [
           Expanded(child: Text(label)),
@@ -251,19 +250,19 @@ class _Body extends StatelessWidget {
             Text(state.roundOff ? numText(state.roundOffValue) : '-'),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: AppSpace.md),
         Row(
           children: [
             const Expanded(
               child: Padding(
-                padding: EdgeInsets.only(left: 12),
-                child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                padding: EdgeInsets.only(left: AppSpace.md),
+                child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: AppFont.subtitle)),
               ),
             ),
             SizedBox(
-              width: 170,
+              width: AppSize.fieldSm,
               child: InputDecorator(
-                decoration: const InputDecoration(filled: true, fillColor: pageBg),
+                decoration: const InputDecoration(filled: true, fillColor: AppColors.background),
                 child: Text(
                   money(state.total),
                   textAlign: TextAlign.right,
@@ -279,11 +278,11 @@ class _Body extends StatelessWidget {
     return ListView(
       // A new formRev (loaded / reset after Save & New) rebuilds every input with fresh values.
       key: ValueKey('form-${state.formRev}'),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpace.md),
       children: [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: wide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,32 +291,32 @@ class _Body extends StatelessWidget {
                         flex: 3,
                         child: Align(
                           alignment: Alignment.topLeft,
-                          child: SizedBox(width: 300, child: category),
+                          child: SizedBox(width: AppSize.fieldLg, child: category),
                         ),
                       ),
-                      const SizedBox(width: 48),
+                      const SizedBox(width: AppSpace.huge),
                       Expanded(flex: 2, child: details),
                     ],
                   )
-                : Column(children: [category, const SizedBox(height: 12), details]),
+                : Column(children: [category, const SizedBox(height: AppSpace.md), details]),
           ),
         ),
-        const SizedBox(height: 12),
-        _Lines(state: state, wide: wide),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
+        FieldHighlight(field: 'items', issue: state.issue, child: _Lines(state: state, wide: wide)),
+        const SizedBox(height: AppSpace.md),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: wide
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 3, child: payment),
-                      const SizedBox(width: 48),
+                      Expanded(flex: 3, child: FieldHighlight(field: 'payments', issue: state.issue, child: payment)),
+                      const SizedBox(width: AppSpace.huge),
                       Expanded(flex: 2, child: totals),
                     ],
                   )
-                : Column(children: [totals, const SizedBox(height: 20), payment]),
+                : Column(children: [totals, const SizedBox(height: AppSpace.xl), FieldHighlight(field: 'payments', issue: state.issue, child: payment)]),
           ),
         ),
       ],
@@ -330,12 +329,12 @@ class _Lines extends StatelessWidget {
   final ExpenseFormState state;
   final bool wide;
 
-  static const _cell = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12));
+  static const _cell = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.md));
 
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<ExpenseFormCubit>();
-    const head = TextStyle(fontWeight: FontWeight.w600, fontSize: 12);
+    const head = TextStyle(fontWeight: FontWeight.w600, fontSize: AppFont.small);
 
     Widget row(int index, ExpenseLineDraft l) {
       final uid = l.uid;
@@ -356,7 +355,7 @@ class _Lines extends StatelessWidget {
           decoration: _cell.copyWith(hintText: 'Item name', labelText: wide ? null : 'Item'),
         ),
         optionsViewBuilder: (context, onSelected, options) => AutocompleteOptions<ExpenseItemDef>(
-          width: 380,
+          width: AppSize.dialogSm,
           options: options,
           onSelected: onSelected,
           title: (d) => d.name,
@@ -394,71 +393,71 @@ class _Lines extends StatelessWidget {
         textAlign: TextAlign.right,
         style: const TextStyle(fontWeight: FontWeight.w600),
       );
-      final delete = IconButton(tooltip: 'Remove row', icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => cubit.removeLine(uid));
+      final delete = IconButton(tooltip: 'Remove row', icon: const Icon(Icons.delete_outline, size: AppIconSize.md), onPressed: () => cubit.removeLine(uid));
 
       if (wide) {
         return Container(
           key: ValueKey('line-$uid'),
-          color: index.isOdd ? const Color(0xFFFAFBFD) : null,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          color: index.isOdd ? AppColors.surfaceMuted : null,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
           child: Row(
             children: [
               SizedBox(
                 width: 32,
-                child: Text('${index + 1}', style: const TextStyle(color: Colors.black54)),
+                child: Text('${index + 1}', style: const TextStyle(color: AppColors.textMuted)),
               ),
               Expanded(
                 flex: 8,
-                child: Padding(padding: const EdgeInsets.only(right: 6), child: name),
+                child: Padding(padding: const EdgeInsets.only(right: AppSpace.sm), child: name),
               ),
               Expanded(
                 flex: 2,
-                child: Padding(padding: const EdgeInsets.only(right: 6), child: qtyField),
+                child: Padding(padding: const EdgeInsets.only(right: AppSpace.sm), child: qtyField),
               ),
               Expanded(
                 flex: 3,
-                child: Padding(padding: const EdgeInsets.only(right: 6), child: price),
+                child: Padding(padding: const EdgeInsets.only(right: AppSpace.sm), child: price),
               ),
               if (state.gstEnabled)
                 Expanded(
                   flex: 3,
-                  child: Padding(padding: const EdgeInsets.only(right: 6), child: taxField),
+                  child: Padding(padding: const EdgeInsets.only(right: AppSpace.sm), child: taxField),
                 ),
               Expanded(flex: 3, child: amount),
-              SizedBox(width: 44, child: delete),
+              SizedBox(width: AppSpace.huge, child: delete),
             ],
           ),
         );
       }
       return Padding(
         key: ValueKey('line-$uid'),
-        padding: const EdgeInsets.fromLTRB(12, 12, 4, 4),
+        padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.md, AppSpace.xs, AppSpace.xs),
         child: Column(
           children: [
             Row(
               children: [
-                Text('${index + 1}.', style: const TextStyle(color: Colors.black54)),
-                const SizedBox(width: 8),
+                Text('${index + 1}.', style: const TextStyle(color: AppColors.textMuted)),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(child: name),
                 delete,
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpace.md),
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: AppSpace.sm),
               child: Row(
                 children: [
                   Expanded(child: qtyField),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpace.sm),
                   Expanded(child: price),
-                  if (state.gstEnabled) const SizedBox(width: 8),
+                  if (state.gstEnabled) const SizedBox(width: AppSpace.sm),
                   if (state.gstEnabled) Expanded(child: taxField),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: AppSpace.sm),
                   Expanded(child: amount),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpace.sm),
             const Divider(),
           ],
         ),
@@ -472,16 +471,16 @@ class _Lines extends StatelessWidget {
         children: [
           if (state.gstEnabled)
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.sm, AppSpace.md, AppSpace.sm),
               child: Row(
                 children: [
-                  const Text('Prices are entered', style: TextStyle(fontSize: 13)),
-                  const SizedBox(width: 8),
+                  const Text('Prices are entered', style: AppText.body),
+                  const SizedBox(width: AppSpace.sm),
                   DropdownButtonHideUnderline(
                     child: DropdownButton<bool>(
                       value: state.pricesIncludeTax,
                       isDense: true,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 13, fontWeight: FontWeight.w600, color: brandBlue),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: AppFont.body, fontWeight: FontWeight.w600, color: AppColors.primary),
                       items: const [
                         DropdownMenuItem(value: false, child: Text('Without Tax')),
                         DropdownMenuItem(value: true, child: Text('With Tax')),
@@ -494,11 +493,11 @@ class _Lines extends StatelessWidget {
             ),
           if (wide)
             Container(
-              color: pageBg,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              color: AppColors.background,
+              padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
               child: Row(
                 children: [
-                  const SizedBox(width: 32, child: Text('#', style: head)),
+                  const SizedBox(width: AppSpace.xxxl, child: Text('#', style: head)),
                   const Expanded(flex: 8, child: Text('ITEM', style: head)),
                   const Expanded(flex: 2, child: Text('QTY', style: head)),
                   const Expanded(flex: 3, child: Text('PRICE/UNIT', style: head)),
@@ -507,14 +506,14 @@ class _Lines extends StatelessWidget {
                     flex: 3,
                     child: Text('AMOUNT', style: head, textAlign: TextAlign.right),
                   ),
-                  const SizedBox(width: 44),
+                  const SizedBox(width: AppSpace.huge),
                 ],
               ),
             ),
-          for (var i = 0; i < state.lines.length; i++) row(i, state.lines[i]),
+          for (var i = 0; i < state.lines.length; i++) FieldHighlight(key: ValueKey('row-${state.lines[i].uid}'), field: 'row:${state.lines[i].uid}', issue: state.issue, child: row(i, state.lines[i])),
           const Divider(),
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpace.md),
             child: Wrap(
               alignment: WrapAlignment.spaceBetween,
               crossAxisAlignment: WrapCrossAlignment.center,

@@ -29,7 +29,14 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>billing_app</title>
+  <title>Billing</title>
+  <style>
+    html, body { margin: 0; background: #F9FAFB; }
+    /* The loader Flutter shows at the top of the page until the app is ready: a thin multicolour band instead of the stock blue bar. */
+    .flutter-loader { height: 3px !important; background-color: #E5E7EB !important; z-index: 10; }
+    .flutter-loader .indeterminate:before, .flutter-loader .indeterminate:after {
+      background: linear-gradient(90deg, #EA4335, #FBBC05, #34A853, #4285F4) !important; }
+  </style>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>

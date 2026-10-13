@@ -174,7 +174,7 @@ class DirectPrintButton extends StatelessWidget {
       builder: (context, s) => TextButton.icon(
         onPressed: s.status == SubmitStatus.submitting ? null : () => _choose(context, s),
         icon: s.status == SubmitStatus.submitting
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            ? const InlineSpinner()
             : const Icon(Icons.receipt_long_outlined),
         label: const Text('Print to Receipt Printer'),
       ),
@@ -217,7 +217,7 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
         return AlertDialog(
           title: const Text('Print to a receipt printer'),
           content: SizedBox(
-            width: 420,
+            width: AppSize.dialogMd,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -225,7 +225,7 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
                 children: [
                   if (supportsNetworkPrinter) ...[
                     const Text('Network printer', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.sm),
                     TextField(
                       controller: _host,
                       decoration: const InputDecoration(
@@ -234,7 +234,7 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
                         helperText: 'Remembered on this device',
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.sm),
                     FilledButton(
                       onPressed: () async {
                         final host = _host.text.trim();
@@ -246,9 +246,9 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
                     ),
                   ],
                   if (bluetoothSupported) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpace.lg),
                     const Text('Bluetooth printer', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpace.sm),
                     if (s.bluetooth != null)
                       FilledButton.icon(
                         onPressed: () => Navigator.pop(context, BluetoothTransport(s.bluetooth!)),
@@ -266,15 +266,15 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
                       label: Text(s.bluetooth == null ? 'Choose a Bluetooth printer' : 'Choose another'),
                     ),
                     const Padding(
-                      padding: EdgeInsets.only(top: 6),
+                      padding: EdgeInsets.only(top: AppSpace.sm),
                       child: Text(
                         'Switch the printer on first. Printers that need a PIN must be paired in the phone’s Bluetooth settings (Android); they then show up in the list.',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: AppText.helper,
                       ),
                     ),
                   ],
                   for (final t in transports) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpace.md),
                     OutlinedButton.icon(onPressed: () => Navigator.pop(context, t), icon: const Icon(Icons.usb), label: Text(t.label)),
                   ],
                   const Divider(height: 28),
@@ -318,10 +318,10 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
                     ),
                   if (!supportsNetworkPrinter && !bluetoothSupported && transports.isNotEmpty)
                     const Padding(
-                      padding: EdgeInsets.only(top: 12),
+                      padding: EdgeInsets.only(top: AppSpace.md),
                       child: Text(
                         'Your browser will ask which printer to use. USB printers must not be claimed by another program.',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: AppText.helper,
                       ),
                     ),
                 ],
@@ -384,18 +384,18 @@ class _BluetoothPicker extends StatelessWidget {
       builder: (context, s) => AlertDialog(
         title: const Text('Choose a Bluetooth printer'),
         content: SizedBox(
-          width: 380,
+          width: AppSize.dialogSm,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (s.scanning) const LinearProgressIndicator(),
+              if (s.scanning) const GradientProgressBar(),
               if (s.error != null)
                 Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(s.error!, style: const TextStyle(color: payRed)),
+                  padding: const EdgeInsets.all(AppSpace.sm),
+                  child: Text(s.error!, style: const TextStyle(color: AppColors.dangerText)),
                 ),
               if (!s.scanning && s.error == null && s.printers.isEmpty)
-                const Padding(padding: EdgeInsets.all(12), child: Text('No printers found. Switch the printer on, keep it close, and search again.')),
+                const Padding(padding: EdgeInsets.all(AppSpace.md), child: Text('No printers found. Switch the printer on, keep it close, and search again.')),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,

@@ -58,25 +58,25 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
         child: AlertDialog(
           title: Text("${m.fullName}'s day"),
           content: SizedBox(
-            width: 560,
+            width: AppSize.dialogLg,
             height: 560,
             child: Column(
               children: [
                 BlocBuilder<ValueCubit<String>, String>(
                   builder: (context, date) => DateField(label: 'Date', value: date, onChanged: context.read<ValueCubit<String>>().set),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 Expanded(
                   child: BlocBuilder<ListCubit<TrailPoint>, ListState<TrailPoint>>(
                     builder: (context, s) {
-                      if (s.status != LoadStatus.success) return const Center(child: CircularProgressIndicator());
+                      if (s.status != LoadStatus.success) return const LoadingView();
                       if (s.items.isEmpty) return const Center(child: Text('No locations recorded on this day.'));
                       final summary = context.watch<ListCubit<DaySummary>>().state.items.firstOrNull;
                       final zones = context.watch<ListCubit<Geofence>>().state.items;
                       return ListView(
                         children: [
                           TeamMap(
-                            height: 220,
+                            height: AppSize.mapSm,
                             zones: zones,
                             route: [for (final p in s.items) (p.latitude, p.longitude)],
                             pins: [
@@ -86,7 +86,7 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
                           ),
                           if (summary != null)
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
                               child: Text(
                                 [
                                   'Travelled about ${summary.distanceKm.toStringAsFixed(1)} km',
@@ -101,13 +101,13 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
                               leading: Icon(
                                 p.context == 'ping' ? Icons.circle : Icons.place,
                                 size: p.context == 'ping' ? 10 : 20,
-                                color: p.context == 'ping' ? Colors.black38 : brandBlue,
+                                color: p.context == 'ping' ? AppColors.textSubtle : AppColors.primary,
                               ),
                               title: Text('${_time.format(p.recordedAt)} · ${_contextLabel(p.context)}'),
                               subtitle: Text([p.ref ?? '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}', if (p.zone != null) 'in ${p.zone}'].join(' · ')),
                               trailing: IconButton(
                                 tooltip: 'Open in maps',
-                                icon: const Icon(Icons.open_in_new, size: 18),
+                                icon: const Icon(Icons.open_in_new, size: AppIconSize.sm),
                                 onPressed: () => _openMap(context, p.latitude, p.longitude),
                               ),
                             ),
@@ -152,15 +152,15 @@ class TeamLocationsScreen extends StatelessWidget {
                 await _showZones(context);
                 cubit.load();
               },
-              icon: const Icon(Icons.radio_button_checked, size: 18),
+              icon: const Icon(Icons.radio_button_checked, size: AppIconSize.sm),
               label: Text('Zones (${zones.length})'),
             ),
-            OutlinedButton.icon(onPressed: cubit.load, icon: const Icon(Icons.refresh, size: 18), label: const Text('Refresh')),
+            OutlinedButton.icon(onPressed: cubit.load, icon: const Icon(Icons.refresh, size: AppIconSize.sm), label: const Text('Refresh')),
           ],
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(AppSpace.sm),
                 child: TeamMap(
                   zones: zones,
                   pins: [
@@ -171,6 +171,8 @@ class TeamLocationsScreen extends StatelessWidget {
               ),
             ),
             RowsCard(
+              texts: [for (final m in state.items) '${m.fullName} ${m.role}'],
+              sorts: {'Name': [for (final m in state.items) m.fullName], 'Last seen': [for (final m in state.items) m.recordedAt]},
               empty: const EmptyState(icon: Icons.place_outlined, title: 'No users'),
               rows: [
                 for (final m in state.items)
@@ -190,7 +192,7 @@ class TeamLocationsScreen extends StatelessWidget {
                               TextButton(onPressed: () => _showTrail(context, m), child: const Text('Trail')),
                               IconButton(
                                 tooltip: 'Open in maps',
-                                icon: const Icon(Icons.place, color: brandBlue),
+                                icon: Icon(Icons.place, color: AppColors.primary),
                                 onPressed: () => _openMap(context, m.latitude!, m.longitude!),
                               ),
                             ],
@@ -231,7 +233,7 @@ Future<void> _showZones(BuildContext context) {
             return AlertDialog(
               title: const Text('Zones'),
               content: SizedBox(
-                width: 560,
+                width: AppSize.dialogLg,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -239,11 +241,11 @@ Future<void> _showZones(BuildContext context) {
                     children: [
                       const Text(
                         'A zone is a place you care about — the shop, a warehouse, a market. The team list shows who is in which zone, and each trail shows when they were there. Tap the map to place a new one.',
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: AppText.helper,
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       TeamMap(
-                        height: 240,
+                        height: AppSize.mapSm,
                         zones: list.items,
                         draft: placed ? (draft.latitude!, draft.longitude!, draft.radiusM) : null,
                         onTap: (lat, lon) => cubit.set((latitude: lat, longitude: lon, radiusM: draft.radiusM)),
@@ -257,13 +259,13 @@ Future<void> _showZones(BuildContext context) {
                           }
                           cubit.set((latitude: fix.latitude, longitude: fix.longitude, radiusM: draft.radiusM));
                         },
-                        icon: const Icon(Icons.my_location, size: 18),
+                        icon: const Icon(Icons.my_location, size: AppIconSize.sm),
                         label: const Text('Use where I am now'),
                       ),
                       Row(
                         children: [
                           Expanded(child: TextField(controller: name, decoration: const InputDecoration(labelText: 'Zone name', isDense: true))),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpace.md),
                           DropdownButton<int>(
                             value: draft.radiusM,
                             items: const [
@@ -275,7 +277,7 @@ Future<void> _showZones(BuildContext context) {
                             ],
                             onChanged: (v) => cubit.set((latitude: draft.latitude, longitude: draft.longitude, radiusM: v ?? 200)),
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpace.md),
                           FilledButton(
                             onPressed: list.busy
                                 ? null
@@ -293,17 +295,17 @@ Future<void> _showZones(BuildContext context) {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       for (final z in list.items)
                         ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.radio_button_checked, color: receiveGreen, size: 18),
+                          leading: const Icon(Icons.radio_button_checked, color: AppColors.success, size: AppIconSize.sm),
                           title: Text(z.name),
                           subtitle: Text('${z.radiusM >= 1000 ? '${z.radiusM / 1000} km' : '${z.radiusM} m'} around ${z.latitude.toStringAsFixed(4)}, ${z.longitude.toStringAsFixed(4)}'),
-                          trailing: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline, size: 18), onPressed: () => zones.run(() => repo.removeGeofence(z.id))),
+                          trailing: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline, size: AppIconSize.sm), onPressed: () => zones.run(() => repo.removeGeofence(z.id))),
                         ),
-                      if (list.error != null) Text(list.error!, style: const TextStyle(color: payRed)),
+                      if (list.error != null) Text(list.error!, style: const TextStyle(color: AppColors.dangerText)),
                     ],
                   ),
                 ),

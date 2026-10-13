@@ -63,7 +63,7 @@ class _CompanyFormState extends State<_CompanyForm> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<CompanyCubit>().save({
       'name': _name.text.trim(),
       'phone': _phone.text.trim(),
@@ -90,30 +90,30 @@ class _CompanyFormState extends State<_CompanyForm> {
         if (state.firm == null) {
           return state.loadStatus == LoadStatus.failure
               ? ErrorRetry(error: state.error!, onRetry: context.read<CompanyCubit>().load)
-              : const Center(child: CircularProgressIndicator());
+              : const LoadingView();
         }
         final cubit = context.read<CompanyCubit>();
         final saving = state.submitStatus == SubmitStatus.submitting;
         return Column(children: [
           Expanded(
-            child: Form(
+            child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
               key: _formKey,
-              child: ListView(padding: const EdgeInsets.all(12), children: [
+              child: ListView(padding: const EdgeInsets.all(AppSpace.md), children: [
                 Card(
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(AppSpace.xl),
                     child: LayoutBuilder(builder: (context, c) {
                       final cols = c.maxWidth >= 900 ? 3 : (c.maxWidth >= 600 ? 2 : 1);
                       final width = (c.maxWidth - (cols - 1) * 24) / cols;
                       Widget box(Widget child) => SizedBox(width: width, child: child);
                       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        const Text('Edit Profile', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 20),
+                        const Text('Edit Profile', style: AppText.title),
+                        const SizedBox(height: AppSpace.xl),
                         Wrap(spacing: 24, runSpacing: 16, children: [
                           box(TextFormField(
                             controller: _name,
                             decoration: const InputDecoration(labelText: 'Business Name *'),
-                            validator: (v) => (v ?? '').trim().length < 2 ? 'Enter your business name' : null,
+                            validator: Validators.minLength('Business name', 2),
                           )),
                           box(TextFormField(
                             controller: _phone,
@@ -126,7 +126,7 @@ class _CompanyFormState extends State<_CompanyForm> {
                             decoration: const InputDecoration(labelText: 'GSTIN'),
                             validator: (v) {
                               final t = (v ?? '').trim().toUpperCase();
-                              return t.isEmpty || _gstinPattern.hasMatch(t) ? null : 'Enter a valid 15-character GSTIN';
+                              return t.isEmpty || _gstinPattern.hasMatch(t) ? null : 'GSTIN must be 15 characters, like 27AAACA1234C1Z5';
                             },
                             onChanged: (v) {
                               final t = v.trim().toUpperCase();
@@ -137,10 +137,7 @@ class _CompanyFormState extends State<_CompanyForm> {
                             controller: _email,
                             keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(labelText: 'Email ID'),
-                            validator: (v) {
-                              final t = (v ?? '').trim();
-                              return t.isEmpty || RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t) ? null : 'Enter a valid email';
-                            },
+                            validator: Validators.email(label: 'Email ID'),
                           )),
                           box(DateField(label: 'Account Books Beginning Date', value: state.booksStartDate!, onChanged: cubit.booksStartDateChanged)),
                           box(_dropdown('Business Type', state.businessType, businessTypes, cubit.businessTypeChanged)),
@@ -161,19 +158,19 @@ class _CompanyFormState extends State<_CompanyForm> {
                             controller: _pan,
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(labelText: 'PAN', helperText: 'For TDS / TCS statements'),
-                            validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'PAN looks like ABCDE1234F',
+                            validator: Validators.pan(),
                           )),
                           box(TextFormField(
                             controller: _tan,
                             textCapitalization: TextCapitalization.characters,
                             decoration: const InputDecoration(labelText: 'TAN', helperText: 'Needed only if you deduct or collect tax'),
-                            validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{4}[0-9]{5}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'TAN looks like PNEA12345B',
+                            validator: Validators.tan(),
                           )),
                           box(TextFormField(
                             controller: _pincode,
                             keyboardType: TextInputType.number,
                             decoration: const InputDecoration(labelText: 'Pincode'),
-                            validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[1-9][0-9]{5}$').hasMatch(v!.trim()) ? null : 'Pincode must be 6 digits',
+                            validator: Validators.pincode(),
                           )),
                           SizedBox(
                             width: cols == 1 ? width : width * 2 + 24,
@@ -185,14 +182,14 @@ class _CompanyFormState extends State<_CompanyForm> {
                             ),
                           ),
                         ]),
-                        const SizedBox(height: 24),
-                        const Text('Logo and signature', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        const Text('Printed on invoices and other documents. PNG, JPEG or WebP, up to 5 MB.', style: TextStyle(color: Colors.black54)),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpace.xxl),
+                        const Text('Logo and signature', style: AppText.subtitle),
+                        const SizedBox(height: AppSpace.xs),
+                        const Text('Printed on invoices and other documents. PNG, JPEG or WebP, up to 5 MB.', style: TextStyle(color: AppColors.textMuted)),
+                        const SizedBox(height: AppSpace.md),
                         Wrap(spacing: 24, runSpacing: 16, children: [
                           ImageSlot(label: 'Business logo', fileId: state.logoFileId, onChanged: cubit.logoChanged, icon: Icons.storefront_outlined),
-                          ImageSlot(label: 'Signature', fileId: state.signatureFileId, onChanged: cubit.signatureChanged, width: 220, icon: Icons.draw_outlined),
+                          ImageSlot(label: 'Signature', fileId: state.signatureFileId, onChanged: cubit.signatureChanged, width: AppSize.fieldMd, icon: Icons.draw_outlined),
                         ]),
                       ]);
                     }),
@@ -202,8 +199,8 @@ class _CompanyFormState extends State<_CompanyForm> {
             ),
           ),
           Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(12),
+            color: AppColors.onPrimary,
+            padding: const EdgeInsets.all(AppSpace.md),
             child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
               TextButton(
                 onPressed: saving
@@ -214,12 +211,11 @@ class _CompanyFormState extends State<_CompanyForm> {
                       },
                 child: const Text('Cancel'),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.md),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: payRed),
                 onPressed: saving ? null : _save,
                 child: saving
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? InlineSpinner(color: AppColors.onPrimary)
                     : const Text('Save Changes'),
               ),
             ]),

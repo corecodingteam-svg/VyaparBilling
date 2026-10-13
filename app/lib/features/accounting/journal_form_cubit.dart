@@ -8,6 +8,7 @@ import '../../data/models/cash_bank.dart';
 import '../../data/repositories/accounting_repository.dart';
 import '../../data/repositories/cash_bank_repository.dart';
 import '../../shared/format.dart';
+import '../../shared/theme.dart';
 
 num _r2(num v) => (v * 100).round() / 100;
 
@@ -48,6 +49,7 @@ class JournalFormState extends Equatable {
     this.formRev = 0,
     this.status = SubmitStatus.idle,
     this.error,
+    this.issue,
   });
 
   final LoadStatus loadStatus;
@@ -62,6 +64,9 @@ class JournalFormState extends Equatable {
   final int formRev;
   final SubmitStatus status;
   final String? error;
+
+  /// Which part of the form [error] is about, so the screen can outline it.
+  final FormIssue? issue;
 
   num get debitTotal => _r2(lines.fold<num>(0, (s, l) => s + (parseNum(l.debit) ?? 0)));
   num get creditTotal => _r2(lines.fold<num>(0, (s, l) => s + (parseNum(l.credit) ?? 0)));
@@ -85,6 +90,7 @@ class JournalFormState extends Equatable {
     int? formRev,
     SubmitStatus? status,
     String? error,
+    FormIssue? issue,
   }) =>
       JournalFormState(
         loadStatus: loadStatus ?? this.loadStatus,
@@ -97,10 +103,11 @@ class JournalFormState extends Equatable {
         formRev: formRev ?? this.formRev,
         status: status ?? this.status,
         error: error,
+        issue: issue,
       );
 
   @override
-  List<Object?> get props => [loadStatus, ledgerAccounts, bankAccounts, number, date, description, lines, formRev, status, error];
+  List<Object?> get props => [loadStatus, ledgerAccounts, bankAccounts, number, date, description, lines, formRev, status, error, issue];
 }
 
 /// State and rules of the journal entry dialog: at least two lines, each on one account and one
@@ -178,30 +185,36 @@ class JournalFormCubit extends Cubit<JournalFormState> {
       _update(uid, (l) => l.debit.isEmpty || v.trim().isEmpty ? l.copyWith(credit: v) : l.copyWith(credit: v, debit: '', rev: l.rev + 1));
 
   /// Returns a message for the first problem, or null when the entry can be saved.
-  String? validate() {
+  /// The first problem and which part of the form it is about, or null when the form can be saved.
+  FormIssue? firstIssue() {
     final s = state;
-    if (s.number.trim().isEmpty) return 'Enter the journal number.';
+    if (s.number.trim().isEmpty) return FormIssue('number', 'Enter the journal number.');
     final filled = s.lines.where((l) => !l.isBlank).toList();
-    if (filled.length < 2) return 'A journal entry needs at least two lines.';
+    if (filled.length < 2) return FormIssue('lines', 'A journal entry needs at least two lines.');
     for (final l in filled) {
       final row = s.lines.indexOf(l) + 1;
-      if (l.account == null) return 'Line $row: select an account.';
+      if (l.account == null) return FormIssue('line:${l.uid}', 'Line $row: select an account.');
       final debit = parseNum(l.debit) ?? 0;
       final credit = parseNum(l.credit) ?? 0;
       if ((l.debit.trim().isNotEmpty && parseNum(l.debit) == null) || (l.credit.trim().isNotEmpty && parseNum(l.credit) == null)) {
-        return 'Line $row: enter a valid amount.';
+        return FormIssue('line:${l.uid}', 'Line $row: enter a valid amount.');
       }
-      if ((debit > 0) == (credit > 0)) return 'Line $row: enter either a debit or a credit amount.';
+      if ((debit > 0) == (credit > 0)) return FormIssue('line:${l.uid}', 'Line $row: enter either a debit or a credit amount.');
     }
-    if (s.difference != 0) return 'Debits (${money(s.debitTotal)}) and credits (${money(s.creditTotal)}) must be equal.';
+    if (s.difference != 0) return FormIssue('totals', 'Debits (${money(s.debitTotal)}) and credits (${money(s.creditTotal)}) must be equal.');
     return null;
   }
 
+  /// The message for the first problem, or null when the form can be saved.
+  String? validate() => firstIssue()?.message;
+
+
   Future<void> save() async {
     if (state.status == SubmitStatus.submitting) return;
-    final problem = validate();
-    if (problem != null) {
-      emit(state.copyWith(status: SubmitStatus.failure, error: problem));
+    final issue = firstIssue();
+    final problem = issue?.message;
+    if (issue != null) {
+      emit(state.copyWith(status: SubmitStatus.failure, error: problem, issue: issue));
       return;
     }
     emit(state.copyWith(status: SubmitStatus.submitting));

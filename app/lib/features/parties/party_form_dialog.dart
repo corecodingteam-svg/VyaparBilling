@@ -105,7 +105,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   }
 
   void _save({required bool andNew}) {
-    if (!_formKey.currentState!.validate()) {
+    if (!validateForm(context, _formKey, report: showError)) {
       // Errors on a hidden tab would otherwise be invisible, so switch to it.
       if (_emailError(_email.text) != null) {
         _tabs.animateTo(0);
@@ -163,20 +163,20 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
 
   String? _gstinError(String? v) {
     final t = (v ?? '').trim().toUpperCase();
-    return t.isEmpty || _gstinPattern.hasMatch(t) ? null : 'Enter a valid 15-character GSTIN';
+    return t.isEmpty || _gstinPattern.hasMatch(t) ? null : 'GSTIN must be 15 characters, like 27AAACA1234C1Z5';
   }
 
   String? _phoneError(String? v) {
     final t = (v ?? '').trim();
-    return t.isEmpty || RegExp(r'^[0-9+\- ]{6,20}$').hasMatch(t) ? null : 'Enter a valid phone number';
+    return t.isEmpty || RegExp(r'^[0-9+\- ]{6,20}$').hasMatch(t) ? null : 'Phone number must be 6 to 20 digits (digits, +, - and spaces only)';
   }
 
   String? _emailError(String? v) {
     final t = (v ?? '').trim();
-    return t.isEmpty || RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t) ? null : 'Enter a valid email';
+    return t.isEmpty || RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(t) ? null : 'Email must be a valid address, like name@example.com';
   }
 
-  String? _amountError(String? v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid amount' : null;
+  String? _amountError(String? v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Opening balance must be a number' : null;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +184,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
     final content = BlocConsumer<PartyFormCubit, PartyFormState>(
       listenWhen: (a, b) => a.status != b.status && (b.status == SubmitStatus.success || b.status == SubmitStatus.failure),
       listener: _onResult,
-      builder: (context, state) => Form(
+      builder: (context, state) => Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
         key: _formKey,
         child: Column(
           children: [
@@ -192,12 +192,12 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
             const Divider(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(AppSpace.xl),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _topFields(narrow),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpace.lg),
                     TabBar(
                       controller: _tabs,
                       isScrollable: true,
@@ -208,7 +208,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                         Tab(text: 'Additional Fields'),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: AppSpace.xl),
                     AnimatedBuilder(
                       animation: _tabs,
                       builder: (_, _) => IndexedStack(
@@ -231,15 +231,15 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
     if (narrow) return Dialog.fullscreen(child: content);
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900, maxHeight: 640), child: content),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: AppSize.dialogForm, maxHeight: AppSize.dialogMaxHeight), child: content),
     );
   }
 
   Widget _header() => Padding(
-    padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
+    padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.md, AppSpace.sm, AppSpace.md),
     child: Row(
       children: [
-        Text(_cubit.editing ? 'Edit Party' : 'Add Party', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        Text(_cubit.editing ? 'Edit Party' : 'Add Party', style: AppText.title),
         const Spacer(),
         IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
       ],
@@ -248,12 +248,12 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
 
   Widget _row(bool narrow, List<Widget> children) => narrow
       ? Column(
-          children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c)],
+          children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: AppSpace.md), child: c)],
         )
       : Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: 16), Expanded(child: children[i])],
+            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: AppSpace.lg), Expanded(child: children[i])],
           ],
         );
 
@@ -262,7 +262,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
       controller: _name,
       autofocus: !_cubit.editing,
       decoration: const InputDecoration(labelText: 'Party Name *'),
-      validator: (v) => (v ?? '').trim().isEmpty ? 'Party name is required' : null,
+      validator: Validators.required('Party name'),
     ),
     TextFormField(
       controller: _gstin,
@@ -293,7 +293,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
           items: [for (final e in gstTypes.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
           onChanged: (v) => _cubit.gstTypeChanged(v!),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<String>(
           key: ValueKey('state-${state.stateCode}'),
           initialValue: state.stateCode,
@@ -302,7 +302,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
           items: [for (final e in gstStates.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
           onChanged: _cubit.stateChanged,
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         TextFormField(
           controller: _email,
           keyboardType: TextInputType.emailAddress,
@@ -319,17 +319,17 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
           maxLines: 3,
           decoration: const InputDecoration(labelText: 'Billing Address', alignLabelWithHint: true),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         Row(
           children: [
             Expanded(child: TextFormField(controller: _city, decoration: const InputDecoration(labelText: 'City'))),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpace.md),
             Expanded(
               child: TextFormField(
                 controller: _pincode,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'Pincode'),
-                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[1-9][0-9]{5}$').hasMatch(v!.trim()) ? null : 'Pincode must be 6 digits',
+                validator: Validators.pincode(),
               ),
             ),
           ],
@@ -346,7 +346,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
               alignLabelWithHint: true,
               suffixIcon: IconButton(
                 tooltip: 'Remove shipping address',
-                icon: const Icon(Icons.close, size: 18),
+                icon: const Icon(Icons.close, size: AppIconSize.sm),
                 onPressed: () => _cubit.shippingToggled(false),
               ),
             ),
@@ -374,14 +374,14 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
               controller: _pan,
               textCapitalization: TextCapitalization.characters,
               decoration: const InputDecoration(labelText: 'PAN', helperText: 'Taken from the GSTIN when empty'),
-              validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'PAN looks like ABCDE1234F',
+              validator: Validators.pan(),
             ),
             if (widget.settings.tdsEnabled)
               TextFormField(
                 controller: _tdsSection,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'TDS section code', helperText: 'Empty = company default (1031 goods)'),
-                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^1\d{3}$').hasMatch(v!.trim()) ? null : '4-digit code, e.g. 1031',
+                validator: Validators.pattern('TDS section code', RegExp(r'^1\d{3}$'), '4 digits starting with 1, like 1031'),
               )
             else
               const SizedBox.shrink(),
@@ -390,12 +390,12 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                 controller: _tcsCode,
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(labelText: 'TCS collection code', helperText: 'e.g. 1073 scrap'),
-                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^1\d{3}$').hasMatch(v!.trim()) ? null : '4-digit code, e.g. 1073',
+                validator: Validators.pattern('TCS collection code', RegExp(r'^1\d{3}$'), '4 digits starting with 1, like 1073'),
               )
             else
               const SizedBox.shrink(),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
         ],
         _row(narrow, [
           TextFormField(
@@ -406,52 +406,52 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
           ),
           DateField(label: 'As Of Date', value: state.asOf, onChanged: _cubit.asOfChanged),
         ]),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         SegmentedButton<bool>(
           segments: const [
-            ButtonSegment(value: true, label: Text('To Receive'), icon: Icon(Icons.south_west, size: 16)),
-            ButtonSegment(value: false, label: Text('To Pay'), icon: Icon(Icons.north_east, size: 16)),
+            ButtonSegment(value: true, label: Text('To Receive'), icon: Icon(Icons.south_west, size: AppIconSize.xs)),
+            ButtonSegment(value: false, label: Text('To Pay'), icon: Icon(Icons.north_east, size: AppIconSize.xs)),
           ],
           selected: {state.toReceive},
           onSelectionChanged: (s) => _cubit.balanceDirectionChanged(s.first),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpace.xxl),
         const Text('Credit Limit', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
+        const SizedBox(height: AppSpace.xs),
         Row(
           children: [
             Text(
               'No Limit',
-              style: TextStyle(color: state.customLimit ? Colors.black54 : brandBlue, fontWeight: FontWeight.w600),
+              style: TextStyle(color: state.customLimit ? AppColors.textMuted : AppColors.primary, fontWeight: FontWeight.w600),
             ),
             Switch(value: state.customLimit, onChanged: _cubit.creditLimitToggled),
             Text(
               'Custom Limit',
-              style: TextStyle(color: state.customLimit ? brandBlue : Colors.black54, fontWeight: FontWeight.w600),
+              style: TextStyle(color: state.customLimit ? AppColors.primary : AppColors.textMuted, fontWeight: FontWeight.w600),
             ),
           ],
         ),
         if (state.customLimit)
           SizedBox(
-            width: 260,
+            width: AppSize.fieldMd,
             child: TextFormField(
               controller: _creditLimit,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Credit Limit', prefixText: '₹ '),
-              validator: (v) => parseNum(v ?? '') == null ? 'Enter the credit limit' : null,
+              validator: Validators.number('Credit limit', required: true),
             ),
           ),
         if (widget.settings.partyGroupsEnabled || state.salesmen.isNotEmpty || state.currencies.isNotEmpty || widget.settings.loyaltyEnabled) ...[
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpace.xxl),
           const Text('More', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           Wrap(
             spacing: 16,
             runSpacing: 14,
             children: [
               if (widget.settings.partyGroupsEnabled)
                 SizedBox(
-                  width: 260,
+                  width: AppSize.fieldMd,
                   child: DropdownButtonFormField<String?>(
                     key: ValueKey('group-${state.groupId}-${state.groups.length}'),
                     initialValue: state.groups.any((g) => g.id == state.groupId) ? state.groupId : null,
@@ -466,7 +466,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                 ),
               if (state.salesmen.isNotEmpty)
                 SizedBox(
-                  width: 260,
+                  width: AppSize.fieldMd,
                   child: DropdownButtonFormField<String?>(
                     key: ValueKey('salesman-${state.assignedUserId}-${state.salesmen.length}'),
                     initialValue: state.salesmen.any((m) => m.id == state.assignedUserId) ? state.assignedUserId : null,
@@ -481,7 +481,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                 ),
               if (state.currencies.isNotEmpty)
                 SizedBox(
-                  width: 260,
+                  width: AppSize.fieldMd,
                   child: DropdownButtonFormField<String?>(
                     key: ValueKey('currency-${state.currencyCode}-${state.currencies.length}'),
                     initialValue: state.currencies.any((c) => c.code == state.currencyCode) ? state.currencyCode : null,
@@ -496,12 +496,12 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                 ),
               if (widget.settings.loyaltyEnabled)
                 SizedBox(
-                  width: 260,
+                  width: AppSize.fieldMd,
                   child: TextFormField(
                     controller: _loyalty,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Opening loyalty points'),
-                    validator: (v) => (v ?? '').trim().isEmpty || int.tryParse(v!.trim()) != null ? null : 'Whole number',
+                    validator: Validators.number('Opening points', whole: true),
                   ),
                 ),
             ],
@@ -515,7 +515,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
     children: [
       for (var i = 0; i < 4; i++)
         Padding(
-          padding: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.only(bottom: AppSpace.md),
           child: Row(
             children: [
               Expanded(
@@ -523,10 +523,10 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
                   controller: _fieldNames[i],
                   // Names of the fields defined in Settings are fixed here so every party uses the same ones.
                   readOnly: i < widget.settings.partyFields.length,
-                  decoration: InputDecoration(labelText: 'Field ${i + 1} Name', filled: i < widget.settings.partyFields.length, fillColor: pageBg),
+                  decoration: InputDecoration(labelText: 'Field ${i + 1} Name', filled: i < widget.settings.partyFields.length, fillColor: AppColors.background),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpace.md),
               Expanded(
                 child: TextFormField(
                   controller: _fieldValues[i],
@@ -542,23 +542,23 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   Widget _footer(PartyFormState state) {
     final busy = state.status == SubmitStatus.submitting;
     return Padding(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(AppSpace.md),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (_cubit.editing)
             OutlinedButton(
               onPressed: busy ? null : _delete,
-              style: OutlinedButton.styleFrom(foregroundColor: payRed),
+              style: AppButtons.destructiveOutlined,
               child: const Text('Delete'),
             )
           else
             OutlinedButton(onPressed: busy ? null : () => _save(andNew: true), child: const Text('Save & New')),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpace.md),
           FilledButton(
             onPressed: busy ? null : () => _save(andNew: false),
             child: busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const InlineSpinner()
                 : Text(_cubit.editing ? 'Update' : 'Save'),
           ),
         ],

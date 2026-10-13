@@ -39,7 +39,7 @@ class IntegrationsScreen extends StatelessWidget {
             'Connect the services you have an account with. Keys are stored encrypted on the server and are never shown again. '
             'Everything works without them; these add sending, filing and online payments.',
         actions: [
-          OutlinedButton.icon(onPressed: () => context.push('/messages'), icon: const Icon(Icons.forum_outlined, size: 18), label: const Text('Messages')),
+          OutlinedButton.icon(onPressed: () => context.push('/messages'), icon: const Icon(Icons.forum_outlined, size: AppIconSize.sm), label: const Text('Messages')),
         ],
         children: [for (final i in state.items) _IntegrationCard(integration: i)],
       ),
@@ -67,18 +67,18 @@ class _IntegrationCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(integration.help, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-                const SizedBox(height: 12),
+                Text(integration.help, style: AppText.helper),
+                const SizedBox(height: AppSpace.md),
                 for (final f in integration.fields)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.only(bottom: AppSpace.md),
                     child: f.options != null
                         ? DropdownButtonFormField<String>(
                             initialValue: f.options!.contains(f.value) ? f.value : null,
                             decoration: InputDecoration(labelText: f.required ? '${f.label} *' : f.label),
                             items: [for (final o in f.options!) DropdownMenuItem(value: o, child: Text(o))],
                             onChanged: (v) => picked[f.key] = v ?? '',
-                            validator: (v) => f.required && v == null ? 'Choose one' : null,
+                            validator: (v) => f.required && v == null ? 'Choose ${f.label}' : null,
                           )
                         : TextFormField(
                             controller: controllers[f.key],
@@ -90,7 +90,7 @@ class _IntegrationCard extends StatelessWidget {
                               helperText: f.secret && f.stored != null ? 'Saved (${f.stored}). Leave empty to keep it.' : f.help,
                               helperMaxLines: 3,
                             ),
-                            validator: (v) => f.required && (v ?? '').trim().isEmpty && !(f.secret && f.stored != null) ? 'Required' : null,
+                            validator: (v) => f.required && (v ?? '').trim().isEmpty && !(f.secret && f.stored != null) ? '${f.label} is required' : null,
                           ),
                   ),
               ],
@@ -121,7 +121,7 @@ class _IntegrationCard extends StatelessWidget {
           keyboardType: TextInputType.phone,
           autofocus: true,
           decoration: const InputDecoration(labelText: 'Your mobile number', helperText: 'The test goes to this number.'),
-          validator: (v) => RegExp(r'^[+\d\s()-]{7,20}$').hasMatch(v ?? '') ? null : 'Enter a phone number',
+          validator: Validators.pattern('Mobile number', RegExp(r'^[+\d\s()-]{7,20}$'), 'a phone number, like +91 98765 43210', required: true),
           onFieldSubmitted: (_) => submit(),
         ),
       ],
@@ -143,25 +143,25 @@ class _IntegrationCard extends StatelessWidget {
     final messaging = i.provider == 'whatsapp' || i.provider == 'sms';
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Expanded(child: Text(i.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                Expanded(child: Text(i.title, style: AppText.subtitle)),
                 Chip(
                   label: Text(i.connected ? 'Connected' : 'Not set up'),
-                  backgroundColor: (i.connected ? receiveGreen : Colors.grey).withValues(alpha: 0.15),
+                  backgroundColor: (i.connected ? AppColors.successText : AppColors.textSubtle).withValues(alpha: 0.15),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(i.help, style: const TextStyle(color: Colors.black54, fontSize: 12)),
-            if (isGoogle && i.email != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text('Account: ${i.email}${i.location == null ? '' : ' · ${i.location}'}')),
+            const SizedBox(height: AppSpace.xs),
+            Text(i.help, style: AppText.helper),
+            if (isGoogle && i.email != null) Padding(padding: const EdgeInsets.only(top: AppSpace.sm), child: Text('Account: ${i.email}${i.location == null ? '' : ' · ${i.location}'}')),
             if (i.provider == 'razorpay') const _WebhookUrl(),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -196,13 +196,13 @@ class _WebhookUrl extends StatelessWidget {
       builder: (context, url) => url == null
           ? const SizedBox.shrink()
           : Padding(
-              padding: const EdgeInsets.only(top: 8),
+              padding: const EdgeInsets.only(top: AppSpace.sm),
               child: Row(
                 children: [
-                  Expanded(child: SelectableText('Webhook address: $url', style: const TextStyle(fontSize: 12))),
+                  Expanded(child: SelectableText('Webhook address: $url', style: AppText.small)),
                   IconButton(
                     tooltip: 'Copy',
-                    icon: const Icon(Icons.copy, size: 16),
+                    icon: const Icon(Icons.copy, size: AppIconSize.xs),
                     onPressed: () async {
                       await Clipboard.setData(ClipboardData(text: url));
                       if (context.mounted) showSuccess(context, 'Webhook address copied');
@@ -246,7 +246,7 @@ Future<void> showSendDialog(
         builder: (ctx, submit) => AlertDialog(
           title: Text(title),
           content: SizedBox(
-            width: 360,
+            width: AppSize.dialogSm,
             child: BlocBuilder<ListCubit<Integration>, ListState<Integration>>(
               builder: (ctx, list) {
                 final channels = [for (final i in list.items) if ((i.provider == 'whatsapp' || i.provider == 'sms') && i.connected) i.provider];
@@ -256,16 +256,16 @@ Future<void> showSendDialog(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     TextField(controller: phoneField, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile number')),
-                    const SizedBox(height: 16),
-                    if (list.status == LoadStatus.loading) const Center(child: CircularProgressIndicator()),
+                    const SizedBox(height: AppSpace.lg),
+                    if (list.status == LoadStatus.loading) const LoadingView(),
                     if (list.status != LoadStatus.loading && channels.isEmpty)
                       const Text('WhatsApp and SMS are not connected, so the app cannot send for you. Connect them under Settings → Integrations, or open WhatsApp on this device with the message ready.'),
                     for (final c in channels)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.only(bottom: AppSpace.sm),
                         child: FilledButton.icon(
                           onPressed: busy ? null : () => ctx.read<SubmitCubit<void>>().run(() => send(repo, c, phoneField.text.trim())),
-                          icon: Icon(c == 'sms' ? Icons.sms_outlined : Icons.chat_outlined, size: 18),
+                          icon: Icon(c == 'sms' ? Icons.sms_outlined : Icons.chat_outlined, size: AppIconSize.sm),
                           label: Text('Send by ${_channelNames[c]}'),
                         ),
                       ),
@@ -275,7 +275,7 @@ Future<void> showSendDialog(
                         if (number == null) return showError(ctx, 'Enter a valid mobile number.');
                         await launchUrl(Uri.parse('https://wa.me/$number?text=${Uri.encodeComponent(manualMessage)}'), mode: LaunchMode.externalApplication);
                       },
-                      icon: const Icon(Icons.open_in_new, size: 18),
+                      icon: const Icon(Icons.open_in_new, size: AppIconSize.sm),
                       label: const Text('Open WhatsApp on this device'),
                     ),
                   ],
@@ -321,7 +321,7 @@ class _EinvoiceDialog extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: Text(title),
         content: SizedBox(
-          width: 360,
+          width: AppSize.dialogSm,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             for (var i = 0; i < fields.length; i++)
               TextField(controller: controllers[i], decoration: InputDecoration(labelText: fields[i].$1, helperText: fields[i].$2.isEmpty ? null : fields[i].$2)),
@@ -346,10 +346,10 @@ class _EinvoiceDialog extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel the e-invoice'),
         content: SizedBox(
-          width: 360,
+          width: AppSize.dialogSm,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('The portal allows this only within 24 hours of generating the IRN.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-            const SizedBox(height: 8),
+            const Text('The portal allows this only within 24 hours of generating the IRN.', style: AppText.helper),
+            const SizedBox(height: AppSpace.sm),
             BlocBuilder<ValueCubit<String>, String>(
               bloc: reason,
               builder: (_, v) => DropdownButtonFormField<String>(
@@ -399,24 +399,24 @@ class _EinvoiceDialog extends StatelessWidget {
       return AlertDialog(
         title: Text('E-invoice · $number'),
         content: SizedBox(
-          width: 520,
+          width: AppSize.dialogLg,
           child: info == null
-              ? (s.status == LoadStatus.failure ? Text(s.error ?? 'Could not load') : const Center(child: CircularProgressIndicator()))
+              ? (s.status == LoadStatus.failure ? Text(s.error ?? 'Could not load') : const LoadingView())
               : SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _section('E-invoice (IRN)'),
                       if (info.hasIrn) ...[
-                        SelectableText('IRN: ${info.irn}', style: const TextStyle(fontSize: 12)),
-                        if (info.ackNo != null) Text('Ack no. ${info.ackNo}', style: const TextStyle(fontSize: 12)),
-                        const SizedBox(height: 4),
-                        const Text('This invoice is registered and cannot be edited or deleted unless the IRN is cancelled.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        SelectableText('IRN: ${info.irn}', style: AppText.small),
+                        if (info.ackNo != null) Text('Ack no. ${info.ackNo}', style: AppText.small),
+                        const SizedBox(height: AppSpace.xs),
+                        const Text('This invoice is registered and cannot be edited or deleted unless the IRN is cancelled.', style: AppText.helper),
                       ] else ...[
-                        if (info.status == 'cancelled') const Text('The earlier IRN was cancelled.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        if (info.status == 'cancelled') const Text('The earlier IRN was cancelled.', style: AppText.helper),
                         _problems(info.einvoiceProblems),
                       ],
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         if (!info.hasIrn && info.portalConnected)
                           FilledButton(onPressed: s.busy || info.einvoiceProblems.isNotEmpty ? null : cubit.generate, child: const Text('Generate on portal')),
@@ -441,18 +441,18 @@ class _EinvoiceDialog extends StatelessWidget {
                       ]),
                       if (!info.portalConnected && !info.hasIrn)
                         const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text('Filing directly needs the portal connected under Settings → Integrations. Otherwise download the JSON and upload it on the e-invoice portal.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                          padding: EdgeInsets.only(top: AppSpace.sm),
+                          child: Text('Filing directly needs the portal connected under Settings → Integrations. Otherwise download the JSON and upload it on the e-invoice portal.', style: AppText.helper),
                         ),
                       const Divider(height: 28),
                       _section('Transport and e-way bill'),
                       _TransportForm(key: ValueKey(info.transport), initial: info.transport, busy: s.busy, onSave: cubit.saveTransport),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       if (info.ewayBillNo != null)
                         Text('E-way bill ${info.ewayBillNo}${info.ewayValidUpto == null ? '' : ' · valid until ${info.ewayValidUpto!.substring(0, 10)}'}', style: const TextStyle(fontWeight: FontWeight.w600))
                       else
                         _problems(info.ewayProblems),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpace.sm),
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         if (info.ewayBillNo == null && info.portalConnected && info.hasIrn)
                           FilledButton(onPressed: s.busy || info.ewayProblems.isNotEmpty ? null : cubit.generateEway, child: const Text('Generate e-way bill')),
@@ -465,7 +465,7 @@ class _EinvoiceDialog extends StatelessWidget {
                             child: const Text('I have the number'),
                           ),
                       ]),
-                      if (s.busy) const Padding(padding: EdgeInsets.only(top: 12), child: LinearProgressIndicator()),
+                      if (s.busy) const Padding(padding: EdgeInsets.only(top: AppSpace.md), child: GradientProgressBar()),
                     ],
                   ),
                 ),
@@ -475,15 +475,15 @@ class _EinvoiceDialog extends StatelessWidget {
     },
   );
 
-  Widget _section(String text) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)));
+  Widget _section(String text) => Padding(padding: const EdgeInsets.only(bottom: AppSpace.sm), child: Text(text, style: const TextStyle(fontSize: AppFont.bodyLarge, fontWeight: FontWeight.w600)));
 
   Widget _problems(List<String> problems) => problems.isEmpty
-      ? const Text('Everything needed is filled in.', style: TextStyle(color: receiveGreen))
+      ? const Text('Everything needed is filled in.', style: TextStyle(color: AppColors.successText))
       : Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('Fix these first:', style: TextStyle(fontWeight: FontWeight.w600)),
-            for (final p in problems) Padding(padding: const EdgeInsets.only(top: 2), child: Text('• $p', style: const TextStyle(fontSize: 12))),
+            for (final p in problems) Padding(padding: const EdgeInsets.only(top: AppSpace.xxs), child: Text('• $p', style: AppText.small)),
           ],
         );
 }
@@ -537,17 +537,17 @@ class _TransportFormState extends State<_TransportForm> {
       ),
       Row(children: [
         Expanded(child: TextField(controller: vehicle, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Vehicle number'))),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpace.md),
         Expanded(child: TextField(controller: distance, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Distance (km)'))),
       ]),
       Row(children: [
         Expanded(child: TextField(controller: transporterId, decoration: const InputDecoration(labelText: 'Transporter GSTIN'))),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpace.md),
         Expanded(child: TextField(controller: transporterName, decoration: const InputDecoration(labelText: 'Transporter name'))),
       ]),
       Row(children: [
         Expanded(child: TextField(controller: docNo, decoration: const InputDecoration(labelText: 'Transport doc no.'))),
-        const SizedBox(width: 12),
+        const SizedBox(width: AppSpace.md),
         Expanded(child: TextField(controller: docDate, decoration: const InputDecoration(labelText: 'Doc date', hintText: 'yyyy-mm-dd'))),
       ]),
       Align(
@@ -589,26 +589,26 @@ Future<void> showPaymentLinkDialog(BuildContext context, {required String invoic
           return AlertDialog(
             title: Text('Pay online · $number'),
             content: SizedBox(
-              width: 420,
+              width: AppSize.dialogMd,
               child: link != null
                   ? Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(money(link.amount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 8),
+                        Text(money(link.amount), style: AppText.headline),
+                        const SizedBox(height: AppSpace.sm),
                         SelectableText(link.url),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpace.sm),
                         Text(
                           link.paid ? 'Paid. A Payment-In was recorded against this invoice.' : 'Send this link to the customer. When they pay, the payment is recorded here by itself.',
-                          style: TextStyle(color: link.paid ? receiveGreen : Colors.black54, fontSize: 12),
+                          style: TextStyle(color: link.paid ? AppColors.successText : AppColors.textMuted, fontSize: AppFont.small),
                         ),
-                        if (s.busy) const Padding(padding: EdgeInsets.only(top: 8), child: LinearProgressIndicator()),
+                        if (s.busy) const Padding(padding: EdgeInsets.only(top: AppSpace.sm), child: GradientProgressBar()),
                       ],
                     )
                   : s.status == LoadStatus.failure
                       ? Text(s.error ?? 'Could not make the link.')
-                      : const Center(child: CircularProgressIndicator()),
+                      : const LoadingView(),
             ),
             actions: [
               if (link != null && !link.paid) ...[
@@ -706,38 +706,40 @@ class _MessagesViewState extends State<_MessagesView> {
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpace.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Message all customers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
+                  const Text('Message all customers', style: AppText.subtitle),
+                  const SizedBox(height: AppSpace.xs),
                   const Text(
                     'WhatsApp only delivers a first message to customers through a template Meta has approved (set its name in the WhatsApp integration). SMS in India needs a DLT-approved template.',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: AppText.helper,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.md),
                   SegmentedButton<String>(
                     segments: const [ButtonSegment(value: 'whatsapp', label: Text('WhatsApp')), ButtonSegment(value: 'sms', label: Text('SMS'))],
                     selected: {channel},
                     onSelectionChanged: (v) => context.read<ValueCubit<String>>().set(v.first),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.md),
                   TextField(controller: text, minLines: 2, maxLines: 5, maxLength: 500, decoration: const InputDecoration(labelText: 'Message', helperText: 'Use {customer} and {business} to personalise.')),
-                  FilledButton.icon(onPressed: () => _send(context), icon: const Icon(Icons.send, size: 18), label: const Text('Send')),
+                  FilledButton.icon(onPressed: () => _send(context), icon: const Icon(Icons.send, size: AppIconSize.sm), label: const Text('Send')),
                 ],
               ),
             ),
           ),
           RowsCard(
+            texts: [for (final m in state.items) '${m.to} ${m.kind} ${m.channel} ${m.partyName ?? ''} ${m.body}'],
+            sorts: {'Newest': [for (final m in state.items) m.createdAt], 'Recipient': [for (final m in state.items) m.to]},
             empty: const EmptyState(icon: Icons.forum_outlined, title: 'Nothing sent yet', message: 'Messages you send show up here, with any error the provider gave.'),
             rows: [
               for (final m in state.items)
                 ListTile(
-                  leading: Icon(m.channel == 'sms' ? Icons.sms_outlined : Icons.chat_outlined, color: m.ok ? receiveGreen : payRed),
+                  leading: Icon(m.channel == 'sms' ? Icons.sms_outlined : Icons.chat_outlined, color: m.ok ? AppColors.success : AppColors.danger),
                   title: Text('${m.partyName ?? m.to} · ${m.kind}'),
                   subtitle: Text(m.ok ? m.body : '${m.error ?? 'Failed'}\n${m.body}', maxLines: 3, overflow: TextOverflow.ellipsis),
-                  trailing: Text('${displayDate(isoDate(m.createdAt))}\n${TimeOfDay.fromDateTime(m.createdAt).format(context)}', textAlign: TextAlign.end, style: const TextStyle(fontSize: 11)),
+                  trailing: Text('${displayDate(isoDate(m.createdAt))}\n${TimeOfDay.fromDateTime(m.createdAt).format(context)}', textAlign: TextAlign.end, style: AppText.caption),
                 ),
             ],
           ),
@@ -762,14 +764,14 @@ class GoogleProfileScreen extends StatelessWidget {
         if (s.message != null) showSuccess(context, s.message!);
       },
       builder: (context, s) => switch (s.stage) {
-        GoogleStage.loading => const Center(child: CircularProgressIndicator()),
+        GoogleStage.loading => const LoadingView(),
         GoogleStage.failure => ErrorRetry(error: s.error ?? 'Could not load', onRetry: context.read<GoogleProfileCubit>().load),
         GoogleStage.notConnected => TitledPage(
           title: 'Google Business Profile',
           children: [
             Card(
               child: SizedBox(
-                height: 300,
+                height: AppSize.stateHeight,
                 child: EmptyState(
                   icon: Icons.storefront_outlined,
                   title: 'Connect your Google listing',
@@ -825,7 +827,7 @@ class _GoogleReady extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Reply to ${r.name}'),
-        content: SizedBox(width: 380, child: TextField(controller: c, autofocus: true, minLines: 3, maxLines: 6, maxLength: 4000)),
+        content: SizedBox(width: AppSize.dialogSm, child: TextField(controller: c, autofocus: true, minLines: 3, maxLines: 6, maxLength: 4000)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Post reply')),
@@ -848,16 +850,16 @@ class _GoogleReady extends StatelessWidget {
         _PostForm(busy: state.busy, onPost: cubit.post),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   reviews == null ? 'Reviews' : 'Reviews · ${reviews.average?.toStringAsFixed(1) ?? '-'} ★ from ${reviews.total}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: AppText.subtitle,
                 ),
                 if (reviews == null || reviews.reviews.isEmpty)
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No reviews yet.', style: TextStyle(color: Colors.black54))),
+                  const Padding(padding: EdgeInsets.symmetric(vertical: AppSpace.md), child: Text('No reviews yet.', style: TextStyle(color: AppColors.textMuted))),
                 for (final r in reviews?.reviews ?? const <GoogleReview>[])
                   ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -898,15 +900,15 @@ class _ProfileFormState extends State<_ProfileForm> {
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Business details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          if (widget.profile.phone.isNotEmpty) Text('Phone ${widget.profile.phone}', style: const TextStyle(color: Colors.black54)),
+          const Text('Business details', style: AppText.subtitle),
+          if (widget.profile.phone.isNotEmpty) Text('Phone ${widget.profile.phone}', style: const TextStyle(color: AppColors.textMuted)),
           TextField(controller: description, minLines: 2, maxLines: 6, maxLength: 750, decoration: const InputDecoration(labelText: 'Description')),
           TextField(controller: website, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Website')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           FilledButton(onPressed: widget.busy ? null : () => widget.onSave(description.text.trim(), website.text.trim()), child: const Text('Save')),
         ],
       ),
@@ -937,14 +939,14 @@ class _PostFormState extends State<_PostForm> {
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpace.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Post an update', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const Text('Post an update', style: AppText.subtitle),
           TextField(controller: summary, minLines: 2, maxLines: 6, maxLength: 1500, decoration: const InputDecoration(labelText: 'What’s new')),
           TextField(controller: url, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Learn-more link (optional)')),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpace.sm),
           FilledButton(
             onPressed: widget.busy
                 ? null

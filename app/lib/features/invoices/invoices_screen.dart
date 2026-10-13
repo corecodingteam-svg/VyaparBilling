@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/status.dart';
 import '../../data/models/invoice.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/period.dart';
 import '../../shared/theme.dart';
@@ -47,23 +49,29 @@ class _InvoicesView extends StatelessWidget {
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
         final bloc = context.read<InvoicesBloc>();
-        return ListView(padding: const EdgeInsets.all(12), children: [
+        return PullToRefresh(onRefresh: () => context.reloadBloc<InvoicesBloc, InvoicesEvent, InvoicesState>(const InvoicesRequested()), child: ListView(padding: const EdgeInsets.all(AppSpace.md), children: [
           Row(children: [
-            Expanded(child: Text(kind.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
+            Expanded(child: Text(kind.title, style: AppText.title)),
+            ExportMenu(table: () => TableExport(
+              title: kind.title,
+              subtitle: '${displayDate(state.range.from)} to ${displayDate(state.range.to)}',
+              headers: ['Date', 'Number', 'Party', 'Total', kind.paidLabel, kind.unpaidLabel],
+              rows: [for (final i in state.visible) [displayDate(i.invoiceDate), i.number, i.partyName, i.total, i.received, i.balance]],
+            )),
+            const SizedBox(width: AppSpace.sm),
             FilledButton.icon(
               onPressed: () => context.push('${kind.basePath}/new'),
-              style: FilledButton.styleFrom(backgroundColor: payRed),
               icon: const Icon(Icons.add),
               label: Text('Add ${kind.singular}'),
             ),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           PeriodFilterBar(range: state.range, onChanged: (r) => bloc.add(InvoicesPeriodChanged(r))),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           Align(
             alignment: Alignment.centerLeft,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
+              constraints: const BoxConstraints(maxWidth: AppSize.dialogSm),
               child: kind.isQuote
                   ? AmountSummaryCard(
                       title: 'Total ${kind.title}',
@@ -77,17 +85,17 @@ class _InvoicesView extends StatelessWidget {
                     ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           Card(
             clipBehavior: Clip.antiAlias,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.md, AppSpace.md, AppSpace.md),
                 child: Row(children: [
-                  const Expanded(child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+                  const Expanded(child: Text('Transactions', style: AppText.subtitle)),
                   SizedBox(
-                    width: 240,
-                    child: TextField(
+                    width: AppSize.fieldMd,
+                    child: TextField(textInputAction: TextInputAction.search, 
                       onChanged: (v) => bloc.add(InvoicesSearchChanged(v)),
                       decoration: const InputDecoration(hintText: 'Search party or number', prefixIcon: Icon(Icons.search)),
                     ),
@@ -97,25 +105,25 @@ class _InvoicesView extends StatelessWidget {
               _body(context, state),
             ]),
           ),
-        ]);
+        ]));
       },
     );
   }
 
   Widget _body(BuildContext context, InvoicesState state) {
     if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
-      return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+      return const SizedBox(height: AppSize.stateHeight, child: LoadingView());
     }
     if (state.status == LoadStatus.failure && state.invoices.isEmpty) {
       return SizedBox(
-        height: 260,
+        height: AppSize.stateHeight,
         child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => context.read<InvoicesBloc>().add(const InvoicesRequested())),
       );
     }
     final rows = state.visible;
     if (rows.isEmpty) {
       return SizedBox(
-        height: 280,
+        height: AppSize.stateHeight,
         child: EmptyState(
           icon: Icons.receipt_long_outlined,
           title: state.invoices.isEmpty ? 'No transactions to show' : 'No matching transactions',
@@ -141,9 +149,9 @@ class _InvoicesView extends StatelessWidget {
               Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text(money(inv.total), style: const TextStyle(fontWeight: FontWeight.w600)),
                 if (kind.isQuote)
-                  _StatusText(inv, fontSize: 12)
+                  _StatusText(inv, fontSize: AppFont.small)
                 else if (inv.balance > 0)
-                  Text('Bal ${money(inv.balance)}', style: const TextStyle(color: payRed, fontSize: 12)),
+                  Text('Bal ${money(inv.balance)}', style: const TextStyle(color: AppColors.moneyOut, fontSize: AppFont.small)),
               ]),
               _menu(context, inv),
             ]),
@@ -152,60 +160,60 @@ class _InvoicesView extends StatelessWidget {
         ],
       ]);
     }
-    return LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: c.maxWidth),
-          child: DataTable(
-            headingRowColor: const WidgetStatePropertyAll(pageBg),
-            columns: [
-              const DataColumn(label: Text('Date')),
-              DataColumn(label: Text(kind.numberColumn)),
-              const DataColumn(label: Text('Party Name')),
-              if (!kind.isQuote) const DataColumn(label: Text('Transaction')),
-              if (!kind.isQuote) const DataColumn(label: Text('Payment Type')),
-              const DataColumn(label: Text('Amount'), numeric: true),
-              if (kind.isQuote) const DataColumn(label: Text('Status')) else DataColumn(label: Text(kind.unpaidLabel), numeric: true),
-              const DataColumn(label: Text('Actions')),
+    return PagedDataTable(
+      searchable: false, // this page has its own search box above
+      initialSortColumn: 0,
+      initialSortAscending: false,
+      columns: [
+        const TableColumnSpec('Date'),
+        TableColumnSpec(kind.numberColumn),
+        const TableColumnSpec('Party Name'),
+        if (!kind.isQuote) const TableColumnSpec('Transaction'),
+        if (!kind.isQuote) const TableColumnSpec('Payment Type'),
+        const TableColumnSpec('Amount', numeric: true),
+        if (kind.isQuote) const TableColumnSpec('Status') else TableColumnSpec(kind.unpaidLabel, numeric: true),
+        const TableColumnSpec('Actions', sortable: false),
+      ],
+      rows: [
+        for (final inv in rows)
+          TableRowData(
+            onTap: () => context.push('${kind.basePath}/${inv.id}/edit'),
+            sort: [
+              inv.invoiceDate,
+              int.tryParse(inv.number) ?? inv.number,
+              inv.partyName,
+              if (!kind.isQuote) kind.singular,
+              if (!kind.isQuote) inv.paymentLabel,
+              inv.total,
+              if (kind.isQuote) (inv.isOpen ? 'Open' : 'Converted') else inv.balance,
+              null,
             ],
-            rows: [
-              for (final inv in rows)
-                DataRow(
-                  onSelectChanged: (_) => context.push('${kind.basePath}/${inv.id}/edit'),
-                  cells: [
-                    DataCell(Text(displayDate(inv.invoiceDate))),
-                    DataCell(Text(inv.number)),
-                    DataCell(Text(inv.partyName)),
-                    if (!kind.isQuote) DataCell(Text(kind.singular)),
-                    if (!kind.isQuote) DataCell(Text(inv.paymentLabel)),
-                    DataCell(Text(money(inv.total))),
-                    if (kind.isQuote)
-                      DataCell(_StatusText(inv))
-                    else
-                      DataCell(Text(money(inv.balance), style: TextStyle(color: inv.balance > 0 ? payRed : null))),
-                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                      if (inv.isOpen) _ConvertButton(kind: kind, onConvert: (target) => _convert(context, inv, target)),
-                      IconButton(
-                        tooltip: 'Preview / Print',
-                        icon: const Icon(Icons.print_outlined, size: 20),
-                        onPressed: () => context.push('${kind.basePath}/${inv.id}/preview'),
-                      ),
-                      _menu(context, inv),
-                    ])),
-                  ],
+            cells: [
+              Text(displayDate(inv.invoiceDate)),
+              Text(inv.number),
+              Text(inv.partyName),
+              if (!kind.isQuote) Text(kind.singular),
+              if (!kind.isQuote) Text(inv.paymentLabel),
+              Text(money(inv.total)),
+              if (kind.isQuote) _StatusText(inv) else Text(money(inv.balance), style: TextStyle(color: inv.balance > 0 ? AppColors.moneyOut : null)),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                if (inv.isOpen) _ConvertButton(kind: kind, onConvert: (target) => _convert(context, inv, target)),
+                IconButton(
+                  tooltip: 'Preview / Print',
+                  icon: const Icon(Icons.print_outlined, size: AppIconSize.md),
+                  onPressed: () => context.push('${kind.basePath}/${inv.id}/preview'),
                 ),
+                _menu(context, inv),
+              ]),
             ],
-            showCheckboxColumn: false,
           ),
-        ),
-      ),
+      ],
     );
   }
 
   Widget _menu(BuildContext context, InvoiceSummary inv) => PopupMenuButton<String>(
         tooltip: 'More',
-        icon: const Icon(Icons.more_vert, size: 20),
+        icon: const Icon(Icons.more_vert, size: AppIconSize.md),
         onSelected: (v) {
           final target = InvoiceKind.maybeOf(v);
           if (target != null) return _convert(context, inv, target);
@@ -272,11 +280,11 @@ class _ConvertButton extends StatelessWidget {
       tooltip: 'Convert',
       onSelected: onConvert,
       itemBuilder: (_) => [for (final t in targets) PopupMenuItem(value: t, child: Text('Convert to ${t.singular}'))],
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text('Convert', style: TextStyle(color: brandBlue, fontWeight: FontWeight.w600)),
-          Icon(Icons.arrow_drop_down, color: brandBlue),
+          Text('Convert', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+          Icon(Icons.arrow_drop_down, color: AppColors.primary),
         ]),
       ),
     );
@@ -292,6 +300,6 @@ class _StatusText extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         invoice.isOpen ? 'Open' : 'Converted',
-        style: TextStyle(color: invoice.isOpen ? Colors.orange.shade800 : receiveGreen, fontWeight: FontWeight.w600, fontSize: fontSize),
+        style: TextStyle(color: invoice.isOpen ? AppColors.warningText : AppColors.successText, fontWeight: FontWeight.w600, fontSize: fontSize),
       );
 }

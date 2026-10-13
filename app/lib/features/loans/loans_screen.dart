@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/status.dart';
 import '../../data/models/loan.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
@@ -70,7 +72,7 @@ class _LoanDialogState extends State<_LoanDialog> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<LoanFormCubit>().saveAccount({
       'name': _name.text.trim(),
       'lender': _lender.text.trim(),
@@ -98,26 +100,26 @@ class _LoanDialogState extends State<_LoanDialog> {
       },
       builder: (context, state) => AlertDialog(
         title: Text(_loan == null ? 'Add Loan Account' : 'Edit Loan Account'),
-        content: Form(
+        content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: _formKey,
           child: SizedBox(
-            width: 540,
+            width: AppSize.dialogLg,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpace.xs),
                 TextFormField(
                   controller: _name,
                   autofocus: _loan == null,
                   decoration: const InputDecoration(labelText: 'Account Name *'),
-                  validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name for this loan' : null,
+                  validator: Validators.required('Loan name'),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 Row(children: [
                   Expanded(child: TextFormField(controller: _lender, decoration: const InputDecoration(labelText: 'Lender Bank'))),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.md),
                   Expanded(child: TextFormField(controller: _number, decoration: const InputDecoration(labelText: 'Account Number'))),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: TextFormField(
@@ -127,35 +129,32 @@ class _LoanDialogState extends State<_LoanDialog> {
                       validator: _optionalNumber,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.md),
                   Expanded(child: DateField(label: 'Balance As Of', value: state.date, onChanged: cubit.dateChanged)),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 _MoneyAccountField(label: 'Loan Received In', state: state, onChanged: cubit.bankAccountChanged),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(
                     child: TextFormField(
                       controller: _rate,
                       keyboardType: _numeric,
                       decoration: const InputDecoration(labelText: 'Interest Rate', suffixText: '% per annum'),
-                      validator: (v) {
-                        final n = parseNum(v ?? '');
-                        return (v ?? '').trim().isEmpty || (n != null && n >= 0 && n <= 100) ? null : 'Between 0 and 100';
-                      },
+                      validator: Validators.number('Interest rate', nonNegative: true, max: 100),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: AppSpace.md),
                   Expanded(
                     child: TextFormField(
                       controller: _term,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: 'Term Duration', suffixText: 'months'),
-                      validator: (v) => (v ?? '').trim().isEmpty || (int.tryParse(v!.trim()) ?? 0) > 0 ? null : 'Whole months',
+                      validator: Validators.number('Term', positive: true, whole: true),
                     ),
                   ),
                 ]),
-                const SizedBox(height: 14),
+                const SizedBox(height: AppSpace.md),
                 TextFormField(controller: _description, decoration: const InputDecoration(labelText: 'Description')),
               ]),
             ),
@@ -209,7 +208,7 @@ class _LoanTxnDialogState extends State<_LoanTxnDialog> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<LoanFormCubit>().saveTransaction(
           widget.loan.id,
           principal: parseNum(_principal.text) ?? 0,
@@ -234,14 +233,14 @@ class _LoanTxnDialogState extends State<_LoanTxnDialog> {
         final isPayment = state.kind == 'payment';
         return AlertDialog(
           title: Text(_txn == null ? loanTxnKinds[state.kind]! : 'Edit ${_txn.type}'),
-          content: Form(
+          content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
             key: _formKey,
             child: SizedBox(
-              width: 440,
+              width: AppSize.dialogMd,
               child: SingleChildScrollView(
                 child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Text('${widget.loan.name} · outstanding ${money(widget.loan.balance)}'),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpace.lg),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(
                       child: TextFormField(
@@ -254,38 +253,38 @@ class _LoanTxnDialogState extends State<_LoanTxnDialog> {
                         ),
                         validator: (v) {
                           final n = parseNum(v ?? '');
-                          if ((v ?? '').trim().isNotEmpty && n == null) return 'Enter a valid amount';
+                          if ((v ?? '').trim().isNotEmpty && n == null) return 'Amount must be a number';
                           if (isPayment) {
-                            if ((n ?? 0) + (parseNum(_interest.text) ?? 0) <= 0) return 'Enter principal or interest';
-                            return (n ?? 0) > _payable ? 'More than the outstanding ${money(_payable)}' : null;
+                            if ((n ?? 0) + (parseNum(_interest.text) ?? 0) <= 0) return 'Enter the principal repaid or the interest paid';
+                            return (n ?? 0) > _payable ? 'Amount cannot be more than the ${money(_payable)} outstanding' : null;
                           }
-                          return (n ?? 0) <= 0 ? 'Enter an amount greater than 0' : null;
+                          return (n ?? 0) <= 0 ? 'Amount must be greater than 0' : null;
                         },
                       ),
                     ),
                     if (isPayment) ...[
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpace.md),
                       Expanded(
                         child: TextFormField(
                           controller: _interest,
                           keyboardType: _numeric,
                           decoration: const InputDecoration(labelText: 'Interest Amount', prefixText: '₹ '),
-                          validator: (v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid amount' : null,
+                          validator: Validators.number('Amount', nonNegative: false),
                         ),
                       ),
                     ],
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Expanded(child: DateField(label: 'Date', value: state.date, onChanged: cubit.dateChanged)),
                     if (state.kind != 'charge') ...[
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpace.md),
                       Expanded(
                         child: _MoneyAccountField(label: isPayment ? 'Paid From' : 'Received In', state: state, onChanged: cubit.bankAccountChanged),
                       ),
                     ],
                   ]),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: AppSpace.md),
                   TextFormField(controller: _description, decoration: const InputDecoration(labelText: 'Description')),
                 ]),
               ),
@@ -337,21 +336,28 @@ class _LoansView extends StatelessWidget {
       listenWhen: (a, b) => b.error != null && a.error != b.error && b.status == LoadStatus.success,
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
-        if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) return const LoadingView();
         if (state.status == LoadStatus.failure && state.loans.isEmpty) {
           return ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => context.read<LoansBloc>().add(const LoansRequested()));
         }
         final add = FilledButton.icon(
           onPressed: () => showLoanForm(context),
-          style: FilledButton.styleFrom(backgroundColor: payRed),
           icon: const Icon(Icons.add),
           label: const Text('Add Loan A/C'),
         );
         final header = Row(children: [
-          const Text('Loan Accounts', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 16),
-          if (state.loans.isNotEmpty) Text(money(state.totalOutstanding), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: payRed)),
+          const Text('Loan Accounts', style: AppText.title),
+          const SizedBox(width: AppSpace.lg),
+          if (state.loans.isNotEmpty) Text(money(state.totalOutstanding), style: const TextStyle(fontSize: AppFont.title, fontWeight: FontWeight.w700, color: AppColors.moneyOut)),
           const Spacer(),
+          if (state.loans.isNotEmpty) ...[
+            ExportMenu(table: () => TableExport(
+              title: 'Loan accounts',
+              headers: ['Account', 'Lender', 'Account number', 'Interest %', 'Term (months)', 'Outstanding'],
+              rows: [for (final l in state.loans) [l.name, l.lender, l.accountNumber, l.interestRate, l.termMonths, l.balance]],
+            )),
+            const SizedBox(width: AppSpace.sm),
+          ],
           add,
         ]);
         final list = Card(
@@ -365,42 +371,42 @@ class _LoansView extends StatelessWidget {
                 )
               : Column(children: [
                   Container(
-                    color: pageBg,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: AppColors.background,
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
                     child: const Row(children: [
-                      Expanded(child: Text('Account Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-                      Text('Balance', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      Expanded(child: Text('Account Name', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppFont.small))),
+                      Text('Balance', style: TextStyle(fontWeight: FontWeight.w600, fontSize: AppFont.small)),
                     ]),
                   ),
                   Expanded(
-                    child: ListView.separated(
+                    child: PullToRefresh(onRefresh: () => context.reloadBloc<LoansBloc, LoansEvent, LoansState>(const LoansRequested()), child: ListView.separated(
                       itemCount: state.loans.length,
                       separatorBuilder: (_, _) => const Divider(),
                       itemBuilder: (_, i) {
                         final l = state.loans[i];
                         return ListTile(
                           selected: wide && l.id == state.selectedId,
-                          selectedTileColor: brandBlue.withValues(alpha: 0.08),
+                          selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
                           title: Text(l.name, overflow: TextOverflow.ellipsis),
                           subtitle: (l.lender ?? '').isEmpty ? null : Text(l.lender!),
-                          trailing: Text(money(l.balance), style: const TextStyle(color: payRed, fontWeight: FontWeight.w600)),
+                          trailing: Text(money(l.balance), style: const TextStyle(color: AppColors.moneyOut, fontWeight: FontWeight.w600)),
                           onTap: () => _open(context, l),
                         );
                       },
-                    ),
+                    )),
                   ),
                 ]),
         );
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.md),
           child: Column(children: [
             header,
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Expanded(
               child: wide && state.loans.isNotEmpty
                   ? Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      SizedBox(width: 320, child: list),
-                      const SizedBox(width: 12),
+                      SizedBox(width: AppSize.listPane, child: list),
+                      const SizedBox(width: AppSpace.md),
                       const Expanded(child: _LoanDetail()),
                     ])
                   : list,
@@ -421,22 +427,22 @@ class _LoanDetail extends StatelessWidget {
       final loan = state.selected;
       if (loan == null) return const SizedBox.shrink();
       final bloc = context.read<LoansBloc>();
-      return ListView(padding: EdgeInsets.zero, children: [
+      return PullToRefresh(onRefresh: () => context.reloadBloc<LoansBloc, LoansEvent, LoansState>(const LoansRequested()), child: ListView(padding: EdgeInsets.zero, children: [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Wrap(alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 8, children: [
                 Row(mainAxisSize: MainAxisSize.min, children: [
-                  Flexible(child: Text(loan.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                  Flexible(child: Text(loan.name, style: AppText.title, overflow: TextOverflow.ellipsis)),
                   IconButton(
                     tooltip: 'Edit loan',
-                    icon: const Icon(Icons.edit_outlined, color: brandBlue, size: 20),
+                    icon: Icon(Icons.edit_outlined, color: AppColors.primary, size: AppIconSize.md),
                     onPressed: () => showLoanForm(context, loan: loan),
                   ),
                   IconButton(
                     tooltip: 'Delete loan',
-                    icon: const Icon(Icons.delete_outline, size: 20),
+                    icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
                     onPressed: () async {
                       if (await confirmDelete(context, title: 'Delete loan account', message: 'Delete "${loan.name}"?')) bloc.add(LoanDeleted(loan.id));
                     },
@@ -448,9 +454,9 @@ class _LoanDetail extends StatelessWidget {
                   OutlinedButton(onPressed: () => showLoanTxnForm(context, loan, 'charge'), child: const Text('Charges On Loan')),
                 ]),
               ]),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpace.sm),
               Wrap(spacing: 40, runSpacing: 12, children: [
-                InfoField('Balance Amount', money(loan.balance), valueColor: payRed),
+                InfoField('Balance Amount', money(loan.balance), valueColor: AppColors.moneyOut),
                 if ((loan.lender ?? '').isNotEmpty) InfoField('Lender Bank', loan.lender!),
                 if ((loan.accountNumber ?? '').isNotEmpty) InfoField('Account Number', loan.accountNumber!),
                 if (loan.interestRate != null) InfoField('Interest Rate', '${numText(loan.interestRate)}% p.a.'),
@@ -459,66 +465,64 @@ class _LoanDetail extends StatelessWidget {
             ]),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpace.md),
         Card(
           clipBehavior: Clip.antiAlias,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            const Padding(padding: EdgeInsets.all(16), child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
+            const Padding(padding: EdgeInsets.all(AppSpace.lg), child: Text('Transactions', style: AppText.subtitle)),
             if (state.txnStatus != LoadStatus.success)
-              const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
+              const SizedBox(height: AppSize.stateHeight, child: LoadingView())
             else
-              LayoutBuilder(
-                builder: (context, c) => SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(minWidth: c.maxWidth),
-                    child: DataTable(
-                      headingRowColor: const WidgetStatePropertyAll(pageBg),
-                      columns: const [
-                        DataColumn(label: Text('Type')),
-                        DataColumn(label: Text('Date')),
-                        DataColumn(label: Text('Principal'), numeric: true),
-                        DataColumn(label: Text('Interest'), numeric: true),
-                        DataColumn(label: Text('Total Amount'), numeric: true),
-                        DataColumn(label: Text('Balance'), numeric: true),
-                        DataColumn(label: Text('')),
-                      ],
-                      rows: [
-                        for (final t in state.txns)
-                          DataRow(cells: [
-                            DataCell(Text(t.type)),
-                            DataCell(Text(displayDate(t.date))),
-                            DataCell(Text(money(t.principal))),
-                            DataCell(Text(t.interest == 0 ? '-' : money(t.interest))),
-                            DataCell(Text(money(t.total), style: TextStyle(color: t.kind == 'payment' ? receiveGreen : payRed))),
-                            DataCell(Text(money(t.balance))),
-                            DataCell(t.id == null
-                                ? const SizedBox.shrink()
-                                : Row(mainAxisSize: MainAxisSize.min, children: [
-                                    IconButton(
-                                      tooltip: 'Edit',
-                                      icon: const Icon(Icons.edit_outlined, size: 18),
-                                      onPressed: () => showLoanTxnForm(context, loan, t.kind, txn: t),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Delete',
-                                      icon: const Icon(Icons.delete_outline, size: 20),
-                                      onPressed: () async {
-                                        if (await confirmDelete(context, title: 'Delete entry', message: 'Delete this "${t.type}" of ${money(t.total)}?')) {
-                                          bloc.add(LoanTxnDeleted(t.id!));
-                                        }
-                                      },
-                                    ),
-                                  ])),
-                          ]),
-                      ],
-                    ),
+              PagedDataTable(
+              searchHint: 'Search entries',
+              initialSortColumn: 1,
+              initialSortAscending: false,
+              columns: const [
+                TableColumnSpec('Type'),
+                TableColumnSpec('Date'),
+                TableColumnSpec('Principal', numeric: true),
+                TableColumnSpec('Interest', numeric: true),
+                TableColumnSpec('Total Amount', numeric: true),
+                TableColumnSpec('Balance', numeric: true),
+                TableColumnSpec('', sortable: false),
+              ],
+              rows: [
+                for (final t in state.txns)
+                  TableRowData(
+                    search: '${t.type} ${displayDate(t.date)}',
+                    sort: [t.type, t.date, t.principal, t.interest, t.total, t.balance, null],
+                    cells: [
+                      Text(t.type),
+                      Text(displayDate(t.date)),
+                      Text(money(t.principal)),
+                      Text(t.interest == 0 ? '-' : money(t.interest)),
+                      Text(money(t.total), style: TextStyle(color: t.kind == 'payment' ? AppColors.moneyIn : AppColors.moneyOut)),
+                      Text(money(t.balance)),
+                      t.id == null
+                          ? const SizedBox.shrink()
+                          : Row(mainAxisSize: MainAxisSize.min, children: [
+                              IconButton(
+                                tooltip: 'Edit',
+                                icon: const Icon(Icons.edit_outlined, size: AppIconSize.sm),
+                                onPressed: () => showLoanTxnForm(context, loan, t.kind, txn: t),
+                              ),
+                              IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(Icons.delete_outline, size: AppIconSize.md),
+                                onPressed: () async {
+                                  if (await confirmDelete(context, title: 'Delete entry', message: 'Delete this "${t.type}" of ${money(t.total)}?')) {
+                                    bloc.add(LoanTxnDeleted(t.id!));
+                                  }
+                                },
+                              ),
+                            ]),
+                    ],
                   ),
-                ),
-              ),
+              ],
+            ),
           ]),
         ),
-      ]);
+      ]));
     });
   }
 }

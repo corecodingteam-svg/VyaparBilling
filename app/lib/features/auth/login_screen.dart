@@ -6,6 +6,8 @@ import '../../core/status.dart';
 import 'auth_layout.dart';
 import 'bloc/auth_bloc.dart';
 import 'bloc/auth_form_cubit.dart';
+import '../../shared/theme.dart';
+import '../../shared/widgets.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -38,7 +40,7 @@ class _LoginFormState extends State<_LoginForm> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<AuthFormCubit>().login(email: _email.text, password: _password.text);
   }
 
@@ -49,7 +51,7 @@ class _LoginFormState extends State<_LoginForm> {
     return AuthLayout(
       title: 'Welcome back',
       subtitle: 'Log in with your email and password',
-      child: Form(
+      child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
         key: _formKey,
         child: AutofillGroup(
           child: Column(
@@ -67,7 +69,7 @@ class _LoginFormState extends State<_LoginForm> {
                 ),
                 validator: validateEmail,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpace.lg),
               TextFormField(
                 controller: _password,
                 obscureText: form.obscurePassword,
@@ -83,18 +85,18 @@ class _LoginFormState extends State<_LoginForm> {
                     onPressed: context.read<AuthFormCubit>().togglePasswordVisibility,
                   ),
                 ),
-                validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                validator: Validators.required('Password'),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpace.xxl),
               if (form.status == SubmitStatus.failure && form.error != null) AuthErrorBanner(form.error!),
               FilledButton(
                 onPressed: loading ? null : _submit,
                 style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
                 child: loading
-                    ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-                    : const Text('Log in', style: TextStyle(fontSize: 16)),
+                    ? InlineSpinner(color: AppColors.onPrimary)
+                    : const Text('Log in', style: TextStyle(fontSize: AppFont.subtitle)),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpace.xl),
               Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
                 const Text("Don't have an account?"),
                 TextButton(onPressed: () => context.go('/register'), child: const Text('Create one')),

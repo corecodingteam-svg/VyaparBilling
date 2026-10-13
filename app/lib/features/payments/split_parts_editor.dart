@@ -4,6 +4,7 @@ import '../../data/models/cash_bank.dart';
 import '../../data/models/invoice.dart' show paymentModes;
 import '../../shared/widgets.dart';
 import '../invoices/bloc/invoice_form_cubit.dart' show PartDraft;
+import '../../shared/theme.dart';
 
 /// The payment types after the first when something is paid in several (e.g. part cash, part UPI),
 /// each with its own bank account and amount, and the button to add one.
@@ -41,14 +42,14 @@ class SplitPartsEditor extends StatelessWidget {
         for (final p in parts)
           Padding(
             key: ValueKey('split-${p.uid}'),
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(top: AppSpace.md),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 SizedBox(
-                  width: 130,
+                  width: AppSize.fieldXs,
                   child: DropdownButtonFormField<String>(
                     key: ValueKey('split-mode-${p.uid}-${p.mode}'),
                     initialValue: p.mode,
@@ -59,7 +60,7 @@ class SplitPartsEditor extends StatelessWidget {
                 ),
                 if (modeUsesBank(p.mode))
                   SizedBox(
-                    width: 190,
+                    width: AppSize.fieldSm,
                     child: BankAccountField(
                       accounts: [for (final a in bankAccounts) (a.id, a.name)],
                       value: p.bankAccountId,
@@ -67,7 +68,7 @@ class SplitPartsEditor extends StatelessWidget {
                     ),
                   ),
                 SizedBox(
-                  width: 130,
+                  width: AppSize.fieldXs,
                   child: TextFormField(
                     initialValue: p.amount,
                     onChanged: (v) => onAmount(p.uid, v),
@@ -76,14 +77,14 @@ class SplitPartsEditor extends StatelessWidget {
                     decoration: InputDecoration(labelText: 'Amount', prefixText: '$symbol '),
                   ),
                 ),
-                IconButton(tooltip: 'Remove', icon: const Icon(Icons.close, size: 18), onPressed: () => onRemove(p.uid)),
+                IconButton(tooltip: 'Remove', icon: const Icon(Icons.close, size: AppIconSize.sm), onPressed: () => onRemove(p.uid)),
               ],
             ),
           ),
         if (parts.length < paymentModes.length - 1)
           TextButton.icon(
             onPressed: onAdd,
-            icon: const Icon(Icons.add, size: 18),
+            icon: const Icon(Icons.add, size: AppIconSize.sm),
             label: Text(parts.isEmpty ? 'Add another payment type (split payment)' : 'Add another payment type'),
           ),
       ],

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../shared/theme.dart';
 import 'lock_cubit.dart';
+import '../../shared/widgets.dart';
 
 /// Covers the app until the PIN is entered. [onForgot] signs out (which clears the lock).
 class LockScreen extends StatefulWidget {
@@ -34,18 +35,18 @@ class _LockScreenState extends State<LockScreen> {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: pageBg,
+      color: AppColors.background,
       child: Center(
         child: SizedBox(
-          width: 320,
+          width: AppSize.fieldLg,
           child: BlocBuilder<LockCubit, AppLockState>(
             builder: (context, s) => Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline, size: 44, color: brandBlue),
-                const SizedBox(height: 12),
-                const Text('Enter your PIN', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 16),
+                Icon(Icons.lock_outline, size: AppIconSize.hero, color: AppColors.primary),
+                const SizedBox(height: AppSpace.md),
+                const Text('Enter your PIN', style: AppText.title),
+                const SizedBox(height: AppSpace.lg),
                 TextField(
                   controller: _pin,
                   focusNode: _focus,
@@ -55,7 +56,7 @@ class _LockScreenState extends State<LockScreen> {
                   textAlign: TextAlign.center,
                   maxLength: LockCubit.maxLength,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                  style: const TextStyle(fontSize: AppFont.headline, letterSpacing: 8),
                   decoration: const InputDecoration(counterText: ''),
                   onSubmitted: (_) => _submit(),
                   onChanged: (v) {
@@ -63,7 +64,7 @@ class _LockScreenState extends State<LockScreen> {
                     if (v.length == LockCubit.maxLength) _submit();
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpace.sm),
                 SizedBox(
                   height: 36,
                   child: s.message == null
@@ -71,7 +72,7 @@ class _LockScreenState extends State<LockScreen> {
                       : Text(
                           s.message!,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: payRed),
+                          style: const TextStyle(color: AppColors.dangerText),
                         ),
                 ),
                 FilledButton(
@@ -129,7 +130,7 @@ class _AppLockState extends State<AppLock> with WidgetsBindingObserver {
       children: [
         // Nothing of the app is built while it is locked.
         if (s.ready && !s.locked) widget.child,
-        if (!s.ready) const Center(child: CircularProgressIndicator()),
+        if (!s.ready) const LoadingView(),
         if (s.ready && s.locked) LockScreen(onForgot: widget.onForgot),
       ],
     ),
@@ -202,7 +203,7 @@ class _PinDialog extends StatelessWidget {
         return AlertDialog(
           title: Text(title),
           content: SizedBox(
-            width: 320,
+            width: AppSize.fieldLg,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -215,7 +216,7 @@ class _PinDialog extends StatelessWidget {
                     inputFormatters: digits,
                     decoration: deco('Current PIN'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.md),
                 ],
                 if (askNew) ...[
                   TextField(
@@ -226,7 +227,7 @@ class _PinDialog extends StatelessWidget {
                     inputFormatters: digits,
                     decoration: deco('New PIN (${LockCubit.minLength}–${LockCubit.maxLength} digits)'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpace.md),
                   TextField(
                     controller: confirm,
                     obscureText: true,
@@ -239,8 +240,8 @@ class _PinDialog extends StatelessWidget {
                 ],
                 if (error != null)
                   Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(error, style: const TextStyle(color: payRed)),
+                    padding: const EdgeInsets.only(top: AppSpace.md),
+                    child: Text(error, style: const TextStyle(color: AppColors.dangerText)),
                   ),
               ],
             ),

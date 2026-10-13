@@ -74,7 +74,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
   }
 
   void _save() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     _cubit.save(number: _number.text, amount: parseNum(_amount.text)!, description: _description.text);
   }
 
@@ -101,10 +101,10 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
           mainAxisSize: narrow ? MainAxisSize.max : MainAxisSize.min,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
+              padding: const EdgeInsets.fromLTRB(AppSpace.xl, AppSpace.md, AppSpace.sm, AppSpace.md),
               child: Row(
                 children: [
-                  Text(kind.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  Text(kind.title, style: AppText.title),
                   const Spacer(),
                   IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
                 ],
@@ -114,16 +114,16 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
             Flexible(
               child: switch (state.loadStatus) {
                 LoadStatus.failure => SizedBox(
-                  height: 260,
+                  height: AppSize.stateHeight,
                   child: ErrorRetry(error: state.error ?? 'Could not load', onRetry: _cubit.load),
                 ),
-                LoadStatus.success => SingleChildScrollView(padding: const EdgeInsets.all(20), child: _fields(state, narrow)),
-                _ => const SizedBox(height: 260, child: Center(child: CircularProgressIndicator())),
+                LoadStatus.success => SingleChildScrollView(padding: const EdgeInsets.all(AppSpace.xl), child: _fields(state, narrow)),
+                _ => const SizedBox(height: AppSize.stateHeight, child: LoadingView()),
               },
             ),
             const Divider(),
             Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(AppSpace.md),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -131,7 +131,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                     onPressed: busy || state.loadStatus != LoadStatus.success ? null : _save,
                     style: FilledButton.styleFrom(minimumSize: const Size(110, 44)),
                     child: busy
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const InlineSpinner()
                         : Text(_cubit.editing ? 'Update' : 'Save'),
                   ),
                 ],
@@ -144,7 +144,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
     if (narrow) return Dialog.fullscreen(child: content);
     return Dialog(
       clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: content),
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: AppSize.dialogForm), child: content),
     );
   }
 
@@ -167,10 +167,10 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
             focusNode: focusNode,
             onChanged: _cubit.partyTextChanged,
             decoration: const InputDecoration(labelText: 'Party *', suffixIcon: Icon(Icons.arrow_drop_down)),
-            validator: (v) => (v ?? '').trim().isEmpty ? 'Select a party' : null,
+            validator: Validators.choose<String>('party'),
           ),
           optionsViewBuilder: (context, onSelected, options) => AutocompleteOptions<Party>(
-            width: 320,
+            width: AppSize.fieldLg,
             options: options,
             onSelected: onSelected,
             title: (p) => p.name,
@@ -182,13 +182,13 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
         ),
         if (party != null)
           Padding(
-            padding: const EdgeInsets.only(top: 4, left: 4),
+            padding: const EdgeInsets.only(top: AppSpace.xs, left: AppSpace.xs),
             child: Text(
               'BAL: ${money(party.balance.abs())}',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: balanceColor(party.balance)),
+              style: TextStyle(fontSize: AppFont.small, fontWeight: FontWeight.w600, color: balanceColor(party.balance)),
             ),
           ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         DropdownButtonFormField<String>(
           key: ValueKey('mode-${state.paymentMode}'),
           initialValue: state.paymentMode,
@@ -197,7 +197,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
           onChanged: (v) => _cubit.paymentModeChanged(v!),
         ),
         if (modeUsesBank(state.paymentMode)) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.md),
           BankAccountField(
             accounts: [for (final a in state.bankAccounts) (a.id, a.name)],
             value: state.bankAccountId,
@@ -207,14 +207,14 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
         for (final p in state.extraParts)
           Padding(
             key: ValueKey('part-${p.uid}'),
-            padding: const EdgeInsets.only(top: 14),
+            padding: const EdgeInsets.only(top: AppSpace.md),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 SizedBox(
-                  width: 130,
+                  width: AppSize.fieldXs,
                   child: DropdownButtonFormField<String>(
                     key: ValueKey('part-mode-${p.uid}-${p.mode}'),
                     initialValue: p.mode,
@@ -225,7 +225,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                 ),
                 if (modeUsesBank(p.mode))
                   SizedBox(
-                    width: 180,
+                    width: AppSize.fieldSm,
                     child: BankAccountField(
                       accounts: [for (final a in state.bankAccounts) (a.id, a.name)],
                       value: p.bankAccountId,
@@ -233,7 +233,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                     ),
                   ),
                 SizedBox(
-                  width: 120,
+                  width: AppSize.fieldXs,
                   child: TextFormField(
                     initialValue: p.amount,
                     onChanged: (v) => _cubit.partAmountChanged(p.uid, v),
@@ -242,7 +242,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                     decoration: InputDecoration(labelText: 'Amount', prefixText: '${state.currencySymbol} '),
                   ),
                 ),
-                IconButton(tooltip: 'Remove', icon: const Icon(Icons.close, size: 18), onPressed: () => _cubit.removePart(p.uid)),
+                IconButton(tooltip: 'Remove', icon: const Icon(Icons.close, size: AppIconSize.sm), onPressed: () => _cubit.removePart(p.uid)),
               ],
             ),
           ),
@@ -251,11 +251,11 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               onPressed: _cubit.addPart,
-              icon: const Icon(Icons.add, size: 18),
+              icon: const Icon(Icons.add, size: AppIconSize.sm),
               label: Text(state.extraParts.isEmpty ? 'Add another payment type (split)' : 'Add another payment type'),
             ),
           ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         TextFormField(
           controller: _description,
           minLines: 2,
@@ -269,12 +269,12 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
         TextFormField(
           controller: _number,
           decoration: const InputDecoration(labelText: 'Receipt No'),
-          validator: (v) => (v ?? '').trim().isEmpty ? 'Enter the receipt number' : null,
+          validator: Validators.required('Receipt number'),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         DateField(label: 'Date', value: state.date, onChanged: _cubit.dateChanged),
         if (state.currencies.isNotEmpty) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: AppSpace.md),
           Row(
             children: [
               Expanded(
@@ -291,7 +291,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                 ),
               ),
               if (state.currencyCode != null) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: TextFormField(
                     key: ValueKey('rate-${state.currencyCode}'),
@@ -305,36 +305,36 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
             ],
           ),
         ],
-        const SizedBox(height: 14),
+        const SizedBox(height: AppSpace.md),
         TextFormField(
           controller: _amount,
           autofocus: !_cubit.editing,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textAlign: TextAlign.right,
           decoration: InputDecoration(labelText: '${kind.amountLabel} *', prefixText: '${state.currencySymbol} '),
-          validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter an amount greater than 0' : null,
+          validator: Validators.number('Amount', required: true, positive: true),
           onFieldSubmitted: (_) => _save(),
         ),
       ],
     );
-    return Form(
+    return Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
       key: _formKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           narrow
-              ? Column(children: [left, const SizedBox(height: 14), right])
+              ? Column(children: [left, const SizedBox(height: AppSpace.md), right])
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(flex: 3, child: left),
-                    const SizedBox(width: 40),
+                    const SizedBox(width: AppSpace.huge),
                     Expanded(flex: 2, child: right),
                   ],
                 ),
           // The summary depends on the typed amount, which lives in a controller.
-          if (state.links.isNotEmpty) ...[const SizedBox(height: 18), ListenableBuilder(listenable: _amount, builder: (_, _) => _links(state))],
-          const SizedBox(height: 14),
+          if (state.links.isNotEmpty) ...[const SizedBox(height: AppSpace.lg), ListenableBuilder(listenable: _amount, builder: (_, _) => _links(state))],
+          const SizedBox(height: AppSpace.md),
           const AttachmentsField(label: 'Attach a file'),
         ],
       ),
@@ -346,7 +346,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
     final kind = _cubit.kind;
     final amount = parseNum(_amount.text) ?? 0;
     final unlinked = amount - state.linkedTotal;
-    const head = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black54);
+    const head = TextStyle(fontSize: AppFont.small, fontWeight: FontWeight.w600, color: AppColors.textMuted);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -364,14 +364,14 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
         ),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: const Color(0xFFE3E8EF)),
-            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.border),
+            borderRadius: AppRadius.mdAll,
           ),
           child: Column(
             children: [
               Container(
-                color: pageBg,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                color: AppColors.background,
+                padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.sm),
                 child: const Row(
                   children: [
                     Expanded(flex: 3, child: Text('DATE', style: head)),
@@ -384,9 +384,9 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                       flex: 3,
                       child: Text('UNPAID', style: head, textAlign: TextAlign.right),
                     ),
-                    SizedBox(width: 12),
+                    SizedBox(width: AppSpace.md),
                     SizedBox(
-                      width: 120,
+                      width: AppSize.fieldXs,
                       child: Text('THIS PAYMENT', style: head, textAlign: TextAlign.right),
                     ),
                   ],
@@ -394,7 +394,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
               ),
               for (final l in state.links)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.xs),
                   child: Row(
                     children: [
                       Expanded(flex: 3, child: Text(l.date.isEmpty ? '-' : displayDate(l.date))),
@@ -405,19 +405,19 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
                         child: Text(
                           money(l.due),
                           textAlign: TextAlign.right,
-                          style: const TextStyle(color: payRed),
+                          style: const TextStyle(color: AppColors.dangerText),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpace.md),
                       SizedBox(
-                        width: 120,
+                        width: AppSize.fieldXs,
                         child: TextFormField(
                           key: ValueKey('link-${l.invoiceId}-${state.linksRev}'),
                           initialValue: l.amount,
                           onChanged: (v) => _cubit.linkAmountChanged(l.invoiceId, v),
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           textAlign: TextAlign.right,
-                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10)),
+                          decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: AppSpace.sm, vertical: AppSpace.md)),
                         ),
                       ),
                     ],
@@ -427,10 +427,10 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.only(top: AppSpace.sm),
           child: Text(
             'Linked ${money(state.linkedTotal)}${unlinked > 0 ? '  ·  ${money(unlinked)} stays as an advance / on account' : ''}',
-            style: TextStyle(fontSize: 12, color: unlinked < 0 ? payRed : Colors.black54),
+            style: TextStyle(fontSize: AppFont.small, color: unlinked < 0 ? AppColors.dangerText : AppColors.textMuted),
           ),
         ),
       ],

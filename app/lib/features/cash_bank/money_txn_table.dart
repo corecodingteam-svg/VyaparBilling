@@ -6,6 +6,7 @@ import '../../data/models/cash_bank.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/payment.dart';
 import '../../data/repositories/payments_repository.dart';
+import '../../shared/data_table_view.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
@@ -47,21 +48,21 @@ class MoneyTxnTable extends StatelessWidget {
   final ({String header, Widget Function(MoneyTxn) build})? trailing;
 
   Widget _amount(MoneyTxn t) =>
-      Text(money(t.amount.abs()), style: TextStyle(color: t.amount < 0 ? payRed : receiveGreen, fontWeight: FontWeight.w600));
+      Text(money(t.amount.abs()), style: TextStyle(color: t.amount < 0 ? AppColors.moneyOut : AppColors.moneyIn, fontWeight: FontWeight.w600));
 
   Widget? _menu(BuildContext context, MoneyTxn t) {
     if (_canOpen(t)) {
-      return IconButton(tooltip: 'Open', icon: const Icon(Icons.open_in_new, size: 18), onPressed: () => openMoneyTxn(context, t));
+      return IconButton(tooltip: 'Open', icon: const Icon(Icons.open_in_new, size: AppIconSize.sm), onPressed: () => openMoneyTxn(context, t));
     }
     if (t.source == 'adjustment' && onDeleteAdjustment != null) {
       return Row(mainAxisSize: MainAxisSize.min, children: [
         IconButton(
           tooltip: 'Edit',
-          icon: const Icon(Icons.edit_outlined, size: 18),
+          icon: const Icon(Icons.edit_outlined, size: AppIconSize.sm),
           // Every kind is offered so a cash adjustment can be corrected into a transfer and back.
           onPressed: () => showAdjustmentDialog(context, kinds: adjustmentKinds.keys.toList(), editId: t.id),
         ),
-        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => onDeleteAdjustment!(t)),
+        IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline, size: AppIconSize.md), onPressed: () => onDeleteAdjustment!(t)),
       ]);
     }
     return null;
@@ -88,39 +89,34 @@ class MoneyTxnTable extends StatelessWidget {
         ],
       ]);
     }
-    return LayoutBuilder(
-      builder: (context, c) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: c.maxWidth),
-          child: DataTable(
-            headingRowColor: const WidgetStatePropertyAll(pageBg),
-            showCheckboxColumn: false,
-            columns: [
-              const DataColumn(label: Text('Type')),
-              const DataColumn(label: Text('Name')),
-              const DataColumn(label: Text('Date')),
-              const DataColumn(label: Text('Amount'), numeric: true),
-              if (trailing != null) DataColumn(label: Text(trailing!.header)),
-              const DataColumn(label: Text('')),
-            ],
-            rows: [
-              for (final t in txns)
-                DataRow(
-                  onSelectChanged: _canOpen(t) ? (_) => openMoneyTxn(context, t) : null,
-                  cells: [
-                    DataCell(Text(t.type)),
-                    DataCell(Text(t.name)),
-                    DataCell(Text(displayDate(t.date))),
-                    DataCell(_amount(t)),
-                    if (trailing != null) DataCell(trailing!.build(t)),
-                    DataCell(_menu(context, t) ?? const SizedBox.shrink()),
-                  ],
-                ),
+    return PagedDataTable(
+      searchHint: 'Search transactions',
+      initialSortColumn: 2,
+      initialSortAscending: false,
+      columns: [
+        const TableColumnSpec('Type'),
+        const TableColumnSpec('Name'),
+        const TableColumnSpec('Date'),
+        const TableColumnSpec('Amount', numeric: true),
+        if (trailing != null) TableColumnSpec(trailing!.header, sortable: false),
+        const TableColumnSpec('', sortable: false),
+      ],
+      rows: [
+        for (final t in txns)
+          TableRowData(
+            onTap: _canOpen(t) ? () => openMoneyTxn(context, t) : null,
+            search: '${t.type} ${t.name} ${displayDate(t.date)}',
+            sort: [t.type, t.name, t.date, t.amount, if (trailing != null) null, null],
+            cells: [
+              Text(t.type),
+              Text(t.name),
+              Text(displayDate(t.date)),
+              _amount(t),
+              if (trailing != null) trailing!.build(t),
+              _menu(context, t) ?? const SizedBox.shrink(),
             ],
           ),
-        ),
-      ),
+      ],
     );
   }
 }

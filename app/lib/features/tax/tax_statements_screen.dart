@@ -55,11 +55,11 @@ class _View extends StatelessWidget {
       subtitle:
           'The quarterly statement file the Income Tax Department\'s File Validation Utility (FVU 1.2) reads, for tax year 2026-27 onwards. '
           'Run it through the FVU with the challan file (.csi) from the TIN site, then upload the result at a TIN facilitation centre or the e-filing portal.',
-      actions: [OutlinedButton.icon(onPressed: s.busy ? null : () => _gstr9(context), icon: const Icon(Icons.download, size: 18), label: const Text('GSTR-9 file'))],
+      actions: [OutlinedButton.icon(onPressed: s.busy ? null : () => _gstr9(context), icon: const Icon(Icons.download, size: AppIconSize.sm), label: const Text('GSTR-9 file'))],
       children: [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Wrap(
               spacing: 16,
               runSpacing: 12,
@@ -85,7 +85,7 @@ class _View extends StatelessWidget {
                   ],
                   onChanged: (v) => cubit.periodChanged(quarter: v),
                 ),
-                if (s.busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                if (s.busy) const InlineSpinner(),
               ],
             ),
           ),
@@ -110,10 +110,10 @@ class _View extends StatelessWidget {
         title: const Text('GSTR-9 for which year?'),
         children: [
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.symmetric(horizontal: AppSpace.xxl),
             child: Text(
               'A JSON file in the GST portal\'s GSTR-9 layout with tables 4, 5, 6, 9, 17 and 18 filled from your books. Open it in the GSTR-9 offline tool, check it against your GSTR-1 and GSTR-3B, complete the other tables, then upload.',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+              style: AppText.helper,
             ),
           ),
           for (final y in choices) SimpleDialogOption(onPressed: () => Navigator.pop(ctx, y), child: Text('Financial year $y')),
@@ -139,21 +139,21 @@ class _StatementCard extends StatelessWidget {
     final what = state.form == '140' ? 'deducted' : 'collected';
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('${st.deductees} bill${st.deductees == 1 ? '' : 's'} with tax $what · ${money(st.tax)} $what · ${money(st.deposited)} deposited',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
+                style: AppText.subtitle),
+            const SizedBox(height: AppSpace.sm),
             if (st.problems.isEmpty)
-              const Text('Ready. Download the file and run it through the FVU.', style: TextStyle(color: receiveGreen))
+              const Text('Ready. Download the file and run it through the FVU.', style: TextStyle(color: AppColors.successText))
             else ...[
               const Text('Fix these first:', style: TextStyle(fontWeight: FontWeight.w600)),
-              for (final p in st.problems) Padding(padding: const EdgeInsets.only(top: 2), child: Text('• $p', style: const TextStyle(fontSize: 13))),
+              for (final p in st.problems) Padding(padding: const EdgeInsets.only(top: AppSpace.xxs), child: Text('• $p', style: AppText.body)),
             ],
-            for (final w in st.warnings) Padding(padding: const EdgeInsets.only(top: 4), child: Text('⚠ $w', style: const TextStyle(fontSize: 12, color: payRed))),
-            const SizedBox(height: 12),
+            for (final w in st.warnings) Padding(padding: const EdgeInsets.only(top: AppSpace.xs), child: Text('⚠ $w', style: AppText.error)),
+            const SizedBox(height: AppSpace.md),
             FilledButton.icon(
               onPressed: st.file == null || state.busy
                   ? null
@@ -162,7 +162,7 @@ class _StatementCard extends StatelessWidget {
                       () => saveBytesFile(st.fileName, Uint8List.fromList(ascii.encode(st.file!)), mimeType: 'text/plain'),
                       'Saved ${st.fileName}',
                     ),
-              icon: const Icon(Icons.download, size: 18),
+              icon: const Icon(Icons.download, size: AppIconSize.sm),
               label: Text('Download Form ${state.form} file'),
             ),
           ],
@@ -185,36 +185,30 @@ class _ChallansCard extends StatelessWidget {
     final interest = TextEditingController();
     final fee = TextEditingController();
     final key = GlobalKey<FormState>();
-    String? whole(String? v, {bool required = false}) {
-      final t = (v ?? '').trim();
-      if (t.isEmpty) return required ? 'Required' : null;
-      return RegExp(r'^\d+$').hasMatch(t) ? null : 'Whole rupees';
-    }
-
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Challan for ${state.quarter} ${taxYearLabel(state.taxYear)}'),
         content: SizedBox(
-          width: 380,
-          child: Form(
+          width: AppSize.dialogSm,
+          child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
             key: key,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('From the counterfoil of challan ITNS 281.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                const Text('From the counterfoil of challan ITNS 281.', style: AppText.helper),
                 TextFormField(controller: bsr, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'BSR code'),
-                    validator: (v) => RegExp(r'^\d{7}$').hasMatch((v ?? '').trim()) ? null : '7 digits'),
+                    validator: Validators.digits('BSR code', 7, required: true)),
                 TextFormField(controller: no, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Challan serial number'),
-                    validator: (v) => RegExp(r'^\d{1,5}$').hasMatch((v ?? '').trim()) ? null : 'Up to 5 digits'),
+                    validator: Validators.pattern('Challan serial number', RegExp(r'^\d{1,5}$'), '1 to 5 digits', required: true)),
                 TextFormField(controller: date, decoration: const InputDecoration(labelText: 'Date of deposit', hintText: 'yyyy-mm-dd'),
-                    validator: (v) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch((v ?? '').trim()) ? null : 'yyyy-mm-dd'),
+                    validator: Validators.pattern('Date of deposit', RegExp(r'^\d{4}-\d{2}-\d{2}$'), 'a date written like 2026-10-06', required: true)),
                 TextFormField(controller: tax, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Tax', prefixText: '₹ '),
-                    validator: (v) => whole(v, required: true)),
+                    validator: Validators.number('Tax', required: true, nonNegative: true, whole: true)),
                 Row(children: [
-                  Expanded(child: TextFormField(controller: interest, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Interest'), validator: whole)),
-                  const SizedBox(width: 12),
-                  Expanded(child: TextFormField(controller: fee, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Late fee'), validator: whole)),
+                  Expanded(child: TextFormField(controller: interest, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Interest'), validator: Validators.number('Interest', nonNegative: true, whole: true))),
+                  const SizedBox(width: AppSpace.md),
+                  Expanded(child: TextFormField(controller: fee, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Late fee'), validator: Validators.number('Late fee', nonNegative: true, whole: true))),
                 ]),
               ],
             ),
@@ -222,7 +216,7 @@ class _ChallansCard extends StatelessWidget {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => key.currentState!.validate() ? Navigator.pop(ctx, true) : null, child: const Text('Add')),
+          FilledButton(onPressed: () => validateForm(ctx, key, report: showError) ? Navigator.pop(ctx, true) : null, child: const Text('Add')),
         ],
       ),
     );
@@ -242,22 +236,22 @@ class _ChallansCard extends StatelessWidget {
     final cubit = context.read<TaxStatementsCubit>();
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpace.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Expanded(child: Text('${state.form == '140' ? 'TDS' : 'TCS'} challans for ${state.quarter} ${taxYearLabel(state.taxYear)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-              OutlinedButton.icon(onPressed: state.busy ? null : () => _add(context), icon: const Icon(Icons.add, size: 18), label: const Text('Add Challan')),
+              Expanded(child: Text('${state.form == '140' ? 'TDS' : 'TCS'} challans for ${state.quarter} ${taxYearLabel(state.taxYear)}', style: AppText.subtitle)),
+              OutlinedButton.icon(onPressed: state.busy ? null : () => _add(context), icon: const Icon(Icons.add, size: AppIconSize.sm), label: const Text('Add Challan')),
             ]),
             if (state.challans.isEmpty)
-              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('No challans recorded for this quarter.', style: TextStyle(color: Colors.black54))),
+              const Padding(padding: EdgeInsets.symmetric(vertical: AppSpace.md), child: Text('No challans recorded for this quarter.', style: TextStyle(color: AppColors.textMuted))),
             for (final c in state.challans)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text('BSR ${c.bsrCode} · Challan ${c.challanNo} · ${displayDate(c.depositDate)}'),
                 subtitle: Text('Tax ${money(c.tax)}${c.interest > 0 ? ' · Interest ${money(c.interest)}' : ''}${c.fee > 0 ? ' · Fee ${money(c.fee)}' : ''}'),
-                trailing: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline, size: 20), onPressed: state.busy ? null : () => cubit.removeChallan(c.id)),
+                trailing: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline, size: AppIconSize.md), onPressed: state.busy ? null : () => cubit.removeChallan(c.id)),
               ),
           ],
         ),
@@ -297,22 +291,22 @@ class _DeductorCardState extends State<_DeductorCard> {
     super.dispose();
   }
 
-  Widget _box(Widget w) => SizedBox(width: 300, child: w);
+  Widget _box(Widget w) => SizedBox(width: AppSize.fieldLg, child: w);
 
   @override
   Widget build(BuildContext context) {
     final s = widget.state;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
           key: key,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Deductor details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              const Text('TAN, PAN, address and phone come from Settings → Company.', style: TextStyle(fontSize: 12, color: Colors.black54)),
-              const SizedBox(height: 8),
+              const Text('Deductor details', style: AppText.subtitle),
+              const Text('TAN, PAN, address and phone come from Settings → Company.', style: AppText.helper),
+              const SizedBox(height: AppSpace.sm),
               Wrap(
                 spacing: 16,
                 runSpacing: 4,
@@ -330,13 +324,13 @@ class _DeductorCardState extends State<_DeductorCard> {
                     controller: pan,
                     textCapitalization: TextCapitalization.characters,
                     decoration: const InputDecoration(labelText: 'Their PAN'),
-                    validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'PAN looks like ABCDE1234F',
+                    validator: Validators.pan(),
                   )),
                   _box(TextFormField(
                     controller: mobile,
                     keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(labelText: 'Their mobile'),
-                    validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^\d{10}$').hasMatch(v!.trim()) ? null : '10 digits',
+                    validator: Validators.digits('Mobile number', 10),
                   )),
                   _box(TextFormField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Their email'))),
                   _box(DropdownButtonFormField<String>(
@@ -360,22 +354,22 @@ class _DeductorCardState extends State<_DeductorCard> {
                     controller: tdsToken,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Token no. of last Form 140', helperText: 'Leave empty for your first statement'),
-                    validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^\d{15}$').hasMatch(v!.trim()) ? null : '15 digits',
+                    validator: Validators.digits('Token number', 15),
                   )),
                   _box(TextFormField(
                     controller: tcsToken,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Token no. of last Form 143', helperText: 'Leave empty for your first statement'),
-                    validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^\d{15}$').hasMatch(v!.trim()) ? null : '15 digits',
+                    validator: Validators.digits('Token number', 15),
                   )),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpace.md),
               FilledButton(
                 onPressed: s.busy
                     ? null
                     : () {
-                        if (!key.currentState!.validate()) return;
+                        if (!validateForm(context, key, report: showError)) return;
                         context.read<TaxStatementsCubit>().saveDeductor(Deductor(
                           type: type,
                           name: name.text.trim(),

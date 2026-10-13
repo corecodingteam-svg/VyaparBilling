@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/status.dart';
 import '../core/submit_cubit.dart';
 import 'widgets.dart';
+import 'theme.dart';
 
 /// Dialog with one form whose submission is tracked by a [SubmitCubit]; pops with the result on success.
 Future<T?> showSubmitDialog<T>(
@@ -24,14 +25,14 @@ Future<T?> showSubmitDialog<T>(
         },
         builder: (ctx, s) {
           void submit() {
-            if (formKey.currentState!.validate()) ctx.read<SubmitCubit<T>>().run(action);
+            if (validateForm(ctx, formKey, report: showError)) ctx.read<SubmitCubit<T>>().run(action);
           }
 
           return AlertDialog(
             title: Text(title),
-            content: Form(
+            content: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
               key: formKey,
-              child: SizedBox(width: 360, child: Column(mainAxisSize: MainAxisSize.min, children: fields(submit))),
+              child: SizedBox(width: AppSize.dialogSm, child: Column(mainAxisSize: MainAxisSize.min, children: fields(submit))),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),

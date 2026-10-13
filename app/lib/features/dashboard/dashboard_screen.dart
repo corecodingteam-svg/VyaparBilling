@@ -25,7 +25,7 @@ class DashboardScreen extends StatelessWidget {
         if (s == null) {
           return state.status == LoadStatus.failure
               ? ErrorRetry(error: state.error!, onRetry: context.read<DashboardCubit>().load)
-              : const Center(child: CircularProgressIndicator());
+              : const LoadingView();
         }
         final cards = [
           _StatCard(
@@ -33,7 +33,7 @@ class DashboardScreen extends StatelessWidget {
             amount: money(s.receivable),
             caption: s.receivableParties == 0 ? "You don't have any receivables as of now." : 'From ${s.receivableParties} ${s.receivableParties == 1 ? 'Party' : 'Parties'}',
             icon: Icons.south,
-            color: receiveGreen,
+            color: AppColors.successText,
             onTap: () => context.go('/parties'),
           ),
           _StatCard(
@@ -41,7 +41,7 @@ class DashboardScreen extends StatelessWidget {
             amount: money(s.payable),
             caption: s.payableParties == 0 ? "You don't have any payables as of now." : 'To ${s.payableParties} ${s.payableParties == 1 ? 'Party' : 'Parties'}',
             icon: Icons.north,
-            color: payRed,
+            color: AppColors.dangerText,
             onTap: () => context.go('/parties'),
           ),
           // Salesmen do not see the business's cash and bank position.
@@ -51,7 +51,7 @@ class DashboardScreen extends StatelessWidget {
             amount: money(s.cashInHand),
             caption: 'Bank balance: ${money(s.bankBalance)}',
             icon: Icons.account_balance_wallet_outlined,
-            color: brandBlue,
+            color: AppColors.primary,
             onTap: () => context.go('/cash-in-hand'),
           ),
           if (settingsOf(context, listen: true).stockMaintenance)
@@ -60,22 +60,35 @@ class DashboardScreen extends StatelessWidget {
             amount: '${s.lowStockItems}',
             caption: s.lowStockItems == 0 ? 'All items are above their minimum stock.' : 'Items at or below minimum stock',
             icon: Icons.inventory_2_outlined,
-            color: Colors.orange.shade700,
+            color: AppColors.warningText,
             onTap: () => context.go('/items'),
           ),
         ];
-        return ListView(padding: const EdgeInsets.all(12), children: [
+        return PullToRefresh(onRefresh: context.read<DashboardCubit>().load, child: ListView(padding: const EdgeInsets.all(AppSpace.md), children: [
           LayoutBuilder(
             builder: (_, c) {
               // 4 across on wide screens, 2×2 on tablets, stacked on phones.
               final perRow = c.maxWidth >= 1000 ? 4 : (c.maxWidth >= 560 ? 2 : 1);
-              final width = (c.maxWidth - (perRow - 1) * 12) / perRow;
-              return Wrap(spacing: 12, runSpacing: 12, children: [for (final w in cards) SizedBox(width: width, child: w)]);
+              // Each row is as tall as its tallest card, so a longer caption does not make the others uneven.
+              return Column(children: [
+                for (var i = 0; i < cards.length; i += perRow)
+                  Padding(
+                    padding: EdgeInsets.only(top: i == 0 ? 0 : AppSpace.md),
+                    child: IntrinsicHeight(
+                      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                        for (var j = i; j < i + perRow; j++) ...[
+                          if (j > i) const SizedBox(width: AppSpace.md),
+                          Expanded(child: j < cards.length ? cards[j] : const SizedBox.shrink()),
+                        ],
+                      ]),
+                    ),
+                  ),
+              ]);
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpace.md),
           _SalesCard(summary: s),
-        ]);
+        ]));
       }),
     );
   }
@@ -97,15 +110,15 @@ class _StatCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(AppSpace.lg),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: const TextStyle(color: Colors.black54)),
-                  const SizedBox(height: 6),
-                  Text(amount, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 14),
-                  Text(caption, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+                  Text(title, style: const TextStyle(color: AppColors.textMuted)),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(amount, style: AppText.headline),
+                  const SizedBox(height: AppSpace.md),
+                  Text(caption, style: const TextStyle(color: AppColors.textMuted, fontSize: AppFont.body)),
                 ]),
               ),
               CircleAvatar(backgroundColor: color.withValues(alpha: 0.12), child: Icon(icon, color: color)),
@@ -131,23 +144,23 @@ class _SalesCard extends StatelessWidget {
     final maxY = spots.fold<double>(0, (m, s) => s.y > m ? s.y : m);
     final compact = NumberFormat.compact(locale: 'en_IN');
     final dayLabel = DateFormat('d MMM');
-    const axisStyle = TextStyle(fontSize: 11, color: Colors.black54);
+    const axisStyle = AppText.caption;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 24, 12),
+        padding: const EdgeInsets.fromLTRB(AppSpace.lg, AppSpace.lg, AppSpace.xxl, AppSpace.md),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            const Expanded(child: Text('Total Sale', style: TextStyle(color: Colors.black54))),
+            const Expanded(child: Text('Total Sale', style: TextStyle(color: AppColors.textMuted))),
             Chip(
               label: const Text('This Month'),
-              backgroundColor: brandBlue.withValues(alpha: 0.08),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.08),
               side: BorderSide.none,
               shape: const StadiumBorder(),
             ),
           ]),
-          Text(money(summary.salesTotal), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 20),
+          Text(money(summary.salesTotal), style: AppText.headline),
+          const SizedBox(height: AppSpace.xl),
           SizedBox(
             height: 260,
             child: LineChart(LineChartData(
@@ -171,7 +184,7 @@ class _SalesCard extends StatelessWidget {
                     interval: 3,
                     reservedSize: 26,
                     getTitlesWidget: (v, _) => Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.only(top: AppSpace.sm),
                       child: Text(dayLabel.format(start.add(Duration(days: v.toInt()))), style: axisStyle),
                     ),
                   ),
@@ -183,7 +196,7 @@ class _SalesCard extends StatelessWidget {
                     for (final t in touched)
                       LineTooltipItem(
                         '${dayLabel.format(start.add(Duration(days: t.x.toInt())))}\n${money(t.y)}',
-                        const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                        const TextStyle(color: AppColors.onPrimary, fontWeight: FontWeight.w600),
                       ),
                   ],
                 ),
@@ -193,10 +206,10 @@ class _SalesCard extends StatelessWidget {
                   spots: spots,
                   isCurved: true,
                   preventCurveOverShooting: true,
-                  color: brandBlue,
+                  color: AppColors.primary,
                   barWidth: 2,
                   dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(show: true, color: brandBlue.withValues(alpha: 0.12)),
+                  belowBarData: BarAreaData(show: true, color: AppColors.primary.withValues(alpha: 0.12)),
                 ),
               ],
             )),

@@ -1,3 +1,4 @@
+// ignore_for_file: invalid_use_of_visible_for_testing_member
 // Renders key screens to PNGs for visual review (not part of the normal test run):
 //   FONT_DIR=<flutter>/bin/cache/artifacts/material_fonts flutter test screenshots_test --update-goldens
 import 'dart:io';
@@ -68,11 +69,14 @@ import 'package:billing_app/features/utilities/utilities_screens.dart';
 import 'package:billing_app/features/parties/parties_screen.dart';
 import 'package:billing_app/shared/theme.dart';
 import 'package:billing_app/shell/app_shell.dart';
+import 'package:billing_app/features/reports/report_cubit.dart';
 import 'package:billing_app/shell/nav_cubit.dart';
+import 'package:billing_app/shell/sidebar_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../test/support/fakes.dart';
 
@@ -161,6 +165,8 @@ Widget _app(String location, Widget child, {bool shell = true, Map<String, dynam
         BlocProvider(create: (_) => TrackingCubit(locations, const Stream.empty())),
         BlocProvider(create: (_) => LockCubit(FakePasscodeStore())..load()),
         BlocProvider(create: (_) => NavCubit(location)),
+        BlocProvider(create: (_) => SidebarCubit()),
+        BlocProvider(create: (ctx) => ReportCatalogCubit(ctx.read())..load()),
         BlocProvider(create: (ctx) => CatalogCubit(items, bus)..load()),
       ],
       child: MaterialApp(
@@ -253,6 +259,17 @@ void main() {
   testWidgets('cheques', (t) => _shot(t, desktop, _app('/cheques', const ChequesScreen()), 'cheques_desktop'));
   testWidgets('gst invoice form', (t) => _shot(
       t, desktop, _app('/', const InvoiceFormScreen(kind: InvoiceKind.sale, invoiceId: 'g1'), shell: false), 'invoice_form_gst'));
+  testWidgets('invoice form: validation shows the reason, never "something went wrong"', (t) async {
+    t.view.physicalSize = desktop;
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(_app('/', const InvoiceFormScreen(kind: InvoiceKind.sale), shell: false));
+    await t.pumpAndSettle();
+    await t.tap(find.widgetWithText(FilledButton, 'Save'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('went wrong'), findsNothing);
+    expect(find.textContaining('Select a customer'), findsWidgets);
+  });
   testWidgets('sale orders', (t) => _shot(t, desktop, _app('/sale-orders', const InvoicesScreen(kind: InvoiceKind.saleOrder)), 'sale_orders_desktop'));
   testWidgets('pos', (t) => _shot(t, desktop, _app('/pos', const PosScreen()), 'pos_desktop', then: () async {
         await t.tap(find.text('Sample Item'));
@@ -270,7 +287,7 @@ void main() {
   testWidgets('import items', (t) => _shot(t, desktop, _app('/import-items', ImportScreen(spec: itemImportSpec)), 'import_items_desktop',
       then: () async {
         // Feed a file straight to the cubit (the picker itself is a native dialog).
-        final cubit = BlocProvider.of<ImportCubit>(t.element(find.text('Choose CSV file')));
+        final cubit = BlocProvider.of<ImportCubit>(t.element(find.text('Choose file')));
         cubit.fileChosen('Item Name,Sale Price,GST Rate,HSN\nBasmati Rice 5kg,650,5,1006\nDelivery,50,18,\n,10,,\nBad Tax,10,7,\n');
       }));
   testWidgets('bulk update', (t) => _shot(t, desktop, _app('/bulk-update-items', const BulkUpdateItemsScreen()), 'bulk_update_desktop'));
@@ -309,6 +326,16 @@ void main() {
   testWidgets('salesman home', (t) => _shot(
       t, desktop, _app('/', const DashboardScreen(), user: const AppUser(id: 'u3', email: 's@example.com', fullName: 'Sam Salesman', firmId: 'f', firmName: 'Demo Traders', role: 'salesman')),
       'salesman_home'));
+  testWidgets('settings print', (t) => _shot(t, desktop, _app('/settings', const SettingsScreen(group: 'print')), 'settings_print_desktop'));
+  testWidgets('settings accounting phone', (t) => _shot(t, phone, _app('/settings', const SettingsScreen(group: 'accounting'), settings: accounting), 'settings_accounting_phone'));
+  testWidgets('settings theme', (t) => _shot(t, desktop, _app('/settings', BlocProvider(create: (_) { SharedPreferences.setMockInitialValues({}); return ThemeCubit(); }, child: const SettingsScreen(group: 'theme'))), 'settings_theme_desktop'));
+  testWidgets('collapsed sidebar', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await _shot(t, desktop, _app('/', const DashboardScreen()), 'sidebar_collapsed_desktop', then: () async {
+      await t.tap(find.byTooltip('Collapse menu'));
+      await t.pumpAndSettle();
+    });
+  });
   testWidgets('settings lower', (t) => _shot(t, const Size(1440, 2600), _app('/settings', const SettingsScreen(), settings: accounting), 'settings_full'));
   testWidgets('invoice form split payment', (t) => _shot(
       t, const Size(1440, 1100), _app('/', const InvoiceFormScreen(kind: InvoiceKind.sale, invoiceId: 'v1'), shell: false, settings: accounting), 'invoice_form_split',

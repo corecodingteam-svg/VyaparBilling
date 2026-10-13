@@ -6,6 +6,8 @@ import '../../core/status.dart';
 import '../../data/models/expense.dart';
 import '../../data/models/invoice.dart' show paymentModes;
 import '../../data/repositories/expenses_repository.dart';
+import '../../shared/data_table_view.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/submit_dialog.dart';
 import '../../shared/theme.dart';
@@ -25,7 +27,7 @@ Future<ExpenseCategory?> showExpenseCategoryDialog(BuildContext context, {Expens
         controller: name,
         autofocus: true,
         decoration: const InputDecoration(labelText: 'Expense Category'),
-        validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a name' : null,
+        validator: Validators.required('Name'),
         onFieldSubmitted: (_) => submit(),
       ),
     ],
@@ -70,20 +72,20 @@ class _ExpensesView extends StatelessWidget {
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
         if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingView();
         }
         if (state.status == LoadStatus.failure && state.categories.isEmpty) {
           return ErrorRetry(error: state.error ?? 'Could not load', onRetry: () => context.read<ExpensesBloc>().add(const ExpensesRequested()));
         }
         final list = _CategoryList(state: state, highlight: wide, onTap: (c) => _open(context, c));
         return Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(AppSpace.md),
           child: wide
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 340, child: list),
-                    const SizedBox(width: 12),
+                    SizedBox(width: AppSize.listPane, child: list),
+                    const SizedBox(width: AppSpace.md),
                     const Expanded(child: _CategoryDetail()),
                   ],
                 )
@@ -117,49 +119,41 @@ class _CategoryList extends StatelessWidget {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(AppSpace.md),
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: TextField(textInputAction: TextInputAction.search, 
                     onChanged: (v) => bloc.add(ExpenseCategorySearchChanged(v)),
                     decoration: const InputDecoration(hintText: 'Search', prefixIcon: Icon(Icons.search)),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpace.sm),
+                ExportMenu(table: () => TableExport(
+                  title: 'Expense categories',
+                  headers: ['Category', 'Total'],
+                  rows: [for (final c in shown) [c.name, c.total]],
+                )),
+                const SizedBox(width: AppSpace.sm),
                 FilledButton.icon(
                   onPressed: () => context.push(addPath),
-                  style: FilledButton.styleFrom(backgroundColor: payRed),
                   icon: const Icon(Icons.add),
                   label: const Text('Add Expense'),
                 ),
               ],
             ),
           ),
-          Container(
-            color: pageBg,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text('CATEGORY', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                ),
-                Text('AMOUNT  (${money(state.total)})', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
-                const SizedBox(width: 40),
-              ],
-            ),
-          ),
           Expanded(
-            child: shown.isEmpty
-                ? const Center(child: Text('No categories'))
-                : ListView.separated(
-                    itemCount: shown.length,
-                    separatorBuilder: (_, _) => const Divider(),
-                    itemBuilder: (_, i) {
-                      final c = shown[i];
+            child: PagedListPane<ExpenseCategory>(
+              items: shown,
+              headings: const ['CATEGORY', 'AMOUNT'],
+              sortKeys: [(c) => c.name, (c) => c.total],
+              emptyText: 'No matching categories',
+              onRefresh: () => context.reloadBloc<ExpensesBloc, ExpensesEvent, ExpensesState>(const ExpensesRequested()),
+              itemBuilder: (_, c) {
                       return ListTile(
                         selected: highlight && c.id == state.selectedId,
-                        selectedTileColor: brandBlue.withValues(alpha: 0.08),
+                        selectedTileColor: AppColors.primary.withValues(alpha: 0.08),
                         title: Text(c.name, overflow: TextOverflow.ellipsis),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -167,7 +161,7 @@ class _CategoryList extends StatelessWidget {
                             Text(money(c.total), style: const TextStyle(fontWeight: FontWeight.w600)),
                             PopupMenuButton<String>(
                               tooltip: 'More',
-                              icon: const Icon(Icons.more_vert, size: 20),
+                              icon: const Icon(Icons.more_vert, size: AppIconSize.md),
                               onSelected: (v) => v == 'edit' ? showExpenseCategoryDialog(context, category: c) : _delete(context, c),
                               itemBuilder: (_) => const [
                                 PopupMenuItem(value: 'edit', child: Text('Rename')),
@@ -179,7 +173,7 @@ class _CategoryList extends StatelessWidget {
                         onTap: () => onTap(c),
                       );
                     },
-                  ),
+            ),
           ),
           const Divider(),
           Align(
@@ -216,16 +210,16 @@ class _CategoryDetail extends StatelessWidget {
             child: EmptyState(icon: Icons.account_balance_wallet_outlined, title: 'Add a category to record expenses'),
           );
         }
-        return ListView(
+        return PullToRefresh(onRefresh: () => context.reloadBloc<ExpensesBloc, ExpensesEvent, ExpensesState>(const ExpensesRequested()), child: ListView(
           padding: EdgeInsets.zero,
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(AppSpace.lg),
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(category.name.toUpperCase(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                      child: Text(category.name.toUpperCase(), style: AppText.subtitle),
                     ),
                     Text.rich(
                       TextSpan(
@@ -233,7 +227,7 @@ class _CategoryDetail extends StatelessWidget {
                           const TextSpan(text: 'Total: '),
                           TextSpan(
                             text: money(category.total),
-                            style: const TextStyle(color: payRed, fontWeight: FontWeight.w700),
+                            style: const TextStyle(color: AppColors.dangerText, fontWeight: FontWeight.w700),
                           ),
                         ],
                       ),
@@ -242,23 +236,23 @@ class _CategoryDetail extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpace.md),
             Card(
               clipBehavior: Clip.antiAlias,
               child: switch (state.expensesStatus) {
                 LoadStatus.initial || LoadStatus.loading => const Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.all(AppSpace.huge),
+                  child: LoadingView(),
                 ),
                 LoadStatus.failure => SizedBox(
-                  height: 240,
+                  height: AppSize.stateHeight,
                   child: ErrorRetry(
                     error: state.error ?? 'Could not load expenses',
                     onRetry: () => context.read<ExpensesBloc>().add(ExpenseCategorySelected(category.id)),
                   ),
                 ),
                 LoadStatus.success when state.expenses.isEmpty => SizedBox(
-                  height: 280,
+                  height: AppSize.stateHeight,
                   child: EmptyState(
                     icon: Icons.receipt_long_outlined,
                     title: 'No expenses in ${category.name}',
@@ -269,52 +263,45 @@ class _CategoryDetail extends StatelessWidget {
                     ),
                   ),
                 ),
-                LoadStatus.success => LayoutBuilder(
-                  builder: (context, c) => SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: c.maxWidth),
-                      child: DataTable(
-                        headingRowColor: const WidgetStatePropertyAll(pageBg),
-                        showCheckboxColumn: false,
-                        columns: const [
-                          DataColumn(label: Text('DATE')),
-                          DataColumn(label: Text('EXP NO.')),
-                          DataColumn(label: Text('PAYMENT TYPE')),
-                          DataColumn(label: Text('AMOUNT'), numeric: true),
-                          DataColumn(label: Text('')),
-                        ],
-                        rows: [
-                          for (final e in state.expenses)
-                            DataRow(
-                              onSelectChanged: (_) => context.push('/expenses/${e.id}/edit'),
-                              cells: [
-                                DataCell(Text(displayDate(e.expenseDate))),
-                                DataCell(Text(e.number ?? '')),
-                                DataCell(Text(paymentModes[e.paymentMode] ?? e.paymentMode)),
-                                DataCell(Text(money(e.total))),
-                                DataCell(
-                                  PopupMenuButton<String>(
-                                    tooltip: 'More',
-                                    icon: const Icon(Icons.more_vert, size: 20),
-                                    onSelected: (v) => v == 'edit' ? context.push('/expenses/${e.id}/edit') : _delete(context, e),
-                                    itemBuilder: (_) => const [
-                                      PopupMenuItem(value: 'edit', child: Text('View/Edit')),
-                                      PopupMenuItem(value: 'delete', child: Text('Delete')),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                LoadStatus.success => PagedDataTable(
+                  searchHint: 'Search expenses',
+                  initialSortColumn: 0,
+                  initialSortAscending: false,
+                  columns: const [
+                    TableColumnSpec('DATE'),
+                    TableColumnSpec('EXP NO.'),
+                    TableColumnSpec('PAYMENT TYPE'),
+                    TableColumnSpec('AMOUNT', numeric: true),
+                    TableColumnSpec('', sortable: false),
+                  ],
+                  rows: [
+                    for (final e in state.expenses)
+                      TableRowData(
+                        onTap: () => context.push('/expenses/${e.id}/edit'),
+                        search: '${displayDate(e.expenseDate)} ${e.number ?? ''} ${paymentModes[e.paymentMode] ?? e.paymentMode}',
+                        sort: [e.expenseDate, int.tryParse(e.number ?? '') ?? e.number, paymentModes[e.paymentMode] ?? e.paymentMode, e.total, null],
+                        cells: [
+                          Text(displayDate(e.expenseDate)),
+                          Text(e.number ?? ''),
+                          Text(paymentModes[e.paymentMode] ?? e.paymentMode),
+                          Text(money(e.total)),
+                          PopupMenuButton<String>(
+                            tooltip: 'More',
+                            icon: const Icon(Icons.more_vert, size: AppIconSize.md),
+                            onSelected: (v) => v == 'edit' ? context.push('/expenses/${e.id}/edit') : _delete(context, e),
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'edit', child: Text('View/Edit')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete')),
+                            ],
+                          ),
                         ],
                       ),
-                    ),
-                  ),
+                  ],
                 ),
               },
             ),
           ],
-        );
+        ));
       },
     );
   }

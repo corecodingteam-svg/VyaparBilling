@@ -20,6 +20,7 @@ import '../../../data/repositories/items_repository.dart';
 import '../../../data/repositories/parties_repository.dart';
 import '../../../shared/doc_math.dart';
 import '../../../shared/format.dart';
+import '../../../shared/theme.dart';
 
 num _r2(num v) => (v * 100).round() / 100;
 num _pow10(int n) => const [1, 10, 100, 1000][n.clamp(0, 3)];
@@ -291,6 +292,7 @@ class InvoiceFormState extends Equatable {
     this.result = InvoiceFormResult.none,
     this.savedId,
     this.error,
+    this.issue,
   });
 
   final InvoiceKind kind;
@@ -362,6 +364,9 @@ class InvoiceFormState extends Equatable {
   final InvoiceFormResult result;
   final String? savedId;
   final String? error;
+
+  /// Which part of the form [error] is about, so the screen can outline it.
+  final FormIssue? issue;
 
   Party? get party => parties.where((p) => p.id == partyId).firstOrNull;
 
@@ -511,6 +516,7 @@ class InvoiceFormState extends Equatable {
     InvoiceFormResult? result,
     String? savedId,
     String? error,
+    FormIssue? issue,
   }) =>
       InvoiceFormState(
         kind: kind,
@@ -556,6 +562,7 @@ class InvoiceFormState extends Equatable {
         result: result ?? this.result,
         savedId: savedId ?? this.savedId,
         error: error,
+        issue: issue,
       );
 
   @override
@@ -563,7 +570,7 @@ class InvoiceFormState extends Equatable {
         kind, loadStatus, parties, items, units, isCash, partyId, partyName, phone, billingAddress, number, date,
         stateOfSupply, lines, gstEnabled, pricesIncludeTax, roundOff, receivedInFull, received, paymentMode, bankAccountId, bankAccounts, description, formRev, partyRev,
         extraParts, linkedAmount, originalUnpaid, shippingAddress, dueDate, dueDateAuto, currencies, currencyCode, exchangeRate, settings, extras, godowns, creditPrompt,
-        pendingAndNew, submitStatus, result, savedId, error,
+        pendingAndNew, submitStatus, result, savedId, error, issue,
       ];
 }
 
@@ -991,87 +998,95 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   // ---------------------------------------------------------------- save
 
   /// Returns a message for the first problem, or null when the invoice can be saved.
-  String? validate() {
+  /// The first problem and which part of the form it is about, or null when the form can be saved.
+  FormIssue? firstIssue() {
     final s = state;
-    if (s.kind.numberRequired && s.number.trim().isEmpty) return 'Enter the ${s.kind.numberLabel.toLowerCase().replaceAll('.', '')}.';
+    if (s.kind.numberRequired && s.number.trim().isEmpty) return FormIssue('number', 'Enter the ${s.kind.numberLabel.toLowerCase().replaceAll('.', '')}.');
     if (!s.isCash && s.partyId == null) {
-      return s.partyName.trim().isEmpty
-          ? 'Select a ${s.kind.partyLabel.toLowerCase()}.'
-          : '"${s.partyName.trim()}" is not a saved party. Pick one from the list or add it first.';
+      return FormIssue(
+        'party',
+        s.partyName.trim().isEmpty
+            ? 'Select a ${s.kind.partyLabel.toLowerCase()}.'
+            : '"${s.partyName.trim()}" is not a saved party. Pick one from the list or add it first.',
+      );
     }
     final filled = s.lines.where((l) => !l.isBlank).toList();
-    if (filled.isEmpty) return 'Add at least one item.';
+    if (filled.isEmpty) return FormIssue('items', 'Add at least one item.');
     for (final l in filled) {
       final row = s.lines.indexOf(l) + 1;
-      if (l.name.trim().isEmpty) return 'Row $row: enter the item name.';
+      if (l.name.trim().isEmpty) return FormIssue('row:${l.uid}', 'Row $row: enter the item name.');
       final qty = parseNum(l.qty);
-      if (qty == null || qty <= 0) return 'Row $row: enter a quantity greater than 0.';
+      if (qty == null || qty <= 0) return FormIssue('row:${l.uid}', 'Row $row: enter a quantity greater than 0.');
       final decimals = s.settings.quantityDecimals;
       final scaled = qty * _pow10(decimals);
       if ((scaled - scaled.roundToDouble()).abs() > 1e-6) {
-        return decimals == 0 ? 'Row $row: quantity must be a whole number.' : 'Row $row: quantity can have at most $decimals decimal places.';
+        return FormIssue('row:${l.uid}', decimals == 0 ? 'Row $row: quantity must be a whole number.' : 'Row $row: quantity can have at most $decimals decimal places.');
       }
       final price = parseNum(l.price);
-      if (l.price.trim().isNotEmpty && (price == null || price < 0)) return 'Row $row: enter a valid price.';
+      if (l.price.trim().isNotEmpty && (price == null || price < 0)) return FormIssue('row:${l.uid}', 'Row $row: enter a valid price.');
       final pct = parseNum(l.discountPct);
-      if (pct != null && (pct < 0 || pct > 100)) return 'Row $row: discount must be between 0 and 100%.';
-      if ((parseNum(l.discountAmount) ?? 0) > l.gross) return 'Row $row: discount is more than the amount.';
+      if (pct != null && (pct < 0 || pct > 100)) return FormIssue('row:${l.uid}', 'Row $row: discount must be between 0 and 100%.');
+      if ((parseNum(l.discountAmount) ?? 0) > l.gross) return FormIssue('row:${l.uid}', 'Row $row: discount is more than the amount.');
       if (s.showSerial && l.serials.isNotEmpty && l.serials.length != qty) {
-        return 'Row $row: enter one serial number per unit (quantity ${numText(qty)}, serial numbers ${l.serials.length}).';
+        return FormIssue('row:${l.uid}', 'Row $row: enter one serial number per unit (quantity ${numText(qty)}, serial numbers ${l.serials.length}).');
       }
-      if (l.mrp.trim().isNotEmpty && (parseNum(l.mrp) == null || parseNum(l.mrp)! < 0)) return 'Row $row: enter a valid MRP.';
+      if (l.mrp.trim().isNotEmpty && (parseNum(l.mrp) == null || parseNum(l.mrp)! < 0)) return FormIssue('row:${l.uid}', 'Row $row: enter a valid MRP.');
     }
     final e = s.extras;
     final billDiscount = parseNum(e.billDiscount);
     if (e.billDiscount.trim().isNotEmpty && (billDiscount == null || billDiscount < 0 || (e.billDiscountIsPct && billDiscount > 100))) {
-      return e.billDiscountIsPct ? 'The bill discount must be between 0 and 100%.' : 'Enter a valid bill discount.';
+      return FormIssue('billDiscount', e.billDiscountIsPct ? 'The bill discount must be between 0 and 100%.' : 'Enter a valid bill discount.');
     }
     for (final c in e.charges) {
       if (c.name.trim().isEmpty && c.amount.trim().isEmpty) continue;
-      if (c.name.trim().isEmpty) return 'Name each additional charge.';
-      if (parseNum(c.amount) == null || parseNum(c.amount)! < 0) return 'Enter the amount of "${c.name.trim()}".';
+      if (c.name.trim().isEmpty) return FormIssue('charges', 'Name each additional charge.');
+      if (parseNum(c.amount) == null || parseNum(c.amount)! < 0) return FormIssue('charges', 'Enter the amount of "${c.name.trim()}".');
     }
     for (final (label, text) in [('TCS', e.tcsRate), ('TDS', e.tdsRate)]) {
       final rate = parseNum(text);
-      if (text.trim().isNotEmpty && (rate == null || rate < 0 || rate > 30)) return '$label must be between 0 and 30%.';
+      if (text.trim().isNotEmpty && (rate == null || rate < 0 || rate > 30)) return FormIssue('tax', '$label must be between 0 and 30%.');
     }
     if (s.showLoyalty && e.loyaltyRedeem.trim().isNotEmpty) {
       final points = parseNum(e.loyaltyRedeem);
-      if (points == null || points < 0 || points != points.roundToDouble()) return 'Enter the loyalty points to redeem as a whole number.';
-      if (points > s.loyaltyAvailable) return 'The customer has only ${s.loyaltyAvailable} loyalty points.';
-      if (s.loyaltyAmount + s.doc.tds > s.total) return 'The points redeemed are worth more than the bill.';
+      if (points == null || points < 0 || points != points.roundToDouble()) return FormIssue('loyalty', 'Enter the loyalty points to redeem as a whole number.');
+      if (points > s.loyaltyAvailable) return FormIssue('loyalty', 'The customer has only ${s.loyaltyAvailable} loyalty points.');
+      if (s.loyaltyAmount + s.doc.tds > s.total) return FormIssue('loyalty', 'The points redeemed are worth more than the bill.');
     }
     if (s.kind.hasPayment && !s.isCash && !s.receivedInFull && s.received.trim().isNotEmpty) {
       final r = parseNum(s.received);
-      if (r == null || r < 0) return 'Enter a valid ${s.kind.paidLabel.toLowerCase()} amount.';
-      if (r > s.total) return '${s.kind.paidLabel} amount cannot be more than the total.';
+      if (r == null || r < 0) return FormIssue('received', 'Enter a valid ${s.kind.paidLabel.toLowerCase()} amount.');
+      if (r > s.total) return FormIssue('received', '${s.kind.paidLabel} amount cannot be more than the total.');
     }
     if (s.kind.hasPayment) {
       for (final p in s.extraParts) {
         final amount = parseNum(p.amount);
-        if (amount == null || amount <= 0) return 'Enter the amount of each payment, or remove the empty one.';
+        if (amount == null || amount <= 0) return FormIssue('payments', 'Enter the amount of each payment, or remove the empty one.');
         final problem = bankAccountProblem(p.mode, p.bankAccountId, s.bankAccounts);
-        if (problem != null) return problem;
+        if (problem != null) return FormIssue('payments', problem);
       }
-      if (s.extraPartsTotal > s.total) return 'The payments add up to more than the total.';
+      if (s.extraPartsTotal > s.total) return FormIssue('payments', 'The payments add up to more than the total.');
       if (s.extraParts.isNotEmpty && !s.isCash && !s.receivedInFull && (parseNum(s.received) ?? 0) + s.extraPartsTotal > s.total) {
-        return 'The payments add up to more than the total.';
+        return FormIssue('payments', 'The payments add up to more than the total.');
       }
       if (s.receivedValue + s.linkedAmount + s.deductions > s.total) {
-        return 'Payments of ${money(s.linkedAmount)} are already linked to this ${s.kind.singular.toLowerCase()}; reduce the amount ${s.kind.paidLabel.toLowerCase()} here.';
+        return FormIssue('received', 'Payments of ${money(s.linkedAmount)} are already linked to this ${s.kind.singular.toLowerCase()}; reduce the amount ${s.kind.paidLabel.toLowerCase()} here.');
       }
     }
     // The account only matters when some money actually changes hands now.
     if (s.kind.hasPayment && s.firstPartValue > 0) {
       final problem = bankAccountProblem(s.paymentMode, s.bankAccountId, s.bankAccounts);
-      if (problem != null) return problem;
+      if (problem != null) return FormIssue('payments', problem);
     }
     if (s.currencyCode != null) {
       final rate = parseNum(s.exchangeRate);
-      if (rate == null || rate <= 0) return 'Enter the exchange rate for ${s.currencyCode}.';
+      if (rate == null || rate <= 0) return FormIssue('currency', 'Enter the exchange rate for ${s.currencyCode}.');
     }
     return null;
   }
+
+  /// The message for the first problem, or null when the form can be saved.
+  String? validate() => firstIssue()?.message;
+
 
   Map<String, dynamic> _body() {
     final s = state;
@@ -1138,9 +1153,10 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   /// with [overLimitConfirmed].
   Future<void> save({required bool andNew, bool overLimitConfirmed = false}) async {
     if (state.submitStatus == SubmitStatus.submitting) return;
-    final problem = validate();
-    if (problem != null) {
-      emit(state.copyWith(submitStatus: SubmitStatus.failure, result: InvoiceFormResult.none, error: problem));
+    final issue = firstIssue();
+    final problem = issue?.message;
+    if (issue != null) {
+      emit(state.copyWith(submitStatus: SubmitStatus.failure, result: InvoiceFormResult.none, error: problem, issue: issue));
       return;
     }
     if (state.creditLimitWarning != null && state.creditLimitBlocks) {

@@ -10,6 +10,7 @@ import '../../data/models/extras.dart';
 import '../../data/models/invoice.dart';
 import '../../data/models/payment.dart';
 import '../../data/repositories/utilities_repository.dart';
+import '../../shared/export.dart';
 import '../../shared/format.dart';
 import '../../shared/page.dart';
 import '../../shared/theme.dart';
@@ -41,8 +42,8 @@ Future<void> _copy(BuildContext context, String message) async {
 }
 
 List<Widget> _messageActions(BuildContext context, String? phone, String message) => [
-      IconButton(tooltip: 'Remind on WhatsApp', icon: const Icon(Icons.chat_outlined, size: 20), onPressed: () => _openWhatsApp(context, phone, message)),
-      IconButton(tooltip: 'Copy message', icon: const Icon(Icons.copy, size: 18), onPressed: () => _copy(context, message)),
+      IconButton(tooltip: 'Remind on WhatsApp', icon: const Icon(Icons.chat_outlined, size: AppIconSize.md), onPressed: () => _openWhatsApp(context, phone, message)),
+      IconButton(tooltip: 'Copy message', icon: const Icon(Icons.copy, size: AppIconSize.sm), onPressed: () => _copy(context, message)),
     ];
 
 /// Customers with invoices past their due date.
@@ -64,7 +65,7 @@ class PaymentRemindersScreen extends StatelessWidget {
             return TitledPage(title: 'Payment Reminders', children: [
               Card(
                 child: SizedBox(
-                  height: 260,
+                  height: AppSize.stateHeight,
                   child: EmptyState(
                     icon: Icons.notifications_off_outlined,
                     title: 'Payment reminders are switched off',
@@ -77,23 +78,31 @@ class PaymentRemindersScreen extends StatelessWidget {
           }
           return TitledPage(
             title: 'Payment Reminders',
+            actions: [
+              ExportMenu(table: () => TableExport(
+                title: 'Payment Reminders',
+                headers: ['Customer', 'Phone', 'Invoices', 'Due since', 'Days overdue', 'Overdue', 'Balance'],
+                rows: [for (final r in state.items) [r.name, r.phone, r.invoices, displayDate(r.oldestDue), r.daysOverdue, r.overdueAmount, r.balance]],
+              )),
+            ],
             subtitle: 'Customers with sale invoices past their due date'
                 '${settings.dueDatesEnabled ? '' : ' (unpaid for more than ${settings.paymentReminderDays} days)'}. Overdue in all: ${money(total)}.',
             children: [
               RowsCard(
+                texts: [for (final r in state.items) '${r.name} ${r.phone ?? ''}'],
+                sorts: {'Overdue amount': [for (final r in state.items) r.overdueAmount], 'Customer': [for (final r in state.items) r.name], 'Days overdue': [for (final r in state.items) r.daysOverdue]},
                 empty: const EmptyState(icon: Icons.thumb_up_alt_outlined, title: 'Nothing overdue', message: 'No customer has an invoice past its due date.'),
                 rows: [
                   for (final r in state.items)
-                    ListTile(
+                    ListRow(
                       title: Text(r.name),
                       subtitle: Text('${r.invoices} invoice${r.invoices == 1 ? '' : 's'} · due since ${displayDate(r.oldestDue)} · ${r.daysOverdue} days overdue'
                           '${(r.phone ?? '').isEmpty ? '' : ' · ${r.phone}'}'),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                          Text(money(r.overdueAmount), style: const TextStyle(fontWeight: FontWeight.w700, color: payRed)),
-                          if (r.balance != r.overdueAmount) Text('of ${money(r.balance)} owed', style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                        ]),
-                        const SizedBox(width: 4),
+                      trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Text(money(r.overdueAmount), style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.moneyOut)),
+                        if (r.balance != r.overdueAmount) Text('of ${money(r.balance)} owed', style: AppText.caption),
+                      ]),
+                      actions: [
                         ..._messageActions(
                           context,
                           r.phone,
@@ -102,7 +111,7 @@ class PaymentRemindersScreen extends StatelessWidget {
                         ),
                         IconButton(
                           tooltip: 'Send reminder from the app',
-                          icon: const Icon(Icons.send_outlined, size: 20),
+                          icon: const Icon(Icons.send_outlined, size: AppIconSize.md),
                           onPressed: () => showSendDialog(
                             context,
                             title: 'Remind ${r.name}',
@@ -113,10 +122,10 @@ class PaymentRemindersScreen extends StatelessWidget {
                         ),
                         IconButton(
                           tooltip: 'Record payment',
-                          icon: const Icon(Icons.payments_outlined, size: 20),
+                          icon: const Icon(Icons.payments_outlined, size: AppIconSize.md),
                           onPressed: () => showPaymentForm(context, PaymentKind.paymentIn, partyId: r.partyId),
                         ),
-                      ]),
+                      ],
                     ),
                 ],
               ),
@@ -140,9 +149,18 @@ class ServiceRemindersScreen extends StatelessWidget {
           final firmName = context.select((AuthBloc b) => b.state.user?.firmName ?? '');
           return TitledPage(
             title: 'Service Reminders',
+            actions: [
+              ExportMenu(table: () => TableExport(
+                title: 'Service Reminders',
+                headers: ['Service', 'Customer', 'Phone', 'Invoice', 'Sold on', 'Due', 'Days left'],
+                rows: [for (final r in state.items) [r.itemName, r.partyName, r.phone, r.invoiceNumber, displayDate(r.soldOn), displayDate(r.dueDate), r.daysLeft]],
+              )),
+            ],
             subtitle: 'Follow-ups due in the next 30 days or already overdue. Set "Service reminder after" on a service item to get them.',
             children: [
               RowsCard(
+                texts: [for (final r in state.items) '${r.itemName} ${r.partyName} ${r.phone ?? ''}'],
+                sorts: {'Due date': [for (final r in state.items) r.dueDate], 'Service': [for (final r in state.items) r.itemName], 'Customer': [for (final r in state.items) r.partyName]},
                 empty: const EmptyState(
                   icon: Icons.build_circle_outlined,
                   title: 'No service follow-ups due',
@@ -159,10 +177,10 @@ class ServiceRemindersScreen extends StatelessWidget {
                           Text(displayDate(r.dueDate), style: const TextStyle(fontWeight: FontWeight.w600)),
                           Text(
                             r.daysLeft < 0 ? '${-r.daysLeft} days overdue' : (r.daysLeft == 0 ? 'due today' : 'in ${r.daysLeft} days'),
-                            style: TextStyle(fontSize: 11, color: r.daysLeft <= 0 ? payRed : Colors.black54),
+                            style: TextStyle(fontSize: AppFont.caption, color: r.daysLeft <= 0 ? AppColors.dangerText : AppColors.textMuted),
                           ),
                         ]),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: AppSpace.xs),
                         ..._messageActions(
                           context,
                           r.phone,
@@ -170,7 +188,7 @@ class ServiceRemindersScreen extends StatelessWidget {
                         ),
                         IconButton(
                           tooltip: 'Mark as done',
-                          icon: const Icon(Icons.check_circle_outline, size: 20, color: receiveGreen),
+                          icon: const Icon(Icons.check_circle_outline, size: AppIconSize.md, color: AppColors.success),
                           onPressed: state.busy ? null : () => cubit.run(() => repo.markServiceDone(r.id)),
                         ),
                       ]),

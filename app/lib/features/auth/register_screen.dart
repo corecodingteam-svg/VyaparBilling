@@ -7,6 +7,8 @@ import '../../core/status.dart';
 import 'auth_layout.dart';
 import 'bloc/auth_bloc.dart';
 import 'bloc/auth_form_cubit.dart';
+import '../../shared/theme.dart';
+import '../../shared/widgets.dart';
 
 class RegisterScreen extends StatelessWidget {
   const RegisterScreen({super.key});
@@ -42,7 +44,7 @@ class _RegisterFormState extends State<_RegisterForm> {
   }
 
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!validateForm(context, _formKey, report: showError)) return;
     context.read<AuthFormCubit>().register(
           firmName: _firm.text,
           fullName: _name.text,
@@ -51,8 +53,6 @@ class _RegisterFormState extends State<_RegisterForm> {
         );
   }
 
-  String? _required(String? v, String label) => (v == null || v.trim().length < 2) ? 'Enter $label' : null;
-
   @override
   Widget build(BuildContext context) {
     final form = context.watch<AuthFormCubit>().state;
@@ -60,7 +60,7 @@ class _RegisterFormState extends State<_RegisterForm> {
     return AuthLayout(
       title: 'Create your account',
       subtitle: 'Set up your business to start billing',
-      child: Form(
+      child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -69,9 +69,9 @@ class _RegisterFormState extends State<_RegisterForm> {
               controller: _firm,
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(labelText: 'Business name', prefixIcon: Icon(Icons.storefront_outlined)),
-              validator: (v) => _required(v, 'your business name'),
+              validator: Validators.minLength('Business name', 2),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             DropdownButtonFormField<String>(
               initialValue: form.stateCode,
               isExpanded: true,
@@ -81,17 +81,17 @@ class _RegisterFormState extends State<_RegisterForm> {
                   DropdownMenuItem(value: e.key, child: Text('${e.value} (${e.key})', overflow: TextOverflow.ellipsis)),
               ],
               onChanged: context.read<AuthFormCubit>().stateCodeChanged,
-              validator: (v) => v == null ? 'Select your state' : null,
+              validator: Validators.choose('state'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             TextFormField(
               controller: _name,
               textInputAction: TextInputAction.next,
               autofillHints: const [AutofillHints.name],
               decoration: const InputDecoration(labelText: 'Your name', prefixIcon: Icon(Icons.person_outline)),
-              validator: (v) => _required(v, 'your name'),
+              validator: Validators.minLength('Your name', 2),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             TextFormField(
               controller: _email,
               keyboardType: TextInputType.emailAddress,
@@ -101,7 +101,7 @@ class _RegisterFormState extends State<_RegisterForm> {
               decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.email_outlined)),
               validator: validateEmail,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpace.lg),
             TextFormField(
               controller: _password,
               obscureText: form.obscurePassword,
@@ -117,18 +117,18 @@ class _RegisterFormState extends State<_RegisterForm> {
                   onPressed: context.read<AuthFormCubit>().togglePasswordVisibility,
                 ),
               ),
-              validator: (v) => (v == null || v.length < 8) ? 'Use at least 8 characters' : null,
+              validator: Validators.minLength('Password', 8),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpace.xxl),
             if (form.status == SubmitStatus.failure && form.error != null) AuthErrorBanner(form.error!),
             FilledButton(
               onPressed: loading ? null : _submit,
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50)),
               child: loading
-                  ? const SizedBox(height: 22, width: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
-                  : const Text('Create account', style: TextStyle(fontSize: 16)),
+                  ? InlineSpinner(color: AppColors.onPrimary)
+                  : const Text('Create account', style: TextStyle(fontSize: AppFont.subtitle)),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpace.xl),
             Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
               const Text('Already have an account?'),
               TextButton(onPressed: () => context.go('/login'), child: const Text('Log in')),

@@ -19,13 +19,13 @@ void main() {
 
     await tester.tap(find.text('Log in'));
     await tester.pump();
-    expect(find.text('Enter your email'), findsOneWidget);
-    expect(find.text('Enter your password'), findsOneWidget);
+    expect(find.text('Email is required'), findsOneWidget);
+    expect(find.text('Password is required'), findsOneWidget);
 
     await tester.enterText(find.widgetWithText(TextFormField, 'Email'), 'not-an-email');
     await tester.tap(find.text('Log in'));
     await tester.pump();
-    expect(find.text('Enter a valid email address'), findsOneWidget);
+    expect(find.text('Email must be a valid address, like name@example.com'), findsOneWidget);
   });
 
   testWidgets('password visibility toggle is driven by the cubit', (tester) async {

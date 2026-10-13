@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'offline.dart';
@@ -18,21 +19,41 @@ class ApiException implements Exception {
   /// The server could not be reached at all (no connection, timeout), as opposed to answering with an error.
   final bool offline;
 
-  factory ApiException.from(Object error) {
+  factory ApiException.from(Object error, [StackTrace? stack]) {
     if (error is ApiException) return error;
+    // A message already written for the user (cubits keep their errors as text).
+    if (error is String && error.trim().isNotEmpty) return ApiException(error);
+    // Checks the app makes itself (file formats, import rows) carry a message written for the user.
+    if (error is FormatException && error.message.isNotEmpty) return ApiException(error.message);
     if (error is DioException) {
       final data = error.response?.data;
       if (data is Map && data['error'] is Map) {
         final msg = data['error']['message'];
         if (msg is List && msg.isNotEmpty) return ApiException(msg.first.toString());
-        if (msg != null) return ApiException(msg.toString());
+        if (msg != null && msg.toString().isNotEmpty) return ApiException(msg.toString());
       }
       if (error.type == DioExceptionType.connectionError || error.type == DioExceptionType.connectionTimeout || error.type == DioExceptionType.sendTimeout ||
           (error.type == DioExceptionType.unknown && error.response == null)) {
         return ApiException('Cannot reach the server. Check your internet connection.', offline: true);
       }
+      if (error.type == DioExceptionType.receiveTimeout) return ApiException('The server took too long to answer. Please try again.');
+      // The server (or something in front of it) answered, but not with our error format.
+      final status = error.response?.statusCode;
+      if (status != null) {
+        return ApiException(switch (status) {
+          401 => 'Your session has expired. Please sign in again.',
+          403 => 'You do not have permission to do that.',
+          404 => 'That could not be found. It may have been deleted.',
+          413 => 'That file or request is too large.',
+          429 => 'Too many requests. Please wait a moment and try again.',
+          >= 500 => 'The server had a problem (error $status). Please try again in a moment.',
+          _ => 'The server could not accept that request (error $status).',
+        });
+      }
     }
-    return ApiException('Something went wrong. Please try again.');
+    // A bug, not something the user did: say so, keep the cause visible in the console, and name it so it can be reported.
+    debugPrint('Unexpected ${error.runtimeType}: $error${stack == null ? '' : '\n$stack'}');
+    return ApiException('Something went wrong (${error.runtimeType}). Please try again; if it keeps happening, report this message.');
   }
 
   @override

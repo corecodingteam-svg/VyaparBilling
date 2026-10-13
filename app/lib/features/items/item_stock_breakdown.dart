@@ -7,6 +7,7 @@ import '../../data/repositories/items_repository.dart';
 import '../../shared/format.dart';
 import '../../shared/widgets.dart';
 import '../company/firm_cubit.dart';
+import '../../shared/theme.dart';
 
 class StockBreakdown extends Equatable {
   const StockBreakdown({this.stores = const [], this.batches = const [], this.serials = const []});
@@ -63,11 +64,11 @@ class ItemStockBreakdown extends StatelessWidget {
         builder: (context, b) {
           if (b.stores.isEmpty && b.batches.isEmpty && b.serials.isEmpty) return const SizedBox.shrink();
           Widget heading(String text) => Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 6),
+            padding: const EdgeInsets.only(top: AppSpace.md, bottom: AppSpace.sm),
             child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
           );
           return Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: AppSpace.xs),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -96,7 +97,7 @@ class ItemStockBreakdown extends StatelessWidget {
                     runSpacing: 6,
                     children: [for (final sn in b.serials.take(60)) Chip(label: Text(sn), visualDensity: VisualDensity.compact)],
                   ),
-                  if (b.serials.length > 60) Text('…and ${b.serials.length - 60} more', style: const TextStyle(color: Colors.black54)),
+                  if (b.serials.length > 60) Text('…and ${b.serials.length - 60} more', style: const TextStyle(color: AppColors.textMuted)),
                 ],
               ],
             ),
