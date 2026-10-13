@@ -1,0 +1,71 @@
+# Builds the Android and Windows apps and runs the tests. A Windows app can only be built on Windows, so this is
+# where the Windows download comes from. Run it from the Actions tab ("Run workflow"), or it runs on every push.
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.47.5
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '${{ env.FLUTTER_VERSION }}', channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '${{ env.FLUTTER_VERSION }}', channel: stable, cache: true }
+      # Optional: store a base64 keystore and its passwords as repository secrets to sign for the Play Store.
+      - name: Release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
+          fi
+      - run: flutter pub get
+      - run: flutter build apk --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
+      - run: flutter build appbundle --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            app/build/app/outputs/flutter-apk/app-release.apk
+            app/build/app/outputs/bundle/release/app-release.aab
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '${{ env.FLUTTER_VERSION }}', channel: stable, cache: true }
+      - run: flutter pub get
+      - run: flutter build windows --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
+      - name: Zip the app
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../Billing-windows.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: Billing-windows.zip }

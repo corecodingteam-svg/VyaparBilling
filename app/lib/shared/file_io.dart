@@ -49,3 +49,10 @@ Future<String?> pickJsonFile() async {
   if (file == null) return null;
   return utf8.decode(await file.xFile.readAsBytes(), allowMalformed: true);
 }
+
+/// Lets the user pick a spreadsheet, CSV or Tally XML file and returns its name and bytes, or null if they cancelled.
+Future<({String name, Uint8List bytes})?> pickDataFile() async {
+  final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['csv', 'xlsx', 'xml']);
+  if (file == null) return null;
+  return (name: file.name, bytes: await file.xFile.readAsBytes());
+}

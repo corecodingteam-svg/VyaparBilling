@@ -12,7 +12,9 @@ async function bootstrap() {
   // Uploads and backup files travel as JSON.
   app.useBodyParser('json', { limit: '50mb' });
   app.use(helmet());
-  app.setGlobalPrefix('api/v1', { exclude: ['health', 'ready'] });
+  app.setGlobalPrefix('api/v1', { exclude: ['health', 'ready', 'store/(.*)'] });
+  // Behind Caddy: the visitor's address is the first forwarded one, not the proxy's.
+  app.set('trust proxy', 1);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
   app.useGlobalFilters(new HttpExceptionFilter());
 

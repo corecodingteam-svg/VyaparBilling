@@ -1,5 +1,5 @@
 // End-to-end checks of the "remaining gaps" batch against a running backend (PORT 3100).
-const B = 'http://localhost:3100/api/v1';
+const B = (process.env.BASE ?? 'http://localhost:3100') + '/api/v1';
 let token;
 const call = async (method, path, body, expect) => {
   const r = await fetch(B + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });

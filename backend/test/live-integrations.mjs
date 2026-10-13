@@ -1,6 +1,6 @@
 import http from 'http';
 import crypto from 'crypto';
-const B = 'http://localhost:3100/api/v1';
+const B = (process.env.BASE ?? 'http://localhost:3100') + '/api/v1';
 let token, firmId;
 const call = async (method, path, body, expect) => {
   const r = await fetch(B + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });

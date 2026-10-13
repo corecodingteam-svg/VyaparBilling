@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -7,13 +10,35 @@ import '../../core/status.dart';
 import '../../data/models/item.dart';
 import '../../data/repositories/items_repository.dart';
 import '../../shared/csv.dart';
+import 'file_readers.dart';
 import '../../shared/format.dart';
 import 'import_spec.dart';
 
 // ---------------------------------------------------------------- CSV import
 
 class ImportState extends Equatable {
-  const ImportState({this.rows = const [], this.fileError, this.status = SubmitStatus.idle, this.created, this.serverErrors = const [], this.error});
+  const ImportState({
+    this.rows = const [],
+    this.fileError,
+    this.status = SubmitStatus.idle,
+    this.created,
+    this.serverErrors = const [],
+    this.error,
+    this.sourceHeaders = const [],
+    this.mapping = const {},
+    this.note,
+    this.fromTally = false,
+  });
+
+  /// The chosen file's own column names and which of them feed each column of the import (spreadsheets and CSVs).
+  final List<String> sourceHeaders;
+  final Map<String, int?> mapping;
+
+  /// Something worth saying about the file, e.g. how many ledgers were left out of a Tally import.
+  final String? note;
+
+  /// Balances in a Tally file might be on the wrong side; the screen then offers to swap them.
+  final bool fromTally;
 
   /// Parsed rows of the chosen file (empty until a file is chosen).
   final List<ImportRow> rows;
@@ -32,7 +57,7 @@ class ImportState extends Equatable {
   bool get done => created != null;
 
   @override
-  List<Object?> get props => [rows, fileError, status, created, serverErrors, error];
+  List<Object?> get props => [rows, fileError, status, created, serverErrors, error, sourceHeaders, mapping, note, fromTally];
 }
 
 /// Reads a CSV, shows what will be imported, and sends the valid rows.
@@ -45,6 +70,9 @@ class ImportCubit extends Cubit<ImportState> {
 
   String get sampleCsv => toCsv([spec.headers, ...spec.sample]);
 
+  Table _source = const [];
+  Table _prepared = const [];
+
   void fileChosen(String text) {
     try {
       final rows = spec.read(parseCsv(text));
@@ -52,6 +80,64 @@ class ImportCubit extends Cubit<ImportState> {
     } on FormatException catch (e) {
       emit(ImportState(fileError: e.message));
     }
+  }
+
+  /// A file of any supported kind: Tally XML, an Excel workbook, or a CSV. Columns of the last two are matched
+  /// to the import's columns by name, and the user can correct the match.
+  void dataFileChosen(String name, Uint8List bytes) {
+    try {
+      if (name.toLowerCase().endsWith('.xml')) {
+        final tally = parseTally(utf8.decode(bytes, allowMalformed: true));
+        _prepared = spec.endpoint == '/items/import' ? tally.items : tally.parties;
+        final rows = spec.read(_prepared);
+        if (rows.isEmpty) throw FormatException('The Tally file has no ${spec.noun == 'party' ? 'customers or suppliers' : 'stock items'}.');
+        emit(ImportState(
+          rows: rows,
+          fromTally: spec.noun == 'party',
+          note: spec.noun == 'party'
+              ? '${tally.skippedLedgers} other ledgers (banks, cash, expenses, taxes…) were left out. Check that "to receive" and "to pay" are on the right side before importing.'
+              : 'Tally keeps selling prices in price lists, so sale prices are empty; the purchase price is the opening rate.',
+        ));
+        return;
+      }
+      _source = readTable(bytes, name);
+      final headers = _source.first;
+      final mapping = autoMap(headers, spec);
+      _apply(headers, mapping);
+    } on FormatException catch (e) {
+      emit(ImportState(fileError: e.message));
+    }
+  }
+
+  void _apply(List<String> headers, Map<String, int?> mapping) {
+    final needed = spec.headers.first;
+    if (mapping[needed] == null) {
+      // The name column could not be found; show the matching so the user can point at it.
+      emit(ImportState(sourceHeaders: headers, mapping: mapping, fileError: 'Pick which column holds the ${spec.noun}\'s name.'));
+      return;
+    }
+    _prepared = applyMapping(_source, spec, mapping);
+    final rows = spec.read(_prepared);
+    emit(rows.isEmpty
+        ? const ImportState(fileError: 'The file has no data rows.')
+        : ImportState(rows: rows, sourceHeaders: headers, mapping: mapping));
+  }
+
+  /// The user chose a different file column for one of the import's columns.
+  void mappingChanged(String header, int? column) {
+    if (_source.isEmpty) return;
+    _apply(_source.first, {...state.mapping, header: column});
+  }
+
+  /// Flips receive / pay on every row (for Tally files whose balances came out the wrong way round).
+  void swapBalances() {
+    final i = spec.headers.indexOf('Balance Type');
+    if (i < 0 || _prepared.length < 2) return;
+    _prepared = [
+      _prepared.first,
+      for (final r in _prepared.skip(1)) [for (var c = 0; c < r.length; c++) c == i ? (r[c] == 'receive' ? 'pay' : (r[c] == 'pay' ? 'receive' : r[c])) : r[c]],
+    ];
+    emit(ImportState(rows: spec.read(_prepared), fromTally: state.fromTally, note: state.note));
   }
 
   void reset() => emit(const ImportState());

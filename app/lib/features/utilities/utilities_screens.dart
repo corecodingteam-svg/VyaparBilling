@@ -49,11 +49,53 @@ class _ImportView extends StatelessWidget {
   Future<void> _pick(BuildContext context) async {
     final cubit = context.read<ImportCubit>();
     try {
-      final text = await pickCsvFile();
-      if (text != null) cubit.fileChosen(text);
+      final file = await pickDataFile();
+      if (file != null) cubit.dataFileChosen(file.name, file.bytes);
     } catch (_) {
       if (context.mounted) showError(context, 'Could not read that file.');
     }
+  }
+
+  /// Which column of the file feeds each column of the import.
+  Future<void> _match(BuildContext context, ImportState state) async {
+    final cubit = context.read<ImportCubit>();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => BlocProvider.value(
+        value: cubit,
+        child: BlocBuilder<ImportCubit, ImportState>(
+          builder: (ctx, s) => AlertDialog(
+            title: const Text('Match columns'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('For each thing the import needs, choose the column of your file that holds it.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                  const SizedBox(height: 8),
+                  for (final h in cubit.spec.headers)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: DropdownButtonFormField<int?>(
+                        key: ValueKey('$h-${s.mapping[h]}'),
+                        initialValue: s.mapping[h],
+                        isExpanded: true,
+                        decoration: InputDecoration(labelText: h == cubit.spec.headers.first ? '$h *' : h, isDense: true),
+                        items: [
+                          const DropdownMenuItem<int?>(value: null, child: Text('— none —')),
+                          for (var i = 0; i < s.sourceHeaders.length; i++) DropdownMenuItem<int?>(value: i, child: Text(s.sourceHeaders[i].isEmpty ? 'Column ${i + 1}' : s.sourceHeaders[i], overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (v) => cubit.mappingChanged(h, v),
+                      ),
+                    ),
+                  if (s.fileError != null) Text(s.fileError!, style: const TextStyle(color: payRed)),
+                ]),
+              ),
+            ),
+            actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -69,7 +111,7 @@ class _ImportView extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('1. Prepare a CSV file with these columns', style: const TextStyle(fontWeight: FontWeight.w600)),
+                const Text('1. These are the columns the import fills in', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 6, children: [
                   for (final h in spec.headers)
@@ -83,11 +125,19 @@ class _ImportView extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 const Text('2. Choose your file', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                const Text(
+                  'A CSV, an Excel workbook (.xlsx — for example Vyapar\'s export) or a Tally XML export. Columns with other names are matched for you; you can change the match.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, children: [
-                  FilledButton.icon(onPressed: () => _pick(context), icon: const Icon(Icons.upload_file_outlined), label: const Text('Choose CSV file')),
+                  FilledButton.icon(onPressed: () => _pick(context), icon: const Icon(Icons.upload_file_outlined), label: const Text('Choose file')),
+                  if (state.sourceHeaders.isNotEmpty) OutlinedButton.icon(onPressed: () => _match(context, state), icon: const Icon(Icons.swap_horiz), label: const Text('Match columns')),
+                  if (state.fromTally) OutlinedButton.icon(onPressed: cubit.swapBalances, icon: const Icon(Icons.compare_arrows), label: const Text('Swap receive / pay')),
                   if (state.rows.isNotEmpty || state.fileError != null) TextButton(onPressed: cubit.reset, child: const Text('Clear')),
                 ]),
+                if (state.note != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(state.note!, style: const TextStyle(fontSize: 13))),
                 if (state.fileError != null)
                   Padding(padding: const EdgeInsets.only(top: 10), child: Text(state.fileError!, style: const TextStyle(color: payRed))),
               ]),

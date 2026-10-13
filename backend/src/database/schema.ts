@@ -41,6 +41,7 @@ export interface FirmsTable {
   city: string | null;
   tan: string | null;
   pan: string | null;
+  store_slug: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }
@@ -128,6 +129,7 @@ export interface ItemsTable {
   service_reminder_days: number | null;
   cess_rate: NullableNumeric;
   mrp: NullableNumeric;
+  in_store: Generated<boolean>;
   created_at: Timestamp;
   updated_at: Timestamp;
   deleted_at: Timestamp | null;
@@ -258,7 +260,8 @@ export interface StockMovementsTable {
   firm_id: string;
   item_id: string;
   invoice_id: string | null;
-  type: 'opening' | 'add' | 'reduce' | 'sale' | 'purchase' | 'credit_note' | 'debit_note' | 'transfer';
+  type: 'opening' | 'add' | 'reduce' | 'sale' | 'purchase' | 'credit_note' | 'debit_note' | 'transfer' | 'manufacture_in' | 'manufacture_out';
+  manufacture_id: string | null;
   godown_id: string | null;
   batch_no: string | null;
   expiry_date: string | null;
@@ -479,6 +482,54 @@ export interface TaxChallansTable {
   deleted_at: Timestamp | null;
 }
 
+export interface BomLinesTable {
+  id: Generated<string>;
+  firm_id: string;
+  item_id: string;
+  component_id: string;
+  quantity: Numeric;
+  sort_order: Generated<number>;
+}
+
+export interface ManufactureEntriesTable {
+  id: Generated<string>;
+  firm_id: string;
+  number: string;
+  item_id: string;
+  quantity: Numeric;
+  entry_date: string;
+  godown_id: string | null;
+  component_cost: Numeric;
+  extra_cost: Numeric;
+  description: string | null;
+  created_by: string | null;
+  created_at: Timestamp;
+  deleted_at: Timestamp | null;
+}
+
+export interface StoreOrdersTable {
+  id: Generated<string>;
+  firm_id: string;
+  invoice_id: string | null;
+  customer_name: string;
+  phone: string;
+  address: string | null;
+  note: string | null;
+  client_hash: string | null;
+  status: Generated<'new' | 'accepted' | 'rejected'>;
+  created_at: Timestamp;
+}
+
+export interface IdempotencyKeysTable {
+  firm_id: string;
+  key: string;
+  method: string;
+  path: string;
+  status: number;
+  response: ColumnType<unknown, string | null, string | null>;
+  created_at: Timestamp;
+}
+
 export interface GeofencesTable {
   id: Generated<string>;
   firm_id: string;
@@ -654,6 +705,10 @@ export interface Database {
   integrations: IntegrationsTable;
   geofences: GeofencesTable;
   tax_challans: TaxChallansTable;
+  bom_lines: BomLinesTable;
+  manufacture_entries: ManufactureEntriesTable;
+  store_orders: StoreOrdersTable;
+  idempotency_keys: IdempotencyKeysTable;
   message_log: MessageLogTable;
   payment_links: PaymentLinksTable;
   payment_allocations: PaymentAllocationsTable;

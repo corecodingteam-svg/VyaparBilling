@@ -111,6 +111,15 @@ export const DEFAULT_SETTINGS = {
   /** How many automatic backups to keep. */
   autoBackupKeep: 7,
 
+  // ---- online store
+  storeEnabled: false,
+  storeTagline: '',
+  storeNote: '',
+
+  // ---- manufacturing
+  /** Bills of materials and production entries. */
+  manufacturingEnabled: false,
+
   // ---- credit limit
   /** What happens when a sale would take a customer past their credit limit: a warning, or the sale is refused. */
   creditLimitMode: 'warn' as 'warn' | 'block',
@@ -269,4 +278,8 @@ export class FirmSettingsDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(75) responsibleEmail?: string;
   @ApiPropertyOptional() @IsOptional() @Matches(/^([0-9]{15})?$/, { message: 'Token number has 15 digits' }) tdsPreviousToken?: string;
   @ApiPropertyOptional() @IsOptional() @Matches(/^([0-9]{15})?$/, { message: 'Token number has 15 digits' }) tcsPreviousToken?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() manufacturingEnabled?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() storeEnabled?: boolean;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(120) storeTagline?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(200) storeNote?: string;
 }

@@ -15,6 +15,14 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+// Some plugins (flutter_blue_plus) are compiled against an Android SDK older than their own dependencies need.
+subprojects {
+    afterEvaluate {
+        if (project.name != "app") {
+            project.extensions.findByName("android")?.withGroovyBuilder { "compileSdkVersion"(36) }
+        }
+    }
+}
 subprojects {
     project.evaluationDependsOn(":app")
 }

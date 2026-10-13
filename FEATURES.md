@@ -196,9 +196,37 @@ Search also covers payments (number, party, note) and expenses (number, category
 
 ---
 
+## Batch 7 — in progress (what exists, what does not)
+
+Backend, tested end to end (`backend/test/live-store.mjs`, also run against the production image on an empty database):
+- **Manufacturing:** a bill of materials per item (loops refused), production entries that use up the components and add the
+  finished goods at their cost (components at purchase price plus an extra cost), undo (refused once some were sold), and a
+  "can I make this?" check. Stock, item history and "verify my data" include it. **No screen yet** — only the API.
+- **Online store:** each company can open a public shop page at `/store/<address>` listing the items it chooses (prices
+  shown with GST included, no stock counts or costs exposed), take orders without an account (they become sale orders for a
+  customer found by phone number or created), and refuse bots and floods. The owner sees and accepts orders through the API.
+  **No screen in the app yet** to switch it on, pick items or see orders. The order is not announced to the owner by message.
+- **Safe re-sending of saves:** a save carrying an Idempotency-Key is applied once, however many times it arrives.
+
+App:
+- **Import from Tally and Vyapar:** the import screens accept Tally XML masters (customers and suppliers from Sundry
+  Debtors/Creditors at any depth; stock items with unit, HSN, GST rate, opening quantity and rate; banks, cash and
+  expense ledgers are left out), Excel (.xlsx) and CSV. Spreadsheet columns are matched to ours by name and can be changed
+  by hand. A Tally balance on the wrong side can be swapped before importing. Written from Tally's documented XML layout and
+  tested on a sample I wrote, **not on a real Tally or Vyapar export**; Vyapar's own backup file (.vyp) is not readable.
+- **Android:** a release APK now builds (`flutter build apk --release`, 72 MB) — the Bluetooth plugin needed a newer
+  compile SDK, fixed in `android/build.gradle.kts`. It is **not run on any phone or emulator**, and is signed with the debug
+  key unless `android/key.properties` points to a keystore (the CI workflow can take one from repository secrets).
+- **Windows:** the Windows project is added, and `.github/workflows/build-apps.yml` builds the Windows app and the Android
+  APK/bundle on GitHub. **Never run**, since a Windows build needs Windows.
+- **Offline groundwork:** the cache, the queue of saves made without a connection, and the server's de-duplication exist and
+  are tested in part, but are **not switched on in the app**: nothing yet shows a banner, queues invoices, or retries.
+
+Not started in this batch: **printing invoices in regional languages** (needs Indian-script fonts in the PDF, translated
+labels and a reader to check the result).
+
 ## Still not built
 
-- **Online store** (a public shop page) is not built.
 - Everything in "Outside services" below is built and tested against simulated providers only: **none of it has been
   run against the real WhatsApp, Twilio, MSG91, NIC, Razorpay or Google services**, because that needs your accounts.
 - The Android app build was skipped, so Bluetooth and background location are unverified on Android.

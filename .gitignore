@@ -9,3 +9,7 @@ backend/backups/
 **/.DS_Store
 app/build/
 app/.dart_tool/
+app/android/key.properties
+app/android/*.jks
+app/android/*.keystore
+app/windows/flutter/ephemeral/

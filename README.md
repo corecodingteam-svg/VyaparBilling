@@ -129,11 +129,6 @@ flutter test live_api_test      # registers a throwaway firm on the local backen
   purchase price, expenses and loan interest/charges. Opening stock always counts as opening stock,
   whenever it was entered.
 
-## Deploying
-
-See `../deploy/README.md` §5: `sudo ./setup-billing.sh` adds this app to the existing server on its own
-subdomain (`deploy/docker-compose.billing.yml`, `deploy/sites/billing.caddy`, `app/Dockerfile.web`).
-
 ## Deploy (advaitamaa.com server)
 
 The billing app runs as an add-on to the existing advaitamaa.com Docker stack (the InventorySystems
@@ -161,3 +156,28 @@ and `BILLING_GOOGLE_CLIENT_ID` / `BILLING_GOOGLE_CLIENT_SECRET` to copy backups 
 (OAuth client of type "Web application", Drive API enabled, redirect URI
 `https://billing.advaitamaa.com/api/v1/backups/drive/callback`). Automatic backups are kept in the
 `billing_backups` Docker volume.
+
+Each deploy first dumps the billing database to `/var/backups/billing/` (the ten latest are kept), because
+migrations cannot be undone.
+
+### Rolling back
+
+```bash
+cd /path/to/inventory-checkout/deploy
+COMPOSE="docker compose -f docker-compose.yml -f ../billing/deploy/docker-compose.billing.yml --env-file .env"
+$COMPOSE stop billing-backend billing-web
+git -C ../billing checkout <previous-commit>                    # the code you were running before
+$COMPOSE exec -T postgres dropdb  -U "$POSTGRES_USER" billing
+$COMPOSE exec -T postgres createdb -U "$POSTGRES_USER" billing
+$COMPOSE exec -T postgres pg_restore -U "$POSTGRES_USER" -d billing < /var/backups/billing/billing-<time>.dump
+sudo ../billing/deploy/setup-billing.sh                          # rebuilds the old code (its migrations are already applied)
+```
+
+Anything entered after that dump is lost, so roll back only when the new version is truly unusable.
+
+### More settings
+
+`BILLING_SECRETS_KEY` (optional) is a separate key for the encrypted integration credentials; without it
+`BILLING_JWT_SECRET` is used. Changing either later makes the saved WhatsApp, SMS, Razorpay, e-invoice and Google
+keys unreadable, and they would have to be entered again. The public online shop of a company is at
+`https://billing.advaitamaa.com/store/<its address>`.

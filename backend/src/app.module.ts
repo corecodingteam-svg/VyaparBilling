@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { IdempotencyInterceptor } from './common/idempotency.interceptor';
 import { ConfigModule } from '@nestjs/config';
 import { AccountingModule } from './accounting/accounting.module';
 import { AuthModule } from './auth/auth.module';
@@ -18,6 +20,8 @@ import { EinvoiceModule } from './einvoice/einvoice.module';
 import { OnlinePaymentsModule } from './payments-online/payments-online.module';
 import { GoogleProfileModule } from './google-profile/google-profile.module';
 import { TaxStatementsModule } from './tax-statements/tax-statements.module';
+import { ManufacturingModule } from './manufacturing/manufacturing.module';
+import { StoreModule } from './store/store.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ItemsModule } from './items/items.module';
 import { LoansModule } from './loans/loans.module';
@@ -59,7 +63,10 @@ import { UtilitiesModule } from './utilities/utilities.module';
     OnlinePaymentsModule,
     GoogleProfileModule,
     TaxStatementsModule,
+    ManufacturingModule,
+    StoreModule,
   ],
   controllers: [HealthController],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor }],
 })
 export class AppModule {}

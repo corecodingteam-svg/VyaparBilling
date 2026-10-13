@@ -35,6 +35,8 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing
       JWT_SECRET: ${BILLING_JWT_SECRET}
+      # Optional: a separate key for the encrypted integration credentials (defaults to JWT_SECRET).
+      SECRETS_KEY: ${BILLING_SECRETS_KEY:-}
       BACKUP_DIR: /var/lib/billing/backups
       APP_URL: https://${BILLING_DOMAIN}
       PUBLIC_API_URL: https://${BILLING_DOMAIN}

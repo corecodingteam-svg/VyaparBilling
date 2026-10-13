@@ -9,7 +9,8 @@ import Caddyfile.main
 	@docs path /api/docs*
 	respond @docs 404
 
-	@api path /api/* /health /ready
+	# /store/* is the public online shop page of each company.
+	@api path /api/* /health /ready /store/*
 	reverse_proxy @api billing-backend:3000
 
 	reverse_proxy billing-web:80

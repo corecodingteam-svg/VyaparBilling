@@ -1270,6 +1270,7 @@ export class ReportsService {
       .execute();
     const labels: Record<string, string> = {
       opening: 'Opening Stock', add: 'Stock Added', reduce: 'Stock Reduced', sale: 'Sale', purchase: 'Purchase', credit_note: 'Credit Note', debit_note: 'Debit Note',
+      manufacture_in: 'Manufactured', manufacture_out: 'Used in Production',
     };
     let running = moves.filter((m) => m.movement_date < from).reduce((s, m) => s + n(m.qty_change), 0);
     const opening = r2(running);
