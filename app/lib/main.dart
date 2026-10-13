@@ -148,7 +148,7 @@ List<GoRoute> _invoiceRoutes(InvoiceKind kind) => [
         layouts: [for (final e in invoiceThemes.entries) (e.key, 'A4 · ${e.value}'), (thermalLayout, 'Thermal receipt')],
         buildLayout: (ctx, layout) => renderInvoice(ctx, id, layout),
         directPrintLayout: thermalLayout,
-        directPrint: (ctx) => renderReceiptBytes(ctx, id),
+        directPrint: (ctx, prefs) => renderReceiptBytes(ctx, id, prefs),
       );
     },
   ),

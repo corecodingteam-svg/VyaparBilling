@@ -118,7 +118,11 @@ class CompaniesScreen extends StatelessWidget {
                     subtitle: Text('You are: ${roleLabels[c.role] ?? c.role}'),
                     trailing: c.current
                         ? const Chip(label: Text('Open now'), visualDensity: VisualDensity.compact)
-                        : OutlinedButton(onPressed: () => switchToCompany(context, c.id), child: const Text('Open')),
+                        : Row(mainAxisSize: MainAxisSize.min, children: [
+                            OutlinedButton(onPressed: () => switchToCompany(context, c.id), child: const Text('Open')),
+                            if (c.role == 'owner')
+                              IconButton(tooltip: 'Delete company', icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => _deleteCompany(context, c)),
+                          ]),
                   ),
               ],
             ),
@@ -127,6 +131,39 @@ class CompaniesScreen extends StatelessWidget {
       },
     ),
   );
+}
+
+/// Asks for the company's name before deleting it; there is no undo.
+Future<void> _deleteCompany(BuildContext context, Company c) async {
+  final repo = context.read<AuthRepository>();
+  final cubit = context.read<ListCubit<Company>>();
+  final name = TextEditingController();
+  final done = await showSubmitDialog<bool>(
+    context,
+    title: 'Delete "${c.name}"?',
+    action: () async {
+      await repo.deleteFirm(c.id, name.text.trim());
+      return true;
+    },
+    fields: (submit) => [
+      const Text(
+        'Everything in this company is deleted for good: parties, items, invoices, payments, reports and its backups on the server. '
+        'People whose only company this is can no longer sign in. Download a backup first if you may need it.',
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: name,
+        autofocus: true,
+        decoration: const InputDecoration(labelText: 'Type the company name to confirm'),
+        validator: (v) => (v ?? '').trim().toLowerCase() == c.name.trim().toLowerCase() ? null : 'The name does not match',
+        onFieldSubmitted: (_) => submit(),
+      ),
+    ],
+  );
+  if (done == true) {
+    await cubit.load();
+    if (context.mounted) showSuccess(context, '"${c.name}" was deleted');
+  }
 }
 
 Future<void> _showAddUserDialog(BuildContext context) {

@@ -149,17 +149,21 @@ export class UtilitiesService {
    * Starts a new company for the next year from this one's closing position: party balances, stock,
    * bank and cash balances, outstanding loans and own ledger accounts become opening balances.
    * Masters and settings are copied; transactions stay behind in this company.
+   * The position carried is the one at the end of the day before the new books start, so a new year
+   * can be started late: entries dated on or after the start date are left out of the opening balances.
    */
   async startNewYear(user: JwtPayload, dto: NewYearDto) {
     const from = user.firmId;
     const start = dto.startDate;
+    // The last day of the old books.
+    const cutoff = new Date(Date.parse(start) - 86400000).toISOString().slice(0, 10);
     const firmId = await this.db.transaction().execute(async (trx) => {
       const old = await trx.selectFrom('firms').selectAll().where('id', '=', from).executeTakeFirstOrThrow();
       const firm = await trx
         .insertInto('firms')
         .values({
           name: dto.name, phone: old.phone, gstin: old.gstin, email: old.email, books_start_date: start, business_type: old.business_type,
-          business_category: old.business_category, state_code: old.state_code, pincode: old.pincode, address: old.address,
+          business_category: old.business_category, state_code: old.state_code, pincode: old.pincode, address: old.address, city: old.city,
           settings: JSON.stringify(old.settings),
         })
         .returning('id')
@@ -183,14 +187,16 @@ export class UtilitiesService {
       await sql`insert into party_groups (firm_id, name) select ${to}, name from party_groups where firm_id = ${from}`.execute(trx);
       // Parties: what they owe (or are owed) today becomes the opening balance, and their loyalty points carry over.
       await sql`insert into parties (firm_id, name, phone, gstin, gst_type, state_code, email, billing_address, shipping_address, opening_balance,
-                                     opening_balance_date, credit_limit, additional_fields, assigned_user_id, currency_code, group_id, loyalty_opening)
+                                     opening_balance_date, credit_limit, additional_fields, assigned_user_id, currency_code, city, pincode, group_id, loyalty_opening)
                 select ${to}, name, phone, gstin, gst_type, state_code, email, billing_address, shipping_address,
-                       ${partyBalanceSql(sql.ref('parties.id'), sql.ref('parties.opening_balance'))}, ${start}::date, credit_limit, additional_fields,
-                       assigned_user_id, currency_code,
+                       ${partyBalanceSql(sql.ref('parties.id'), sql.ref('parties.opening_balance'), cutoff)}, ${start}::date, credit_limit, additional_fields,
+                       assigned_user_id, currency_code, city, pincode,
                        (select n.id from party_groups n join party_groups o on lower(o.name) = lower(n.name) where o.id = parties.group_id and n.firm_id = ${to}),
                        parties.loyalty_opening + coalesce((select sum(i.loyalty_earned - i.loyalty_redeemed) from invoices i
-                                                            where i.party_id = parties.id and i.type = 'sale' and i.deleted_at is null), 0)
+                                                            where i.party_id = parties.id and i.type = 'sale' and i.deleted_at is null and i.invoice_date <= ${cutoff}), 0)
                   from parties where firm_id = ${from} and deleted_at is null`.execute(trx);
+
+      await sql`insert into geofences (firm_id, name, latitude, longitude, radius_m) select ${to}, name, latitude, longitude, radius_m from geofences where firm_id = ${from}`.execute(trx);
 
       const godownIds = new Map<string, string>();
       for (const g of await trx.selectFrom('godowns').select(['id', 'name', 'address']).where('firm_id', '=', from).where('deleted_at', 'is', null).execute()) {
@@ -205,15 +211,14 @@ export class UtilitiesService {
       }
       const items = await trx.selectFrom('items').selectAll().where('firm_id', '=', from).where('deleted_at', 'is', null).execute();
       for (const i of items) {
-        const qty = i.type === 'product' ? Number(i.stock_qty) : 0;
         const created = await trx
           .insertInto('items')
           .values({
             firm_id: to, type: i.type, name: i.name, hsn_code: i.hsn_code, unit: i.unit, category_id: i.category_id ? (categoryIds.get(i.category_id) ?? null) : null,
             item_code: i.item_code, sale_price: i.sale_price, sale_price_includes_tax: i.sale_price_includes_tax, sale_discount: i.sale_discount,
             sale_discount_type: i.sale_discount_type, wholesale_price: i.wholesale_price, wholesale_min_qty: i.wholesale_min_qty,
-            purchase_price: i.purchase_price, purchase_price_includes_tax: i.purchase_price_includes_tax, gst_rate: i.gst_rate, opening_qty: qty,
-            opening_price: i.purchase_price, opening_date: start, min_stock: i.min_stock, location: i.location, stock_qty: qty,
+            purchase_price: i.purchase_price, purchase_price_includes_tax: i.purchase_price_includes_tax, gst_rate: i.gst_rate, opening_qty: 0,
+            opening_price: i.purchase_price, opening_date: start, min_stock: i.min_stock, location: i.location, stock_qty: 0,
             image_file_id: await file(i.image_file_id), service_reminder_days: i.service_reminder_days, cess_rate: i.cess_rate, mrp: i.mrp,
           })
           .returning('id')
@@ -224,6 +229,7 @@ export class UtilitiesService {
           .selectFrom('stock_movements')
           .select(['godown_id', 'batch_no', sql<string | null>`max(expiry_date)`.as('expiry_date'), sql<string>`sum(qty_change)`.as('qty')])
           .where('item_id', '=', i.id)
+          .where('movement_date', '<=', cutoff)
           .groupBy(['godown_id', 'batch_no'])
           .having(sql`sum(qty_change)`, '<>', 0)
           .execute();
@@ -238,7 +244,8 @@ export class UtilitiesService {
         }
         // The item's own "opening quantity" is the part in the main store without a batch.
         const main = held.find((h) => h.godown_id === null && h.batch_no === null);
-        await trx.updateTable('items').set({ opening_qty: main ? main.qty : 0 }).where('id', '=', created.id).execute();
+        const qty = held.reduce((s, h) => s + Number(h.qty), 0);
+        await trx.updateTable('items').set({ opening_qty: main ? main.qty : 0, stock_qty: qty }).where('id', '=', created.id).execute();
       }
 
       // Loans still outstanding. In the new books a loan's opening balance counts as money received in
@@ -246,8 +253,8 @@ export class UtilitiesService {
       const loans = await sql<{ name: string; lender: string | null; account_number: string | null; interest_rate: string | null; term_months: number | null; description: string | null; balance: string }>`
         select l.name, l.lender, l.account_number, l.interest_rate, l.term_months, l.description,
                l.opening_balance + coalesce((select sum(case when t.kind = 'payment' then -t.principal else t.principal end)
-                                               from loan_transactions t where t.loan_id = l.id and t.deleted_at is null), 0) as balance
-          from loan_accounts l where l.firm_id = ${from} and l.deleted_at is null`.execute(trx);
+                                               from loan_transactions t where t.loan_id = l.id and t.deleted_at is null and t.txn_date <= ${cutoff}), 0) as balance
+          from loan_accounts l where l.firm_id = ${from} and l.deleted_at is null and l.balance_date <= ${cutoff}::date`.execute(trx);
       let loanCash = 0;
       for (const l of loans.rows) {
         if (Number(l.balance) <= 0) continue;
@@ -264,10 +271,11 @@ export class UtilitiesService {
       // Bank accounts open with today's balance; cash in hand is brought in as an adjustment.
       await sql`insert into bank_accounts (firm_id, name, opening_balance, opening_date, account_number, ifsc, bank_name, holder_name, upi_id)
                 select ${to}, b.name,
-                       b.opening_balance + coalesce((select sum(f.amount) from money_flows f where f.bank_account_id = b.id and f.account = 'bank'), 0),
+                       case when b.opening_date <= ${cutoff}::date then b.opening_balance else 0 end
+                         + coalesce((select sum(f.amount) from money_flows f where f.bank_account_id = b.id and f.account = 'bank' and f.flow_date <= ${cutoff}), 0),
                        ${start}::date, b.account_number, b.ifsc, b.bank_name, b.holder_name, b.upi_id
                   from bank_accounts b where b.firm_id = ${from} and b.deleted_at is null`.execute(trx);
-      const cash = await trx.selectFrom('money_flows').select(sql<string>`coalesce(sum(amount), 0)`.as('total')).where('firm_id', '=', from).where('account', '=', 'cash').executeTakeFirstOrThrow();
+      const cash = await trx.selectFrom('money_flows').select(sql<string>`coalesce(sum(amount), 0)`.as('total')).where('firm_id', '=', from).where('account', '=', 'cash').where('flow_date', '<=', cutoff).executeTakeFirstOrThrow();
       const openingCash = r2(Number(cash.total) - loanCash);
       if (openingCash !== 0) {
         await trx
@@ -276,18 +284,18 @@ export class UtilitiesService {
           .execute();
       }
 
-      await this.carryLedgerAccounts(trx, from, to, start);
+      await this.carryLedgerAccounts(trx, from, to, start, cutoff);
       return to;
     });
     return { id: firmId, name: dto.name };
   }
 
   /** Own ledger accounts; asset, liability and equity balances are carried through one opening journal entry. */
-  private async carryLedgerAccounts(trx: Transaction<Database>, from: string, to: string, start: string) {
+  private async carryLedgerAccounts(trx: Transaction<Database>, from: string, to: string, start: string, cutoff: string) {
     const accounts = await sql<{ id: string; name: string; type: 'asset' | 'liability' | 'income' | 'expense' | 'equity'; balance: string }>`
       select a.id, a.name, a.type,
              coalesce((select sum(jl.debit - jl.credit) from journal_lines jl join journal_entries e on e.id = jl.entry_id
-                        where jl.ledger_account_id = a.id and e.deleted_at is null), 0) as balance
+                        where jl.ledger_account_id = a.id and e.deleted_at is null and e.entry_date <= ${cutoff}), 0) as balance
         from ledger_accounts a where a.firm_id = ${from} and a.deleted_at is null`.execute(trx);
     const lines: Array<{ ledger_account_id: string; debit: number; credit: number }> = [];
     for (const a of accounts.rows) {

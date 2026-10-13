@@ -25,6 +25,19 @@ class PaymentsRepository {
     return Payment.fromJson(json);
   }
 
+  /// What an invoice leaves to settle, and the party's payments that can be set against it.
+  Future<LinkablePayments> linkable(String invoiceId) async =>
+      LinkablePayments.fromJson(await _api.get<Map<String, dynamic>>('/payments/linkable', query: {'invoiceId': invoiceId}));
+
+  /// Replaces the payments linked to an invoice; [links] maps payment id to amount.
+  Future<LinkablePayments> linkToInvoice(String invoiceId, Map<String, num> links) async {
+    final json = await _api.put<Map<String, dynamic>>('/payments/invoice-links/$invoiceId', {
+      'links': [for (final e in links.entries) if (e.value > 0) {'paymentId': e.key, 'amount': e.value}],
+    });
+    _changed();
+    return LinkablePayments.fromJson(json);
+  }
+
   Future<void> delete(String id) async {
     await _api.delete('/payments/$id');
     _changed();

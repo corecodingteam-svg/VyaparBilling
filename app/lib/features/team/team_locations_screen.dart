@@ -13,6 +13,7 @@ import '../../shared/page.dart';
 import '../../shared/theme.dart';
 import '../../shared/value_cubit.dart';
 import '../../shared/widgets.dart';
+import 'team_map.dart';
 
 final _time = DateFormat('h:mm a');
 
@@ -46,14 +47,19 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
       providers: [
         BlocProvider(create: (_) => ValueCubit<String>(isoDate(DateTime.now()))),
         BlocProvider(create: (c) => ListCubit<TrailPoint>(() => repo.trail(m.userId, c.read<ValueCubit<String>>().state))..load()),
+        BlocProvider(create: (c) => ListCubit<DaySummary>(() async => [await repo.daySummary(m.userId, c.read<ValueCubit<String>>().state)])..load()),
+        BlocProvider(create: (_) => ListCubit<Geofence>(repo.geofences)..load()),
       ],
       child: BlocListener<ValueCubit<String>, String>(
-        listener: (context, _) => context.read<ListCubit<TrailPoint>>().load(),
+        listener: (context, _) {
+          context.read<ListCubit<TrailPoint>>().load();
+          context.read<ListCubit<DaySummary>>().load();
+        },
         child: AlertDialog(
           title: Text("${m.fullName}'s day"),
           content: SizedBox(
-            width: 460,
-            height: 420,
+            width: 560,
+            height: 560,
             child: Column(
               children: [
                 BlocBuilder<ValueCubit<String>, String>(
@@ -65,8 +71,30 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
                     builder: (context, s) {
                       if (s.status != LoadStatus.success) return const Center(child: CircularProgressIndicator());
                       if (s.items.isEmpty) return const Center(child: Text('No locations recorded on this day.'));
+                      final summary = context.watch<ListCubit<DaySummary>>().state.items.firstOrNull;
+                      final zones = context.watch<ListCubit<Geofence>>().state.items;
                       return ListView(
                         children: [
+                          TeamMap(
+                            height: 220,
+                            zones: zones,
+                            route: [for (final p in s.items) (p.latitude, p.longitude)],
+                            pins: [
+                              (latitude: s.items.first.latitude, longitude: s.items.first.longitude, label: 'Start', strong: false),
+                              (latitude: s.items.last.latitude, longitude: s.items.last.longitude, label: 'Last', strong: true),
+                            ],
+                          ),
+                          if (summary != null)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Text(
+                                [
+                                  'Travelled about ${summary.distanceKm.toStringAsFixed(1)} km',
+                                  for (final v in summary.visits) '${v.zone} ${_time.format(v.from)}–${_time.format(v.to)}',
+                                ].join('  ·  '),
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
                           for (final p in s.items)
                             ListTile(
                               dense: true,
@@ -76,7 +104,7 @@ Future<void> _showTrail(BuildContext context, TeamMemberLocation m) {
                                 color: p.context == 'ping' ? Colors.black38 : brandBlue,
                               ),
                               title: Text('${_time.format(p.recordedAt)} · ${_contextLabel(p.context)}'),
-                              subtitle: Text(p.ref ?? '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}'),
+                              subtitle: Text([p.ref ?? '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}', if (p.zone != null) 'in ${p.zone}'].join(' · ')),
                               trailing: IconButton(
                                 tooltip: 'Open in maps',
                                 icon: const Icon(Icons.open_in_new, size: 18),
@@ -104,18 +132,44 @@ class TeamLocationsScreen extends StatelessWidget {
   const TeamLocationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => BlocProvider(
-    create: (ctx) => ListCubit<TeamMemberLocation>(ctx.read<LocationRepository>().latest)..load(),
+  Widget build(BuildContext context) => MultiBlocProvider(
+    providers: [
+      BlocProvider(create: (ctx) => ListCubit<TeamMemberLocation>(ctx.read<LocationRepository>().latest)..load()),
+      BlocProvider(create: (ctx) => ListCubit<Geofence>(ctx.read<LocationRepository>().geofences)..load()),
+    ],
     child: ListCubitView<TeamMemberLocation>(
       builder: (context, state) {
         final cubit = context.read<ListCubit<TeamMemberLocation>>();
+        final zones = context.watch<ListCubit<Geofence>>().state.items;
         return TitledPage(
           title: 'Where My Team Is',
           subtitle:
-              'The latest position each user shared, and what they did today. A position is recorded while they have the app open — '
-              'every few minutes, and where they save each sale or payment.',
-          actions: [OutlinedButton.icon(onPressed: cubit.load, icon: const Icon(Icons.refresh, size: 18), label: const Text('Refresh'))],
+              'The latest position each user shared, how far they went and what they did today. A position is recorded every few minutes '
+              '(in the phone app also while it is in the background) and where they save each sale or payment.',
+          actions: [
+            OutlinedButton.icon(
+              onPressed: () async {
+                await _showZones(context);
+                cubit.load();
+              },
+              icon: const Icon(Icons.radio_button_checked, size: 18),
+              label: Text('Zones (${zones.length})'),
+            ),
+            OutlinedButton.icon(onPressed: cubit.load, icon: const Icon(Icons.refresh, size: 18), label: const Text('Refresh')),
+          ],
           children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: TeamMap(
+                  zones: zones,
+                  pins: [
+                    for (final m in state.items)
+                      if (m.hasPosition) (latitude: m.latitude!, longitude: m.longitude!, label: m.fullName, strong: false),
+                  ],
+                ),
+              ),
+            ),
             RowsCard(
               empty: const EmptyState(icon: Icons.place_outlined, title: 'No users'),
               rows: [
@@ -125,7 +179,8 @@ class TeamLocationsScreen extends StatelessWidget {
                     title: Text('${m.fullName} · ${roleLabels[m.role] ?? m.role}'),
                     subtitle: Text(
                       m.hasPosition
-                          ? 'Last seen ${agoText(m.recordedAt!)} · ${m.salesToday} sales, ${m.paymentsToday} payments today · ${m.pointsToday} check-ins'
+                          ? 'Last seen ${agoText(m.recordedAt!)}${m.zone == null ? '' : ' in ${m.zone}'} · ${m.distanceKmToday.toStringAsFixed(1)} km today · '
+                                '${m.salesToday} sales, ${m.paymentsToday} payments · ${m.pointsToday} check-ins'
                           : 'No location shared yet',
                     ),
                     trailing: m.hasPosition
@@ -147,6 +202,117 @@ class TeamLocationsScreen extends StatelessWidget {
           ],
         );
       },
+    ),
+  );
+}
+
+// ---------------------------------------------------------------- zones
+
+/// The spot and size picked for a new zone.
+typedef _ZoneDraft = ({double? latitude, double? longitude, int radiusM});
+
+/// Add and remove zones: tap the map where the zone is, name it and set how wide it is.
+Future<void> _showZones(BuildContext context) {
+  final repo = context.read<LocationRepository>();
+  final zones = context.read<ListCubit<Geofence>>();
+  final name = TextEditingController();
+  return showDialog<void>(
+    context: context,
+    builder: (_) => MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: zones),
+        BlocProvider(create: (_) => ValueCubit<_ZoneDraft>((latitude: null, longitude: null, radiusM: 200))),
+      ],
+      child: BlocBuilder<ListCubit<Geofence>, ListState<Geofence>>(
+        builder: (ctx, list) => BlocBuilder<ValueCubit<_ZoneDraft>, _ZoneDraft>(
+          builder: (ctx, draft) {
+            final cubit = ctx.read<ValueCubit<_ZoneDraft>>();
+            final placed = draft.latitude != null;
+            return AlertDialog(
+              title: const Text('Zones'),
+              content: SizedBox(
+                width: 560,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'A zone is a place you care about — the shop, a warehouse, a market. The team list shows who is in which zone, and each trail shows when they were there. Tap the map to place a new one.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                      const SizedBox(height: 8),
+                      TeamMap(
+                        height: 240,
+                        zones: list.items,
+                        draft: placed ? (draft.latitude!, draft.longitude!, draft.radiusM) : null,
+                        onTap: (lat, lon) => cubit.set((latitude: lat, longitude: lon, radiusM: draft.radiusM)),
+                      ),
+                      TextButton.icon(
+                        onPressed: () async {
+                          final fix = await repo.currentFix();
+                          if (fix == null) {
+                            if (ctx.mounted) showError(ctx, 'This device will not share its location.');
+                            return;
+                          }
+                          cubit.set((latitude: fix.latitude, longitude: fix.longitude, radiusM: draft.radiusM));
+                        },
+                        icon: const Icon(Icons.my_location, size: 18),
+                        label: const Text('Use where I am now'),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(child: TextField(controller: name, decoration: const InputDecoration(labelText: 'Zone name', isDense: true))),
+                          const SizedBox(width: 12),
+                          DropdownButton<int>(
+                            value: draft.radiusM,
+                            items: const [
+                              DropdownMenuItem(value: 100, child: Text('100 m')),
+                              DropdownMenuItem(value: 200, child: Text('200 m')),
+                              DropdownMenuItem(value: 500, child: Text('500 m')),
+                              DropdownMenuItem(value: 1000, child: Text('1 km')),
+                              DropdownMenuItem(value: 5000, child: Text('5 km')),
+                            ],
+                            onChanged: (v) => cubit.set((latitude: draft.latitude, longitude: draft.longitude, radiusM: v ?? 200)),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton(
+                            onPressed: list.busy
+                                ? null
+                                : () async {
+                                    if (!placed) return showError(ctx, 'Tap the map where the zone is.');
+                                    if (name.text.trim().isEmpty) return showError(ctx, 'Give the zone a name.');
+                                    final ok = await zones.run(
+                                      () => repo.addGeofence(name: name.text.trim(), latitude: draft.latitude!, longitude: draft.longitude!, radiusM: draft.radiusM),
+                                    );
+                                    if (!ok) return;
+                                    name.clear();
+                                    cubit.set((latitude: null, longitude: null, radiusM: draft.radiusM));
+                                  },
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      for (final z in list.items)
+                        ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.radio_button_checked, color: receiveGreen, size: 18),
+                          title: Text(z.name),
+                          subtitle: Text('${z.radiusM >= 1000 ? '${z.radiusM / 1000} km' : '${z.radiusM} m'} around ${z.latitude.toStringAsFixed(4)}, ${z.longitude.toStringAsFixed(4)}'),
+                          trailing: IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline, size: 18), onPressed: () => zones.run(() => repo.removeGeofence(z.id))),
+                        ),
+                      if (list.error != null) Text(list.error!, style: const TextStyle(color: payRed)),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done'))],
+            );
+          },
+        ),
+      ),
     ),
   );
 }

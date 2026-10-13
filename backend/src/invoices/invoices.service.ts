@@ -4,7 +4,7 @@ import { resolveBankAccount } from '../common/bank-account';
 import { assertBooksOpen } from '../common/books-lock';
 import { INVOICE_TYPES, InvoiceType, isQuote } from '../common/invoice-types';
 import { num, today } from '../common/numbers';
-import { r2 } from '../common/party-balance';
+import { partyBalanceSql, r2 } from '../common/party-balance';
 import { Db, KYSELY } from '../database/database.module';
 import { Database, InvoicesTable, PaymentMode } from '../database/schema';
 import { FirmService } from '../firm/firm.service';
@@ -136,6 +136,10 @@ export class InvoicesService {
   async get(firmId: string, id: string, scope: Scope = {}) {
     const inv = await this.find(firmId, id, scope);
     const lines = await this.db.selectFrom('invoice_items').selectAll().where('invoice_id', '=', id).orderBy('sort_order').execute();
+    const itemIds = lines.map((l) => l.item_id).filter((x): x is string => !!x);
+    const images = new Map(
+      itemIds.length ? (await this.db.selectFrom('items').select(['id', 'image_file_id']).where('id', 'in', itemIds).execute()).map((i) => [i.id, i.image_file_id] as const) : [],
+    );
     const parts = await this.db.selectFrom('invoice_payments').selectAll().where('invoice_id', '=', id).orderBy('sort_order').execute();
     const linked = await this.db
       .selectFrom('payment_allocations as a')
@@ -180,6 +184,7 @@ export class InvoicesService {
       lines: lines.map((l) => ({
         id: l.id,
         itemId: l.item_id,
+        imageFileId: l.item_id ? (images.get(l.item_id) ?? null) : null,
         name: l.name,
         quantity: num(l.quantity),
         unit: l.unit,
@@ -217,6 +222,7 @@ export class InvoicesService {
         .returning('id')
         .executeTakeFirstOrThrow();
       await this.writeLines(trx, firmId, inv.id, dto, values);
+      await this.enforceCreditLimit(trx, firmId, dto, Number(values.header.total), Number(values.header.received));
       if (dto.fromDocumentId) await this.markConverted(trx, firmId, dto, inv.id);
       return inv.id;
     });
@@ -235,6 +241,7 @@ export class InvoicesService {
       const values = await this.prepare(trx, firmId, dto, id, Number(existing.linked));
       await trx.updateTable('invoices').set({ ...values.header, updated_at: new Date() }).where('id', '=', id).execute();
       await this.writeLines(trx, firmId, id, dto, values);
+      await this.enforceCreditLimit(trx, firmId, dto, Number(values.header.total), Number(values.header.received));
     });
     return this.get(firmId, id);
   }
@@ -638,6 +645,29 @@ export class InvoicesService {
     const moves = await trx.deleteFrom('stock_movements').where('invoice_id', '=', invoiceId).returning(['item_id', 'qty_change']).execute();
     for (const m of moves) {
       await trx.updateTable('items').set({ stock_qty: sql`stock_qty - ${m.qty_change}` }).where('id', '=', m.item_id).execute();
+    }
+  }
+
+  /**
+   * When the company refuses credit sales beyond the credit limit: called after the document is written, so the
+   * party's balance already includes it. Orders and challans do not touch the balance, so their value is added.
+   */
+  private async enforceCreditLimit(trx: Transaction<Database>, firmId: string, dto: SaveInvoiceDto, total: number, received: number) {
+    if (!dto.partyId || !['sale', 'sale_order', 'delivery_challan'].includes(dto.type)) return;
+    // A sale paid in full adds nothing to what the customer owes, so it is never refused.
+    if (dto.type === 'sale' && received >= total) return;
+    if ((await this.firms.settings(firmId)).creditLimitMode !== 'block') return;
+    const party = await trx
+      .selectFrom('parties').select(['name', 'credit_limit'])
+      .select(partyBalanceSql(sql.ref('parties.id'), sql.ref('parties.opening_balance')).as('balance'))
+      .where('id', '=', dto.partyId).where('firm_id', '=', firmId).executeTakeFirst();
+    if (!party || party.credit_limit === null) return;
+    const after = r2(Number(party.balance) + (dto.type === 'sale' ? 0 : total));
+    if (after > Number(party.credit_limit)) {
+      throw new BadRequestException({
+        code: 'CREDIT_LIMIT',
+        message: `${party.name} would owe ${after}, over their credit limit of ${Number(party.credit_limit)}. Take a payment first or raise the limit.`,
+      });
     }
   }
 

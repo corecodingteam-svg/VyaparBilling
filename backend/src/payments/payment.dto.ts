@@ -17,6 +17,20 @@ export class AllocationDto {
   amount: number;
 }
 
+/** Part of a payment set against a document, given from the document's side. */
+export class InvoiceLinkDto {
+  @ApiProperty() @IsUUID()
+  paymentId: string;
+
+  @ApiProperty() @IsNumber({ maxDecimalPlaces: 2 }) @IsPositive()
+  amount: number;
+}
+
+export class InvoiceLinksDto {
+  @ApiProperty({ type: [InvoiceLinkDto] }) @IsArray() @ArrayMaxSize(200) @ValidateNested({ each: true }) @Type(() => InvoiceLinkDto)
+  links: InvoiceLinkDto[];
+}
+
 export class SavePaymentDto {
   @ApiProperty({ enum: ['in', 'out'] }) @IsIn(['in', 'out'])
   type: 'in' | 'out';

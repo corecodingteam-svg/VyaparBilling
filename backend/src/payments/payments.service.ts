@@ -14,7 +14,8 @@ type PaymentType = 'in' | 'out';
 type Part = { mode: PaymentMode; bankAccountId: string | null; amount: number };
 
 /** A Payment-In settles sale invoices; a Payment-Out settles purchase bills. */
-const SETTLES = { in: 'sale', out: 'purchase' } as const;
+/** What each kind of payment can be set against: money in settles sales and purchase returns, money out settles purchases and sale returns. */
+const SETTLES = { in: ['sale', 'debit_note'], out: ['purchase', 'credit_note'] } as const;
 
 @Injectable()
 export class PaymentsService {
@@ -106,7 +107,7 @@ export class PaymentsService {
     const allocations = await this.db
       .selectFrom('payment_allocations as a')
       .innerJoin('invoices as i', 'i.id', 'a.invoice_id')
-      .select(['a.invoice_id', 'a.amount', 'a.fx_amount', 'i.number', 'i.invoice_date', 'i.total', 'i.fx_total'])
+      .select(['a.invoice_id', 'a.amount', 'a.fx_amount', 'i.number', 'i.invoice_date', 'i.total', 'i.fx_total', 'i.type'])
       .where('a.payment_id', '=', id)
       .orderBy('i.invoice_date')
       .execute();
@@ -118,7 +119,7 @@ export class PaymentsService {
       // Parts are kept in the base currency; a foreign payment shows them in its own.
       parts: parts.map((x) => ({ mode: x.payment_mode, bankAccountId: x.bank_account_id, amount: foreign ? r2(Number(x.amount) / rate) : num(x.amount) })),
       allocations: allocations.map((a) => ({
-        invoiceId: a.invoice_id, amount: foreign ? num(a.fx_amount) : num(a.amount), number: a.number, invoiceDate: a.invoice_date,
+        invoiceId: a.invoice_id, amount: foreign ? num(a.fx_amount) : num(a.amount), number: a.number, invoiceDate: a.invoice_date, type: a.type,
         total: foreign ? num(a.fx_total) : num(a.total),
       })),
     };
@@ -165,6 +166,66 @@ export class PaymentsService {
     });
   }
 
+  // ---------------------------------------------------------------- linking from the invoice's side
+
+  private async linkTarget(firmId: string, invoiceId: string, scope: Scope) {
+    const inv = await this.db
+      .selectFrom('invoices as i')
+      .leftJoin('parties as pa', 'pa.id', 'i.party_id')
+      .select(['i.id', 'i.type', 'i.number', 'i.party_id', 'i.total', 'i.received', 'i.tds_amount', 'i.loyalty_amount', 'i.currency_code', 'i.created_by', 'pa.assigned_user_id'])
+      .where('i.id', '=', invoiceId).where('i.firm_id', '=', firmId).where('i.deleted_at', 'is', null)
+      .executeTakeFirst();
+    if (!inv || (scope.ownerUserId && inv.created_by !== scope.ownerUserId && inv.assigned_user_id !== scope.ownerUserId)) {
+      throw new NotFoundException({ code: 'INVOICE_NOT_FOUND', message: 'Invoice not found.' });
+    }
+    const type = (['in', 'out'] as const).find((t) => (SETTLES[t] as readonly string[]).includes(inv.type));
+    if (!type || !inv.party_id) throw new BadRequestException({ code: 'NOT_LINKABLE', message: 'Payments can only be linked to a sale, purchase, credit note or debit note that has a party.' });
+    if (inv.currency_code) throw new BadRequestException({ code: 'FOREIGN_CURRENCY', message: 'Link a foreign-currency document from the payment itself, where the exchange rate is entered.' });
+    return { inv, type, due: r2(Number(inv.total) - Number(inv.received) - Number(inv.tds_amount) - Number(inv.loyalty_amount)) };
+  }
+
+  /** The party's payments that can be set against this document: each with what is free and what is already linked here. */
+  async linkable(firmId: string, invoiceId: string, scope: Scope = {}) {
+    const { inv, type, due } = await this.linkTarget(firmId, invoiceId, scope);
+    const rows = await this.db
+      .selectFrom('payments as p')
+      .select(['p.id', 'p.number', 'p.payment_date', 'p.amount'])
+      .select(sql<string>`coalesce((select sum(a.amount) from payment_allocations a where a.payment_id = p.id and a.invoice_id <> ${invoiceId}), 0)`.as('elsewhere'))
+      .select(sql<string>`coalesce((select sum(a.amount) from payment_allocations a where a.payment_id = p.id and a.invoice_id = ${invoiceId}), 0)`.as('here'))
+      .where('p.firm_id', '=', firmId).where('p.party_id', '=', inv.party_id!).where('p.type', '=', type).where('p.deleted_at', 'is', null).where('p.currency_code', 'is', null)
+      .orderBy('p.payment_date').orderBy('p.created_at')
+      .execute();
+    return {
+      /** What the document leaves to be settled by payments (before any linked here). */
+      due,
+      payments: rows
+        .map((p) => ({ paymentId: p.id, number: p.number, date: p.payment_date, amount: num(p.amount)!, free: r2(Number(p.amount) - Number(p.elsewhere)), linked: num(p.here)! }))
+        .filter((p) => p.free > 0),
+    };
+  }
+
+  /** Replaces the payments linked to this document with [links]. */
+  async linkToInvoice(firmId: string, invoiceId: string, links: { paymentId: string; amount: number }[], scope: Scope = {}) {
+    const { due } = await this.linkTarget(firmId, invoiceId, scope);
+    const wanted = links.filter((l) => l.amount > 0);
+    if (new Set(wanted.map((l) => l.paymentId)).size !== wanted.length) throw new BadRequestException({ code: 'DUPLICATE_PAYMENT', message: 'A payment is listed more than once.' });
+    const total = r2(wanted.reduce((s, l) => s + l.amount, 0));
+    if (total > due) throw new BadRequestException({ code: 'OVER_INVOICE', message: `Only ${due} is left to settle on this document.` });
+    const { payments } = await this.linkable(firmId, invoiceId, scope);
+    for (const l of wanted) {
+      const p = payments.find((x) => x.paymentId === l.paymentId);
+      if (!p) throw new BadRequestException({ code: 'PAYMENT_NOT_LINKABLE', message: "One of the payments is not this party's, or has nothing left to link." });
+      if (l.amount > p.free) throw new BadRequestException({ code: 'OVER_ALLOCATED', message: `Receipt ${p.number} only has ${p.free} not linked elsewhere.` });
+    }
+    await this.db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('payment_allocations').where('invoice_id', '=', invoiceId).where('firm_id', '=', firmId).execute();
+      if (wanted.length) {
+        await trx.insertInto('payment_allocations').values(wanted.map((l) => ({ firm_id: firmId, payment_id: l.paymentId, invoice_id: invoiceId, amount: l.amount, fx_amount: null }))).execute();
+      }
+    });
+    return this.linkable(firmId, invoiceId, scope);
+  }
+
   private async writeParts(trx: Transaction<Database>, firmId: string, paymentId: string, parts: Part[]) {
     await trx
       .insertInto('payment_parts')
@@ -198,7 +259,7 @@ export class PaymentsService {
         .select(sql<string>`coalesce((select sum(a.fx_amount) from payment_allocations a where a.invoice_id = i.id), 0)`.as('linked_fx'))
         .where('i.firm_id', '=', firmId)
         .where('i.party_id', '=', dto.partyId)
-        .where('i.type', '=', SETTLES[dto.type])
+        .where('i.type', 'in', SETTLES[dto.type])
         .where('i.deleted_at', 'is', null)
         .where('i.id', 'in', allocations.map((a) => a.invoiceId))
         .execute();

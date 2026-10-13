@@ -275,8 +275,9 @@ class _CloseYearViewState extends State<_CloseYearView> {
                     const Text('2. Start the new year with fresh books (optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
                     const Text(
-                      'Creates a new company that opens with today\'s position of this one: what each party owes, stock in hand, '
+                      'Creates a new company that opens with this one\'s position at the end of the day before the start date you pick: what each party owes, stock in hand, '
                       'bank and cash balances, outstanding loans and your own accounts. Parties, items, units, settings and users are copied. '
+                      'Entries dated on or after the start date are not carried, so you can start a year late and re-enter them in the new company. '
                       'This company and all its transactions stay exactly as they are, and you can switch back to it at any time.',
                     ),
                     const SizedBox(height: 4),

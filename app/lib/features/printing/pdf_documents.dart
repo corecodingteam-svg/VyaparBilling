@@ -86,7 +86,7 @@ pw.Widget _boxes(List<(String, List<pw.Widget>)> boxes) => pw.Table(
 /// What a printed document needs beyond the document itself: the look chosen in settings and the
 /// uploaded images. Everything is optional; the defaults print the plain classic layout.
 class PrintOptions {
-  const PrintOptions({this.theme, this.accent, this.logo, this.signature, this.partyFields = const [], this.currencySymbol});
+  const PrintOptions({this.theme, this.accent, this.logo, this.signature, this.partyFields = const [], this.currencySymbol, this.itemImages = const {}});
 
   /// Reads the theme and colour from the firm's settings.
   factory PrintOptions.of(
@@ -96,6 +96,7 @@ class PrintOptions {
     List<(String, String)> partyFields = const [],
     String? currencySymbol,
     String? theme,
+    Map<String, Uint8List> itemImages = const {},
   }) => PrintOptions(
     theme: theme ?? firm.settings.invoiceTheme,
     accent: _hex(firm.settings.themeColor),
@@ -103,6 +104,7 @@ class PrintOptions {
     signature: signature,
     partyFields: partyFields,
     currencySymbol: currencySymbol,
+    itemImages: itemImages,
   );
 
   /// classic | modern | minimal
@@ -110,6 +112,9 @@ class PrintOptions {
   final PdfColor? accent;
   final Uint8List? logo;
   final Uint8List? signature;
+
+  /// Item pictures to print beside the item names, by file id.
+  final Map<String, Uint8List> itemImages;
 
   /// The party's additional fields marked "print on invoices", as (name, value).
   final List<(String, String)> partyFields;
@@ -444,7 +449,7 @@ Future<Uint8List> buildInvoicePdf(
             for (var i = 0; i < inv.lines.length; i++)
               [
                 '${i + 1}',
-                [
+                _withPicture(options.itemImages[inv.lines[i].imageFileId], tableStyle.cell, [
                   inv.lines[i].name,
                   // Batch, expiry, MRP and serial numbers, when the line has them.
                   [
@@ -453,7 +458,7 @@ Future<Uint8List> buildInvoicePdf(
                     if (inv.lines[i].mrp != null) 'MRP ${money(inv.lines[i].mrp)}',
                   ].join(' · '),
                   if ((inv.lines[i].serialNos ?? '').isNotEmpty) 'SN: ${inv.lines[i].serialNos}',
-                ].where((t) => t.isNotEmpty).join('\n'),
+                ].where((t) => t.isNotEmpty).join('\n')),
                 if (hasHsn) inv.lines[i].hsnCode ?? '',
                 qty(inv.lines[i].quantity),
                 inv.lines[i].unit ?? '',
@@ -569,6 +574,13 @@ Future<Uint8List> buildInvoicePdf(
     ),
   );
   return doc.save();
+}
+
+/// An item-name cell: just the text, or the item's picture with the text beside it.
+Object _withPicture(Uint8List? picture, pw.TextStyle style, String text) {
+  final image = _image(picture, width: 34, height: 34);
+  if (image == null) return text;
+  return pw.Row(children: [image, pw.SizedBox(width: 6), pw.Expanded(child: pw.Text(text, style: style))]);
 }
 
 /// A UPI QR for what is still due (when the company switched it on and has a UPI ID), and the IRN with its signed QR once registered.

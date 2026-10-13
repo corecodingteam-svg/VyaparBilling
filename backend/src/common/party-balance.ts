@@ -15,14 +15,17 @@ import { RawBuilder, sql } from 'kysely';
  */
 export const UNPAID_SQL = sql.raw('(i.total - i.received - i.tds_amount - i.loyalty_amount)');
 
-export function partyBalanceSql(partyId: RawBuilder<unknown> | ReturnType<typeof sql.ref>, openingBalance: ReturnType<typeof sql.ref>) {
+/** With [asOf] (yyyy-mm-dd) only documents and payments dated on or before that day count. */
+export function partyBalanceSql(partyId: RawBuilder<unknown> | ReturnType<typeof sql.ref>, openingBalance: ReturnType<typeof sql.ref>, asOf?: string) {
+  const invoicesUpTo = asOf ? sql`and i.invoice_date <= ${asOf}` : sql``;
+  const paymentsUpTo = asOf ? sql`and pm.payment_date <= ${asOf}` : sql``;
   return sql<string>`(
     ${openingBalance}
     + coalesce((select sum(case when i.type in ('sale', 'debit_note') then ${UNPAID_SQL} else -(${UNPAID_SQL}) end)
                 from invoices i where i.party_id = ${partyId} and i.deleted_at is null
-                  and i.type in ('sale', 'purchase', 'credit_note', 'debit_note')), 0)
+                  and i.type in ('sale', 'purchase', 'credit_note', 'debit_note') ${invoicesUpTo}), 0)
     + coalesce((select sum(case when pm.type = 'out' then pm.amount + pm.fx_gain else -(pm.amount - pm.fx_gain) end)
-                from payments pm where pm.party_id = ${partyId} and pm.deleted_at is null), 0)
+                from payments pm where pm.party_id = ${partyId} and pm.deleted_at is null ${paymentsUpTo}), 0)
   )`;
 }
 

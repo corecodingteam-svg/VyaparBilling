@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/gst_states.dart';
 import '../../../core/api_client.dart';
 import '../../../core/change_bus.dart';
 import '../../../core/status.dart';
@@ -73,6 +74,8 @@ class ExpenseFormState extends Equatable {
     this.paymentMode = 'cash',
     this.extraParts = const [],
     this.description = '',
+    this.supplierState,
+    this.supplierGstin = '',
     this.formRev = 0,
     this.submitStatus = SubmitStatus.idle,
     this.result = ExpenseFormResult.none,
@@ -106,6 +109,10 @@ class ExpenseFormState extends Equatable {
   final List<PartDraft> extraParts;
   final String description;
 
+  /// Where the supplier billed from; another state than the company's makes the GST IGST.
+  final String? supplierState;
+  final String supplierGstin;
+
   /// Bumped to rebuild every input (form loaded / reset for the next expense).
   final int formRev;
   final SubmitStatus submitStatus;
@@ -138,6 +145,8 @@ class ExpenseFormState extends Equatable {
     String? paymentMode,
     List<PartDraft>? extraParts,
     String? description,
+    String? Function()? supplierState,
+    String? supplierGstin,
     int? formRev,
     SubmitStatus? submitStatus,
     ExpenseFormResult? result,
@@ -159,6 +168,8 @@ class ExpenseFormState extends Equatable {
     paymentMode: paymentMode ?? this.paymentMode,
     extraParts: extraParts ?? this.extraParts,
     description: description ?? this.description,
+    supplierState: supplierState != null ? supplierState() : this.supplierState,
+    supplierGstin: supplierGstin ?? this.supplierGstin,
     formRev: formRev ?? this.formRev,
     submitStatus: submitStatus ?? this.submitStatus,
     result: result ?? this.result,
@@ -183,6 +194,8 @@ class ExpenseFormState extends Equatable {
     paymentMode,
     extraParts,
     description,
+    supplierState,
+    supplierGstin,
     formRev,
     submitStatus,
     result,
@@ -249,6 +262,8 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
               for (final p in e.payments.skip(1)) PartDraft(uid: _nextUid++, mode: p.mode, bankAccountId: p.bankAccountId, amount: numText(p.amount)),
             ],
             description: e.description ?? '',
+            supplierState: () => e.supplierState,
+            supplierGstin: e.supplierGstin ?? '',
             formRev: state.formRev + 1,
           ),
         );
@@ -311,6 +326,14 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
   void partBankAccountChanged(int uid, String? id) => _updatePart(uid, (p) => p.copyWith(bankAccountId: () => id));
   void partAmountChanged(int uid, String v) => _updatePart(uid, (p) => p.copyWith(amount: v));
   void descriptionChanged(String v) => emit(state.copyWith(description: v));
+  void supplierStateChanged(String? v) => emit(state.copyWith(supplierState: () => v));
+
+  /// A valid GSTIN starts with its state's code, which saves picking the state.
+  void supplierGstinChanged(String v) {
+    final gstin = v.trim().toUpperCase();
+    final code = gstin.length >= 2 && gstStates.containsKey(gstin.substring(0, 2)) ? gstin.substring(0, 2) : null;
+    emit(state.copyWith(supplierGstin: gstin, supplierState: code != null ? () => code : null));
+  }
 
   void addLine() => emit(state.copyWith(lines: [...state.lines, _blank()]));
 
@@ -396,6 +419,8 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
             for (final p in s.extraParts) {'mode': p.mode, 'bankAccountId': p.bankAccountId, 'amount': p.value},
           ],
         'description': s.description.trim(),
+        'supplierState': s.supplierState,
+        'supplierGstin': s.supplierGstin.trim(),
         'lines': [
           for (final l in s.lines.where((l) => !l.isBlank))
             {'name': l.name.trim(), 'quantity': parseNum(l.qty), 'price': parseNum(l.price), if (l.gstRate != null) 'gstRate': l.gstRate},

@@ -919,8 +919,9 @@ void main() {
     expect((await reports.run('party-item', from: '2026-01-01', to: '2099-01-01')).rows.single['key'], 'Pen');
 
     // ---- search, set-up checklist, data check.
-    expect((await utilities.search('rav')).map((h) => (h.kind, h.title)), [('party', 'Ravi'), ('invoice', 'Sale 1')]); // the party and their invoice
-    expect((await utilities.search('pe')).single.kind, 'item');
+    expect((await utilities.search('rav')).map((h) => (h.kind, h.title)), [('party', 'Ravi'), ('invoice', 'Sale 1'), ('payment', 'Payment-In 1')]); // the party, their invoice and their payment
+    // One item matches; expenses whose category or note matches are listed after it.
+    expect((await utilities.search('pe')).map((h) => h.kind).toSet().difference({'expense'}), {'item'});
     expect((await utilities.setup()).where((s) => s.done).map((s) => s.id), containsAll(['logo', 'party', 'item', 'bank', 'invoice']));
     expect((await utilities.verify()).every((c) => c.ok), isTrue);
 
@@ -961,7 +962,7 @@ void main() {
     final before = await DashboardRepository(api).summary();
     final backup = await utilities.backup();
     final restored = await utilities.restore(backup, name: 'Restored $stamp');
-    final nextYear = await utilities.startNewYear(name: 'Next Year $stamp', startDate: today);
+    final nextYear = await utilities.startNewYear(name: 'Next Year $stamp', startDate: DateTime.now().add(const Duration(days: 1)).toIso8601String().substring(0, 10));
     expect((await auth.companies()).map((c) => c.name), ['Batch Two $stamp', 'Restored $stamp', 'Next Year $stamp']);
 
     expect((await auth.switchCompany(restored.id)).firmName, 'Restored $stamp');
@@ -1260,7 +1261,7 @@ void main() {
       final (_, content) = await utilities.readServerBackup(backups.single.id);
       final restored = await utilities.restore(content, name: 'Restored $stamp');
       final before = await DashboardRepository(api).summary();
-      final nextYear = await utilities.startNewYear(name: 'Next $stamp', startDate: today);
+      final nextYear = await utilities.startNewYear(name: 'Next $stamp', startDate: DateTime.now().add(const Duration(days: 1)).toIso8601String().substring(0, 10));
       await auth.switchCompany(restored.id);
       final copy = await DashboardRepository(api).summary();
       expect(

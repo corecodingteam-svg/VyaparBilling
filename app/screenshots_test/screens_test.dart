@@ -24,6 +24,7 @@ import 'package:billing_app/data/repositories/location_repository.dart';
 import 'package:billing_app/features/parties/party_groups_screen.dart';
 import 'package:billing_app/features/stock/godowns_screen.dart';
 import 'package:billing_app/features/team/team_locations_screen.dart';
+import 'package:billing_app/features/team/team_map.dart';
 import 'package:billing_app/features/team/tracking_cubit.dart';
 import 'package:billing_app/features/lock/lock_cubit.dart';
 import 'package:billing_app/features/lock/lock_screen.dart';
@@ -113,10 +114,12 @@ Widget _app(String location, Widget child, {bool shell = true, Map<String, dynam
   final AuthRepository authRepo = FakeAuthRepository();
   final firm = FakeFirmRepository(settings: settings);
   final locations = FakeLocationRepository()
+    ..zones = [Geofence.fromJson({'id': 'z1', 'name': 'Shop', 'latitude': 19.07, 'longitude': 72.87, 'radiusM': 500})]
     ..members = [
       TeamMemberLocation.fromJson({
         'userId': 'u3', 'fullName': 'Sam Salesman', 'role': 'salesman', 'latitude': 19.07, 'longitude': 72.87, 'accuracy': 10,
         'recordedAt': DateTime.now().subtract(const Duration(minutes: 12)).toUtc().toIso8601String(), 'context': 'sale', 'pointsToday': 9, 'salesToday': 4, 'paymentsToday': 2,
+        'zone': 'Shop', 'distanceKmToday': 12.4,
       }),
       TeamMemberLocation.fromJson({'userId': 'u2', 'fullName': 'Asha Accountant', 'role': 'accountant', 'pointsToday': 0, 'salesToday': 0, 'paymentsToday': 0}),
     ];
@@ -180,6 +183,8 @@ Future<void> _shot(WidgetTester tester, Size size, Widget app, String name, {Fut
 }
 
 void main() {
+  // No internet in tests, so the map is drawn without its street tiles.
+  mapTilesEnabled = false;
   setUpAll(_loadFonts);
   const desktop = Size(1440, 900);
   const phone = Size(400, 860);
@@ -366,6 +371,12 @@ void main() {
         await t.tap(find.byIcon(Icons.more_vert).first);
         await t.pumpAndSettle();
         await t.tap(find.text('E-invoice / e-way bill'));
+      }));
+  testWidgets('zones', (t) => _shot(t, const Size(1440, 1000), _app('/team-locations', const TeamLocationsScreen(), settings: everything), 'zones', then: () => t.tap(find.textContaining('Zones'))));
+  testWidgets('link payments', (t) => _shot(t, desktop, _app('/sale', const InvoicesScreen(kind: InvoiceKind.sale)), 'link_payments', then: () async {
+        await t.tap(find.byIcon(Icons.more_vert).last);
+        await t.pumpAndSettle();
+        await t.tap(find.text('Link payments'));
       }));
   testWidgets('backups', (t) => _shot(t, const Size(1440, 1100), _app('/backup', const BackupScreen(), settings: everything), 'backups'));
   testWidgets('item detail with stores', (t) => _shot(t, desktop, _app('/items', const ItemsScreen(), settings: everything), 'item_detail_stores'));

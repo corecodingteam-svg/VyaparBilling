@@ -9,6 +9,7 @@ import '../../shared/period.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../integrations/integrations_screens.dart';
+import '../payments/link_payments_dialog.dart';
 import '../company/firm_cubit.dart';
 import 'bloc/invoices_bloc.dart';
 
@@ -215,6 +216,8 @@ class _InvoicesView extends StatelessWidget {
               context.push('${kind.basePath}/${inv.id}/edit');
             case 'preview':
               context.push('${kind.basePath}/${inv.id}/preview');
+            case 'link':
+              showLinkPaymentsDialog(context, invoiceId: inv.id, title: 'Link payments · ${kind.singular} ${inv.number}');
             case 'send':
               showSendDialog(
                 context,
@@ -238,6 +241,8 @@ class _InvoicesView extends StatelessWidget {
             PopupMenuItem(value: 'converted', child: Text('Open ${InvoiceKind.of(inv.convertedType ?? 'sale').singular}')),
           const PopupMenuItem(value: 'edit', child: Text('View/Edit')),
           const PopupMenuItem(value: 'preview', child: Text('Preview / Print')),
+          if (const ['sale', 'purchase', 'credit_note', 'debit_note'].contains(kind.type) && inv.partyId != null && !inv.isForeign)
+            const PopupMenuItem(value: 'link', child: Text('Link payments')),
           if (kind.type == 'sale') const PopupMenuItem(value: 'send', child: Text('Send to customer')),
           if (kind.type == 'sale' && inv.partyId != null && inv.balance > 0) const PopupMenuItem(value: 'paylink', child: Text('Payment link')),
           if (settingsOf(context).einvoiceEnabled && (kind.type == 'sale' || kind.type == 'credit_note'))

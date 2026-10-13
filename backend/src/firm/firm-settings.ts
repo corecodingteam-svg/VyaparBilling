@@ -111,6 +111,14 @@ export const DEFAULT_SETTINGS = {
   /** How many automatic backups to keep. */
   autoBackupKeep: 7,
 
+  // ---- credit limit
+  /** What happens when a sale would take a customer past their credit limit: a warning, or the sale is refused. */
+  creditLimitMode: 'warn' as 'warn' | 'block',
+
+  // ---- print
+  /** Show each item's picture on printed invoices. */
+  itemImagesOnInvoice: false,
+
   // ---- messaging (needs WhatsApp or SMS set up under Integrations)
   /** Send each new sale invoice to the customer automatically. */
   autoSendInvoices: 'off' as 'off' | 'whatsapp' | 'sms',
@@ -233,4 +241,6 @@ export class FirmSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(1e11) einvoiceMinAmount?: number;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @Matches(/^([\w.-]{2,256}@[A-Za-z]{2,64})?$/, { message: 'UPI ID looks like name@bank' }) upiId?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() upiQrOnInvoice?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['warn', 'block']) creditLimitMode?: 'warn' | 'block';
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() itemImagesOnInvoice?: boolean;
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:equatable/equatable.dart';
@@ -10,6 +11,7 @@ import '../../../core/api_client.dart';
 import '../../../core/status.dart';
 import '../../../shared/theme.dart';
 import '../../../shared/widgets.dart';
+import 'escpos.dart';
 import 'printers.dart';
 
 /// The network printer's address, remembered on this device (it belongs to the device, not the company).
@@ -36,14 +38,63 @@ class PrinterStore {
   }
 
   Future<void> saveBluetooth(BluetoothPrinterInfo printer) => _storage.write(key: _bluetoothKey, value: printer.toJson());
+
+  static const _prefsKey = 'receipt_printer_prefs';
+
+  Future<PrinterPrefs> prefs() async {
+    try {
+      return PrinterPrefs.fromJson(await _storage.read(key: _prefsKey));
+    } catch (_) {
+      return const PrinterPrefs();
+    }
+  }
+
+  Future<void> savePrefs(PrinterPrefs prefs) => _storage.write(key: _prefsKey, value: prefs.toJson());
+}
+
+/// How this device's receipt printer likes to be driven: its character set, and what to print besides the bill.
+class PrinterPrefs extends Equatable {
+  const PrinterPrefs({this.codePage = 'ascii', this.openDrawer = false, this.logo = false, this.qr = true});
+
+  factory PrinterPrefs.fromJson(String? json) {
+    if (json == null) return const PrinterPrefs();
+    final j = jsonDecode(json) as Map<String, dynamic>;
+    return PrinterPrefs(
+      codePage: receiptCodePages.containsKey(j['codePage']) ? j['codePage'] as String : 'ascii',
+      openDrawer: j['openDrawer'] == true,
+      logo: j['logo'] == true,
+      qr: j['qr'] != false,
+    );
+  }
+
+  final String codePage;
+  final bool openDrawer;
+  final bool logo;
+  final bool qr;
+
+  String toJson() => jsonEncode({'codePage': codePage, 'openDrawer': openDrawer, 'logo': logo, 'qr': qr});
+
+  PrinterPrefs copyWith({String? codePage, bool? openDrawer, bool? logo, bool? qr}) =>
+      PrinterPrefs(codePage: codePage ?? this.codePage, openDrawer: openDrawer ?? this.openDrawer, logo: logo ?? this.logo, qr: qr ?? this.qr);
+
+  @override
+  List<Object?> get props => [codePage, openDrawer, logo, qr];
 }
 
 class DirectPrintState extends Equatable {
-  const DirectPrintState({this.host = '', this.bluetooth, this.status = SubmitStatus.idle, this.message, this.rev = 0});
+  const DirectPrintState({
+    this.host = '',
+    this.bluetooth,
+    this.prefs = const PrinterPrefs(),
+    this.status = SubmitStatus.idle,
+    this.message,
+    this.rev = 0,
+  });
   final String host;
 
   /// The Bluetooth printer chosen on this device.
   final BluetoothPrinterInfo? bluetooth;
+  final PrinterPrefs prefs;
   final SubmitStatus status;
 
   /// What happened, shown once ([rev] changes with every result).
@@ -51,7 +102,7 @@ class DirectPrintState extends Equatable {
   final int rev;
 
   @override
-  List<Object?> get props => [host, bluetooth, status, message, rev];
+  List<Object?> get props => [host, bluetooth, prefs, status, message, rev];
 }
 
 /// Sends a receipt to a printer chosen by the user.
@@ -60,31 +111,46 @@ class DirectPrintCubit extends Cubit<DirectPrintState> {
   final PrinterStore _store;
 
   Future<void> load() async {
-    final (host, bluetooth) = await (_store.host(), _store.bluetooth()).wait;
-    if (!isClosed && (host != null || bluetooth != null)) emit(DirectPrintState(host: host ?? '', bluetooth: bluetooth));
+    final (host, bluetooth, prefs) = await (_store.host(), _store.bluetooth(), _store.prefs()).wait;
+    if (!isClosed) emit(DirectPrintState(host: host ?? '', bluetooth: bluetooth, prefs: prefs));
+  }
+
+  Future<void> savePrefs(PrinterPrefs prefs) async {
+    await _store.savePrefs(prefs);
+    emit(DirectPrintState(host: state.host, bluetooth: state.bluetooth, prefs: prefs, rev: state.rev));
   }
 
   Future<void> saveBluetooth(BluetoothPrinterInfo printer) async {
     await _store.saveBluetooth(printer);
-    emit(DirectPrintState(host: state.host, bluetooth: printer, rev: state.rev));
+    emit(DirectPrintState(host: state.host, bluetooth: printer, prefs: state.prefs, rev: state.rev));
   }
 
   Future<void> saveHost(String host) async {
     await _store.saveHost(host);
-    emit(DirectPrintState(host: host.trim(), bluetooth: state.bluetooth, rev: state.rev));
+    emit(DirectPrintState(host: host.trim(), bluetooth: state.bluetooth, prefs: state.prefs, rev: state.rev));
   }
 
-  Future<void> print(ReceiptTransport transport, Future<Uint8List> Function() build) async {
+  Future<void> print(ReceiptTransport transport, Future<Uint8List> Function(PrinterPrefs prefs) build) async {
     if (state.status == SubmitStatus.submitting) return;
-    emit(DirectPrintState(host: state.host, bluetooth: state.bluetooth, status: SubmitStatus.submitting, rev: state.rev));
+    emit(DirectPrintState(host: state.host, bluetooth: state.bluetooth, prefs: state.prefs, status: SubmitStatus.submitting, rev: state.rev));
     try {
-      await transport.send(await build());
-      emit(DirectPrintState(host: state.host, bluetooth: state.bluetooth, status: SubmitStatus.success, message: 'Sent to the printer', rev: state.rev + 1));
+      await transport.send(await build(state.prefs));
+      emit(
+        DirectPrintState(
+          host: state.host,
+          bluetooth: state.bluetooth,
+          prefs: state.prefs,
+          status: SubmitStatus.success,
+          message: 'Sent to the printer',
+          rev: state.rev + 1,
+        ),
+      );
     } catch (e) {
       emit(
         DirectPrintState(
           host: state.host,
           bluetooth: state.bluetooth,
+          prefs: state.prefs,
           status: SubmitStatus.failure,
           message: e is PrinterException ? e.message : ApiException.from(e).message,
           rev: state.rev + 1,
@@ -97,7 +163,7 @@ class DirectPrintCubit extends Cubit<DirectPrintState> {
 /// Button that prints a receipt straight to a thermal printer. [makeBytes] makes the ESC/POS bytes.
 class DirectPrintButton extends StatelessWidget {
   const DirectPrintButton({super.key, required this.makeBytes});
-  final Future<Uint8List> Function() makeBytes;
+  final Future<Uint8List> Function(PrinterPrefs prefs) makeBytes;
 
   @override
   Widget build(BuildContext context) => BlocProvider(
@@ -152,78 +218,114 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
           title: const Text('Print to a receipt printer'),
           content: SizedBox(
             width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (supportsNetworkPrinter) ...[
-                  const Text('Network printer', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _host,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (supportsNetworkPrinter) ...[
+                    const Text('Network printer', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _host,
+                      decoration: const InputDecoration(
+                        labelText: 'Printer address',
+                        hintText: '192.168.1.50  or  192.168.1.50:9100',
+                        helperText: 'Remembered on this device',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: () async {
+                        final host = _host.text.trim();
+                        if (host.isEmpty) return;
+                        await cubit.saveHost(host);
+                        if (context.mounted) Navigator.pop(context, networkPrinter(host));
+                      },
+                      child: const Text('Print'),
+                    ),
+                  ],
+                  if (bluetoothSupported) ...[
+                    const SizedBox(height: 16),
+                    const Text('Bluetooth printer', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    if (s.bluetooth != null)
+                      FilledButton.icon(
+                        onPressed: () => Navigator.pop(context, BluetoothTransport(s.bluetooth!)),
+                        icon: const Icon(Icons.bluetooth),
+                        label: Text('Print to ${s.bluetooth!.name}'),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final picked = await showDialog<BluetoothPrinterInfo>(context: context, builder: (_) => const _BluetoothPicker());
+                        if (picked == null) return;
+                        await cubit.saveBluetooth(picked);
+                        if (context.mounted) Navigator.pop(context, BluetoothTransport(picked));
+                      },
+                      icon: const Icon(Icons.bluetooth_searching),
+                      label: Text(s.bluetooth == null ? 'Choose a Bluetooth printer' : 'Choose another'),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Switch the printer on first. Printers that need a PIN must be paired in the phone’s Bluetooth settings (Android); they then show up in the list.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                  ],
+                  for (final t in transports) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(onPressed: () => Navigator.pop(context, t), icon: const Icon(Icons.usb), label: Text(t.label)),
+                  ],
+                  const Divider(height: 28),
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('cp-${s.prefs.codePage}'),
+                    initialValue: s.prefs.codePage,
+                    isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Printer address',
-                      hintText: '192.168.1.50  or  192.168.1.50:9100',
-                      helperText: 'Remembered on this device',
+                      labelText: 'Printer character set',
+                      helperText: 'Change only if accented letters print wrong.',
+                      isDense: true,
                     ),
+                    items: [for (final e in receiptCodePages.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                    onChanged: (v) => cubit.savePrefs(s.prefs.copyWith(codePage: v)),
                   ),
-                  const SizedBox(height: 8),
-                  FilledButton(
-                    onPressed: () async {
-                      final host = _host.text.trim();
-                      if (host.isEmpty) return;
-                      await cubit.saveHost(host);
-                      if (context.mounted) Navigator.pop(context, networkPrinter(host));
-                    },
-                    child: const Text('Print'),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: s.prefs.openDrawer,
+                    onChanged: (v) => cubit.savePrefs(s.prefs.copyWith(openDrawer: v)),
+                    title: const Text('Open the cash drawer after printing'),
                   ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: s.prefs.logo,
+                    onChanged: (v) => cubit.savePrefs(s.prefs.copyWith(logo: v)),
+                    title: const Text('Print the company logo'),
+                  ),
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: s.prefs.qr,
+                    onChanged: (v) => cubit.savePrefs(s.prefs.copyWith(qr: v)),
+                    title: const Text('Print the UPI / e-invoice QR code'),
+                  ),
+                  if (!supportsNetworkPrinter && !bluetoothSupported && transports.isEmpty)
+                    const Text(
+                      'This browser cannot talk to a printer directly. Use Chrome or Edge on a computer (USB or serial printers), '
+                      'the mobile or desktop app (network printers), or use the normal Print button.',
+                    ),
+                  if (!supportsNetworkPrinter && !bluetoothSupported && transports.isNotEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        'Your browser will ask which printer to use. USB printers must not be claimed by another program.',
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
                 ],
-                if (bluetoothSupported) ...[
-                  const SizedBox(height: 16),
-                  const Text('Bluetooth printer', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  if (s.bluetooth != null)
-                    FilledButton.icon(
-                      onPressed: () => Navigator.pop(context, BluetoothTransport(s.bluetooth!)),
-                      icon: const Icon(Icons.bluetooth),
-                      label: Text('Print to ${s.bluetooth!.name}'),
-                    ),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final picked = await showDialog<BluetoothPrinterInfo>(context: context, builder: (_) => const _BluetoothPicker());
-                      if (picked == null) return;
-                      await cubit.saveBluetooth(picked);
-                      if (context.mounted) Navigator.pop(context, BluetoothTransport(picked));
-                    },
-                    icon: const Icon(Icons.bluetooth_searching),
-                    label: Text(s.bluetooth == null ? 'Choose a Bluetooth printer' : 'Choose another'),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Switch the printer on first. Printers that need a PIN must be paired in the phone’s Bluetooth settings (Android); they then show up in the list.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                  ),
-                ],
-                for (final t in transports) ...[
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(onPressed: () => Navigator.pop(context, t), icon: const Icon(Icons.usb), label: Text(t.label)),
-                ],
-                if (!supportsNetworkPrinter && !bluetoothSupported && transports.isEmpty)
-                  const Text(
-                    'This browser cannot talk to a printer directly. Use Chrome or Edge on a computer (USB or serial printers), '
-                    'the mobile or desktop app (network printers), or use the normal Print button.',
-                  ),
-                if (!supportsNetworkPrinter && !bluetoothSupported && transports.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: Text(
-                      'Your browser will ask which printer to use. USB printers must not be claimed by another program.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                  ),
-              ],
+              ),
             ),
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))],
@@ -232,7 +334,6 @@ class _PrinterChoiceState extends State<_PrinterChoice> {
     );
   }
 }
-
 
 // ---------------------------------------------------------------- picking a Bluetooth printer
 
@@ -288,7 +389,11 @@ class _BluetoothPicker extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (s.scanning) const LinearProgressIndicator(),
-              if (s.error != null) Padding(padding: const EdgeInsets.all(8), child: Text(s.error!, style: const TextStyle(color: payRed))),
+              if (s.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(s.error!, style: const TextStyle(color: payRed)),
+                ),
               if (!s.scanning && s.error == null && s.printers.isEmpty)
                 const Padding(padding: EdgeInsets.all(12), child: Text('No printers found. Switch the printer on, keep it close, and search again.')),
               Flexible(

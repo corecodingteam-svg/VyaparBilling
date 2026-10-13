@@ -13,8 +13,9 @@ the end. Limits are listed next to each item so nothing is implied that is not t
   invoice list, sale/purchase reports, receipt PDF and reminders all use that balance.
 - Deleting a payment or an invoice removes its links. Over-linking is refused.
 
-Not built: linking a payment to a credit/debit note; linking from the invoice screen (it is done
-from the payment).
+A payment can also be linked to a return: money out to a credit note, money in to a debit note. Payments can be linked
+from the invoice's side too (invoice list → ⋮ → Link payments), for rupee documents; a foreign-currency document is linked
+from the payment, where the exchange rate is entered.
 
 ## 2. Logo, signature, item images, attachments — built
 
@@ -23,8 +24,8 @@ from the payment).
 - Item form: an image per item.
 - Invoices, expenses and payments: attach files (PNG, JPEG, WebP, PDF, up to 5 MB each).
 
-Limits: files are stored in the database. The item image is shown on the item form only, not in
-the item list or on printed invoices.
+Limits: files are stored in the database. The item image is shown on the item form and, when
+"Item pictures on invoices" is switched on in Settings, beside the item name on printed invoices. Not in the item list or on thermal receipts.
 
 ## 3. Split payments — built
 
@@ -38,7 +39,9 @@ the lists and the prints show each part.
 - A credit sale that would take the customer past their credit limit shows a warning on the form
   and asks for confirmation before saving.
 
-Limits: it is a warning, not a block. It applies to sale invoices only (not POS, orders, challans).
+Settings choose between a warning the user can accept and refusing the sale (the server enforces a refusal). It covers
+credit sales, sale orders and delivery challans. A sale paid in full is always allowed, which is why POS (always paid in
+full, and without a customer account) is not affected.
 
 ## 5. Invoice themes and thermal printing — built
 
@@ -53,7 +56,7 @@ How the direct printing was checked: the receipt bytes are unit-tested; the netw
 local TCP socket; the browser USB and serial code is tested under Node against fake WebUSB / Web Serial objects
 (`app/web_printer_test`). **Not tested on a real printer or in a real browser** — receipt printers differ, so the first
 print on yours may need its paper width or code page adjusting. Bluetooth printers from the phone apps are built (classic paired
-printers on Android, Bluetooth Low Energy on both) but **never tried with a real printer**. Not built: cash-drawer kick, QR codes and logos on the receipt, a per-printer code page.
+printers on Android, Bluetooth Low Energy on both) but **never tried with a real printer**. Per device, the print dialog also offers: kicking the cash drawer after printing, the company logo, the UPI or e-invoice QR code, and the printer's character set (plain, CP437, CP858 or Windows-1252). The bytes sent are unit tested; **none of it has been tried on a real printer**, and ₹ still prints as "Rs." because these character sets have no ₹.
 Themes apply to invoice-type documents; payment receipts and reports keep one plain layout.
 
 ## 6. Reports — 46 in total
@@ -70,7 +73,11 @@ Limits, stated plainly:
 - Profit reports cost goods at the item's current purchase price, not FIFO/average cost.
 - GSTR reports are for reading and export (CSV/PDF); there is no JSON for the GST portal.
 
-Not built: loan statement, GSTR-9, TCS/TDS returns in the government's format, ageing by bucket.
+Also built: receivables and payables ageing (not due, 1–30, 31–60, 61–90, over 90 days), a loan statement, a GSTR-9
+working paper (tables 4, 5, 6 and 9 from the books), and party-wise TCS (Form 27EQ) and TDS (Form 26Q) details with PAN taken
+from the GSTIN. **These are figures to key into the portals, not files the portals accept**: GSTR-9 is filled online and
+26Q/27EQ are filed through the tax department's own utility. The section shown (194Q / 206C) is the usual one for goods and
+must be checked for the period. They have not been reviewed by an accountant.
 
 ## 7. Remaining settings — built
 
@@ -106,14 +113,16 @@ Limits:
 - Verify my data: six consistency checks; "Fix" recalculates stock and received amounts.
 - Set up my business: an eight-step checklist with shortcuts.
 
-Limits: the new company opens with the position as of now, not as of a past date. Open estimates
+The new company opens with the position at the end of the day before its start date, so a year can be started late;
+entries dated on or after the start date are left in the old company and not carried. Limits: open estimates
 and orders and undeposited cheques are not carried over.
 
 ## 9. Multiple companies under one login — built
 
 Add a company, switch between companies, each with its own data and settings.
 
-Not built: deleting a company.
+A company can be deleted by its owner, from another company, by typing its name. Everything in it goes, including its
+server backups, and people whose only company it was can no longer sign in.
 
 ## 10. Accountant access and salesman tracking — built, with one limit
 
@@ -133,7 +142,10 @@ background (Android foreground service with its notification; iOS background loc
 check-in per 5 minutes. The logic is unit tested; the iOS app builds for the simulator. **Not run on a real phone**, and the
 Android build was not attempted (skipped by request). A salesman who force-quits the app, or an Android phone with
 aggressive battery saving, may still stop it. The platform's own background-location approval is needed to publish on the stores.
-There is also no live map inside the app (positions open in Google Maps), no geofencing and no route distance.
+The team screen has a street map (OpenStreetMap) of where everyone was last seen, and each person's trail is drawn on a map
+with the distance travelled (steps under 25 m are ignored, so a parked phone adds nothing). Zones — a named circle such as
+the shop or a warehouse — can be placed by tapping the map; the list shows who is in which zone and a trail shows when they
+were there. There are no alerts when someone enters or leaves a zone. OpenStreetMap's free tiles are for light use.
 
 ## 11. Backup and restore — built
 
@@ -156,7 +168,8 @@ losing the server — that is what the Drive copy or a downloaded file is for. L
 GST rate per expense line, prices with or without tax, saved expense items that fill price and
 rate, and the tax counted as input credit in GSTR-3B and taken out of expenses in Profit & Loss.
 
-Limit: an expense has no supplier state, so its GST is reported as CGST + SGST in equal halves.
+An expense can record the supplier's GSTIN and state; when the state is not the company's, its GST is reported as IGST
+in GSTR-3B and GSTR-9. With no supplier state it is taken as CGST + SGST in equal halves.
 
 ## 13. Editing transfers, cash adjustments and loan entries — built
 
@@ -165,7 +178,7 @@ Limit: an expense has no supplier state, so its GST is reported as CGST + SGST i
 Search button and Ctrl/Cmd+K: parties (name, phone, GSTIN), items (name, code, HSN) and documents
 (number, party, phone).
 
-Not built: searching payments and expenses.
+Search also covers payments (number, party, note) and expenses (number, category, note); salesmen do not see expenses or Payment-Out.
 
 ---
 
@@ -201,14 +214,14 @@ Each service is connected by an admin entering the provider's details in the app
 
 ## How this was checked
 
-- `backend`: 34 unit tests (invoice and document maths, Google Drive backup against a simulated Google, WhatsApp/SMS request
+- `backend`: 37 unit tests, plus `backend/test/live-gaps.mjs` (45 checks of the last batch against the running server). They cover (invoice and document maths, Google Drive backup against a simulated Google, WhatsApp/SMS request
   shapes, e-invoice and e-way JSON, the NIC client against a simulated NIC, webhook signatures, secret encryption), plus
   `backend/test/live-integrations.mjs` — 45 checks against the running server and fake WhatsApp/Twilio/NIC/Razorpay servers.
-- `app`: 128 unit tests, including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
+- `app`: 144 unit tests (the last batch is in `test/gaps_test.dart`), including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
 - `app/web_printer_test`: the browser printer code under Node against fake WebUSB / Web Serial (run separately).
 - `app/live_api_test`: three end-to-end runs of the app's own repositories and form logic against the running backend,
   covering every item above, including restore and a new year with stores, batches and loyalty points carried over.
-- `app/screenshots_test`: 85 screen renders, checked by eye for the new screens.
+- `app/screenshots_test`: 87 screen renders, checked by eye for the new screens.
 
 Not checked by any of these: the browser's file chooser (uploads and restore start from it), real browsers' location and
 USB/serial permission prompts, the WhatsApp link, real receipt printers, Bluetooth, background location on a phone, and every real outside provider.

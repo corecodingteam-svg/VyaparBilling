@@ -40,6 +40,21 @@ class UtilitiesRepository {
           title: '${InvoiceKind.of(d['type'] as String).singular} ${d['number']}'.trim(),
           subtitle: '${d['partyName']} · ${displayDate(d['date'] as String)} · ${money(d['total'] as num?)}',
         ),
+      for (final p in (j['payments'] as List?) ?? const [])
+        SearchHit(
+          kind: 'payment',
+          id: p['id'] as String,
+          type: p['type'] as String,
+          title: '${p['type'] == 'out' ? 'Payment-Out' : 'Payment-In'} ${p['number']}',
+          subtitle: '${p['partyName']} · ${displayDate(p['date'] as String)} · ${money(p['amount'] as num?)}',
+        ),
+      for (final e in (j['expenses'] as List?) ?? const [])
+        SearchHit(
+          kind: 'expense',
+          id: e['id'] as String,
+          title: 'Expense ${e['number'] ?? ''} · ${e['category']}'.replaceAll('  ', ' '),
+          subtitle: [displayDate(e['date'] as String), money(e['total'] as num?), if ((e['description'] as String?)?.isNotEmpty ?? false) e['description'] as String].join(' · '),
+        ),
     ];
   }
 

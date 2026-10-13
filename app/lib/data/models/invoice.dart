@@ -216,6 +216,7 @@ class InvoiceSummary extends Equatable {
 class InvoiceLine extends Equatable {
   InvoiceLine.fromJson(Map<String, dynamic> j)
       : itemId = j['itemId'] as String?,
+        imageFileId = j['imageFileId'] as String?,
         name = j['name'] as String,
         quantity = j['quantity'] as num,
         unit = j['unit'] as String?,
@@ -241,6 +242,9 @@ class InvoiceLine extends Equatable {
         amount = j['amount'] as num;
 
   final String? itemId;
+
+  /// The item's picture, when it has one.
+  final String? imageFileId;
   final String name;
   final num quantity;
   final String? unit;

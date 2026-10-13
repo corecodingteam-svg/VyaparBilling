@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/gst_states.dart';
 import '../../core/status.dart';
 import '../../data/models/cash_bank.dart';
 import '../../data/models/expense.dart';
@@ -183,6 +184,39 @@ class _Body extends StatelessWidget {
           onBank: cubit.partBankAccountChanged,
           onAmount: cubit.partAmountChanged,
         ),
+        if (state.gstEnabled) ...[
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey('gstin-${state.formRev}'),
+                    initialValue: state.supplierGstin,
+                    textCapitalization: TextCapitalization.characters,
+                    onChanged: cubit.supplierGstinChanged,
+                    decoration: const InputDecoration(labelText: 'Supplier GSTIN (optional)'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String?>(
+                    key: ValueKey('state-${state.supplierState}'),
+                    initialValue: state.supplierState,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Supplier state', helperText: 'Another state = IGST'),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('Same as mine')),
+                      for (final e in gstStates.entries) DropdownMenuItem(value: e.key, child: Text(e.value, overflow: TextOverflow.ellipsis)),
+                    ],
+                    onChanged: cubit.supplierStateChanged,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

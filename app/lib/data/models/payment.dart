@@ -93,3 +93,41 @@ class Payment extends Equatable {
   @override
   List<Object?> get props => [id, type, number, partyId, partyName, paymentDate, amount, paymentMode, bankAccountId, linkedAmount, allocations, description, currencyCode, exchangeRate, baseAmount, fxGain, paymentLabel, parts];
 }
+
+/// A payment that can be set against a document, seen from the document's side.
+class LinkablePayment extends Equatable {
+  LinkablePayment.fromJson(Map<String, dynamic> j)
+      : paymentId = j['paymentId'] as String,
+        number = j['number'] as String,
+        date = j['date'] as String,
+        amount = j['amount'] as num,
+        free = j['free'] as num,
+        linked = j['linked'] as num;
+
+  final String paymentId;
+  final String number;
+  final String date;
+  final num amount;
+
+  /// What is not linked to other documents (so includes [linked]).
+  final num free;
+
+  /// Already linked to this document.
+  final num linked;
+
+  @override
+  List<Object?> get props => [paymentId, number, date, amount, free, linked];
+}
+
+class LinkablePayments extends Equatable {
+  LinkablePayments.fromJson(Map<String, dynamic> j)
+      : due = j['due'] as num,
+        payments = [for (final p in j['payments'] as List) LinkablePayment.fromJson(p as Map<String, dynamic>)];
+
+  /// What the document leaves to be settled by payments.
+  final num due;
+  final List<LinkablePayment> payments;
+
+  @override
+  List<Object?> get props => [due, payments];
+}

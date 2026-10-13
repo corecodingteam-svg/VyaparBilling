@@ -52,12 +52,15 @@ export const REPORT_CATALOG: Array<{ id: string; title: string; group: string; p
   { id: 'exchange', title: 'Exchange Gain & Loss', group: 'Transaction', params: ['period'] },
   { id: 'party-statement', title: 'Party Statement', group: 'Party', params: ['party', 'period'] },
   { id: 'all-parties', title: 'All Parties', group: 'Party', params: [] },
+  { id: 'ageing', title: 'Receivables Ageing', group: 'Party', params: [] },
+  { id: 'ageing-payable', title: 'Payables Ageing', group: 'Party', params: [] },
   { id: 'loyalty', title: 'Loyalty Points', group: 'Party', params: [] },
   { id: 'party-profit', title: 'Party Wise Profit & Loss', group: 'Party', params: ['period'] },
   { id: 'party-item', title: 'Party Report by Item', group: 'Party', params: ['party?', 'period'] },
   { id: 'sale-by-party', title: 'Sale Purchase by Party', group: 'Party', params: ['period'] },
   { id: 'gstr1', title: 'GSTR-1 (Sales)', group: 'GST', params: ['period'] },
   { id: 'gstr3b', title: 'GSTR-3B Summary', group: 'GST', params: ['period'] },
+  { id: 'gstr9', title: 'GSTR-9 (Annual Return)', group: 'GST', params: ['period'] },
   { id: 'hsn-summary', title: 'Sale Summary by HSN', group: 'GST', params: ['period'] },
   { id: 'gstr2', title: 'GSTR-2 (Purchases)', group: 'GST', params: ['period'] },
   { id: 'gst-rate', title: 'GST Rate Report', group: 'GST', params: ['period'] },
@@ -65,6 +68,8 @@ export const REPORT_CATALOG: Array<{ id: string; title: string; group: string; p
   { id: 'gst-by-party', title: 'GST Report by Party', group: 'GST', params: ['period'] },
   { id: 'tcs', title: 'TCS Report', group: 'GST', params: ['period'] },
   { id: 'tds', title: 'TDS Report', group: 'GST', params: ['period'] },
+  { id: 'tcs-return', title: 'TCS Return (Form 27EQ details)', group: 'GST', params: ['period'] },
+  { id: 'tds-return', title: 'TDS Return (Form 26Q details)', group: 'GST', params: ['period'] },
   { id: 'stock-summary', title: 'Stock Summary', group: 'Item / Stock', params: [] },
   { id: 'low-stock', title: 'Low Stock Summary', group: 'Item / Stock', params: [] },
   { id: 'stock-detail', title: 'Stock Detail', group: 'Item / Stock', params: ['period'] },
@@ -84,6 +89,7 @@ export const REPORT_CATALOG: Array<{ id: string; title: string; group: string; p
   { id: 'expense-transactions', title: 'Expense Transactions', group: 'Business Status', params: ['period'] },
   { id: 'expense-item', title: 'Expense Item Report', group: 'Business Status', params: ['period'] },
   { id: 'bank-statement', title: 'Bank Statement', group: 'Business Status', params: ['bank', 'period'] },
+  { id: 'loan-statement', title: 'Loan Statement', group: 'Business Status', params: ['period'] },
 ];
 
 const col = (key: string, label: string, type: ColumnType = 'text'): Column => ({ key, label, type });
@@ -204,6 +210,18 @@ export class ReportsService {
         return this.expenseTransactions(firmId, p.from, p.to);
       case 'expense-item':
         return this.expenseItems(firmId, p.from, p.to);
+      case 'ageing':
+        return this.ageing(firmId, 'sale');
+      case 'ageing-payable':
+        return this.ageing(firmId, 'purchase');
+      case 'gstr9':
+        return this.gstr9(firmId, p.from, p.to);
+      case 'tcs-return':
+        return this.deducteeReturn(firmId, 'tcs', p.from, p.to);
+      case 'tds-return':
+        return this.deducteeReturn(firmId, 'tds', p.from, p.to);
+      case 'loan-statement':
+        return this.loanStatement(firmId, p.from, p.to);
       default:
         throw new NotFoundException();
     }
@@ -722,17 +740,8 @@ export class ReportsService {
     };
     const out = net('sale', 'credit_note');
     const itc = net('purchase', 'debit_note');
-    // Expenses record one GST figure with no supplier state, so their tax is taken as CGST + SGST in equal halves.
-    const expenseTax = await this.db
-      .selectFrom('expenses')
-      .select([sql<string>`coalesce(sum(taxable_amount) filter (where tax_amount > 0), 0)`.as('taxable'), sql<string>`coalesce(sum(tax_amount), 0)`.as('tax')])
-      .where('firm_id', '=', firmId)
-      .where('deleted_at', 'is', null)
-      .where('expense_date', '>=', from)
-      .where('expense_date', '<=', to)
-      .executeTakeFirstOrThrow();
-    const half = r2(n(expenseTax.tax) / 2);
-    const expenseItc = { taxable: n(expenseTax.taxable), igst: 0, cgst: half, sgst: r2(n(expenseTax.tax) - half) };
+    const expenseItc = await this.expenseItc(firmId, from, to);
+    itc.igst = r2(itc.igst + expenseItc.igst);
     itc.cgst = r2(itc.cgst + expenseItc.cgst);
     itc.sgst = r2(itc.sgst + expenseItc.sgst);
     itc.taxable = r2(itc.taxable + expenseItc.taxable);
@@ -748,7 +757,7 @@ export class ReportsService {
       rows: [
         withTotal('3.1 Outward taxable supplies (sales less returns)', out),
         withTotal('4. Eligible input tax credit (purchases less returns, and expenses)', itc),
-        ...(n(expenseTax.tax) ? [withTotal('    of which: GST paid on expenses', expenseItc)] : []),
+        ...(expenseItc.igst + expenseItc.cgst + expenseItc.sgst ? [withTotal('    of which: GST paid on expenses', expenseItc)] : []),
         withTotal('Net GST payable (negative = credit carried forward)', payable, true),
       ],
       summary: [
@@ -757,6 +766,31 @@ export class ReportsService {
         money('Net GST Payable', payable.igst + payable.cgst + payable.sgst),
       ],
     };
+  }
+
+  /**
+   * GST paid on expenses in the period. An expense from a supplier in another state carries IGST; one from
+   * the company's own state, or with no supplier state given, carries CGST + SGST in equal halves.
+   */
+  private async expenseItc(firmId: string, from: string, to: string) {
+    const firm = await this.db.selectFrom('firms').select('state_code').where('id', '=', firmId).executeTakeFirstOrThrow();
+    const rows = await this.db
+      .selectFrom('expenses').select(['taxable_amount', 'tax_amount', 'supplier_state'])
+      .where('firm_id', '=', firmId).where('deleted_at', 'is', null).where('tax_amount', '>', '0')
+      .where('expense_date', '>=', from).where('expense_date', '<=', to).execute();
+    const out = { taxable: 0, igst: 0, cgst: 0, sgst: 0 };
+    for (const e of rows) {
+      const tax = n(e.tax_amount);
+      out.taxable += n(e.taxable_amount);
+      if (e.supplier_state && firm.state_code && e.supplier_state !== firm.state_code) {
+        out.igst += tax;
+      } else {
+        const half = r2(tax / 2);
+        out.cgst += half;
+        out.sgst += tax - half;
+      }
+    }
+    return { taxable: r2(out.taxable), igst: r2(out.igst), cgst: r2(out.cgst), sgst: r2(out.sgst) };
   }
 
   /** Sale lines (less sale returns) grouped by HSN code, GST rate or item. */
@@ -1511,6 +1545,197 @@ export class ReportsService {
       ],
       rows: data,
       summary: [money(total >= 0 ? 'Net Exchange Gain' : 'Net Exchange Loss', Math.abs(total))],
+    };
+  }
+
+  // ---------------------------------------------------------------- ageing, annual and deductee returns, loans
+
+  /**
+   * What each party still owes on unpaid invoices (or is owed on unpaid bills), by how long past the due
+   * date it is. An invoice without a due date counts from its own date. Payments not linked to any invoice
+   * are shown separately, since they are not set against a particular bucket.
+   */
+  private async ageing(firmId: string, type: 'sale' | 'purchase') {
+    const rows = await sql<{ party_id: string; name: string; invoice_date: string; due_date: string | null; due: string }>`
+      select p.id as party_id, p.name, i.invoice_date, i.due_date,
+             i.total - i.received - i.tds_amount - i.loyalty_amount
+               - coalesce((select sum(a.amount) from payment_allocations a where a.invoice_id = i.id), 0) as due
+        from invoices i join parties p on p.id = i.party_id
+       where i.firm_id = ${firmId} and i.type = ${type} and i.deleted_at is null and p.deleted_at is null`.execute(this.db);
+    const unlinked = await sql<{ party_id: string; free: string }>`
+      select pm.party_id, sum(pm.amount - coalesce((select sum(a.amount) from payment_allocations a where a.payment_id = pm.id), 0)) as free
+        from payments pm where pm.firm_id = ${firmId} and pm.type = ${type === 'sale' ? 'in' : 'out'} and pm.deleted_at is null
+       group by pm.party_id`.execute(this.db);
+    const now = Date.parse(today());
+    const blank = () => ({ party: '', notDue: 0, d30: 0, d60: 0, d90: 0, older: 0, total: 0, unlinked: 0, net: 0 });
+    const by = new Map<string, ReturnType<typeof blank>>();
+    for (const r of rows.rows) {
+      const due = n(r.due);
+      if (due <= 0) continue;
+      const days = Math.round((now - Date.parse(r.due_date ?? r.invoice_date)) / 86400000);
+      const e = by.get(r.party_id) ?? { ...blank(), party: r.name };
+      const bucket = days <= 0 ? 'notDue' : days <= 30 ? 'd30' : days <= 60 ? 'd60' : days <= 90 ? 'd90' : 'older';
+      e[bucket] = r2(e[bucket] + due);
+      e.total = r2(e.total + due);
+      by.set(r.party_id, e);
+    }
+    for (const [id, e] of by) {
+      e.unlinked = r2(n(unlinked.rows.find((u) => u.party_id === id)?.free));
+      e.net = r2(e.total - e.unlinked);
+    }
+    const data = [...by.values()].sort((a, b) => b.total - a.total);
+    const sum = (k: 'notDue' | 'd30' | 'd60' | 'd90' | 'older' | 'total' | 'net') => data.reduce((s, r) => s + r[k], 0);
+    return {
+      columns: [
+        col('party', 'Party Name'), col('notDue', 'Not Yet Due', 'money'), col('d30', '1–30 Days', 'money'), col('d60', '31–60 Days', 'money'),
+        col('d90', '61–90 Days', 'money'), col('older', 'Over 90 Days', 'money'), col('total', 'Total Unpaid', 'money'),
+        col('unlinked', 'Payments Not Linked', 'money'), col('net', 'Net', 'money'),
+      ],
+      rows: data,
+      summary: [
+        money('Not Yet Due', sum('notDue')), money('1–30 Days', sum('d30')), money('31–60 Days', sum('d60')), money('61–90 Days', sum('d90')),
+        money('Over 90 Days', sum('older')), money(type === 'sale' ? 'Total Receivable' : 'Total Payable', sum('net')),
+      ],
+    };
+  }
+
+  /**
+   * The figures the annual return (GSTR-9) asks for, from the books for the chosen period (use the financial year).
+   * It is a working paper for filling the return on the portal, not a file the portal accepts.
+   */
+  private async gstr9(firmId: string, from: string, to: string) {
+    const lines = await sql<{ type: InvoiceType; registered: boolean; taxed: boolean; taxable: string; igst: string; cgst: string; sgst: string; cess: string }>`
+      select i.type, (i.party_gstin is not null) as registered, (l.gst_rate > 0) as taxed,
+             sum(l.taxable_value) as taxable, sum(l.igst) as igst, sum(l.cgst) as cgst, sum(l.sgst) as sgst, sum(l.cess) as cess
+        from invoice_items l join invoices i on i.id = l.invoice_id
+       where i.firm_id = ${firmId} and i.deleted_at is null and i.type in ('sale', 'purchase', 'credit_note', 'debit_note')
+         and i.invoice_date >= ${from} and i.invoice_date <= ${to}
+       group by 1, 2, 3`.execute(this.db);
+    type V = { taxable: number; igst: number; cgst: number; sgst: number; cess: number };
+    const pick = (type: InvoiceType, taxed: boolean, registered?: boolean): V => {
+      const v = { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+      for (const l of lines.rows) {
+        if (l.type !== type || l.taxed !== taxed || (registered !== undefined && l.registered !== registered)) continue;
+        v.taxable += n(l.taxable); v.igst += n(l.igst); v.cgst += n(l.cgst); v.sgst += n(l.sgst); v.cess += n(l.cess);
+      }
+      return v;
+    };
+    const add = (a: V, b: V, sign = 1): V => ({
+      taxable: r2(a.taxable + sign * b.taxable), igst: r2(a.igst + sign * b.igst), cgst: r2(a.cgst + sign * b.cgst), sgst: r2(a.sgst + sign * b.sgst), cess: r2(a.cess + sign * b.cess),
+    });
+    const zero: V = { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+    const b2c = add(zero, pick('sale', true, false));
+    const b2b = add(zero, pick('sale', true, true));
+    const credit = add(zero, pick('credit_note', true));
+    const outward = add(add(b2c, b2b), credit, -1);
+    const exempt = add(pick('sale', false), pick('credit_note', false), -1);
+    const inward = add(pick('purchase', true), pick('debit_note', true), -1);
+    const expense = { ...(await this.expenseItc(firmId, from, to)), cess: 0 };
+    const itc = add(inward, expense);
+    const row = (table: string, particulars: string, v: V, bold = false): Row => ({ table, particulars, ...v, total: r2(v.igst + v.cgst + v.sgst + v.cess), _bold: bold });
+    return {
+      columns: [
+        col('table', 'Table'), col('particulars', 'Particulars'), col('taxable', 'Taxable Value', 'money'), col('igst', 'IGST', 'money'),
+        col('cgst', 'CGST', 'money'), col('sgst', 'SGST', 'money'), col('cess', 'Cess', 'money'), col('total', 'Total Tax', 'money'),
+      ],
+      rows: [
+        row('4A', 'Supplies to unregistered persons (B2C)', b2c),
+        row('4B', 'Supplies to registered persons (B2B)', b2b),
+        row('4I', 'Credit notes for the above (−)', credit),
+        row('4N', 'Supplies on which tax is payable', outward, true),
+        row('5D–5F', 'Exempt, nil-rated and non-GST supplies (net of credit notes)', exempt),
+        row('5N', 'Total turnover', add(outward, exempt), true),
+        row('6B', 'Input tax credit on purchases (net of debit notes)', inward),
+        row('6B', 'Input tax credit on expenses', expense),
+        row('6O', 'Total input tax credit availed', itc, true),
+        row('9', 'Tax payable for the year', { ...outward, taxable: 0 }, true),
+        row('—', 'Net of input tax credit (negative = credit left over)', { ...add(outward, itc, -1), taxable: 0 }),
+      ],
+      summary: [
+        money('Total Turnover', outward.taxable + exempt.taxable),
+        money('Tax Payable', outward.igst + outward.cgst + outward.sgst + outward.cess),
+        money('Input Tax Credit', itc.igst + itc.cgst + itc.sgst + itc.cess),
+      ],
+    };
+  }
+
+  /**
+   * Party-wise details in the order the quarterly TCS return (Form 27EQ) and TDS return (Form 26Q) ask for them:
+   * TCS the company collected on its sales, or TDS it deducted from its suppliers. PAN is taken from the party's
+   * GSTIN. The section is the usual one for goods and must be checked against the law for the period.
+   */
+  private async deducteeReturn(firmId: string, kind: 'tcs' | 'tds', from: string, to: string) {
+    const type: InvoiceType = kind === 'tcs' ? 'sale' : 'purchase';
+    const rows = (await this.invoices(firmId, [type], from, to).orderBy('invoice_date').orderBy('created_at').execute()).filter(
+      (r) => n(kind === 'tcs' ? r.tcs_amount : r.tds_amount) > 0,
+    );
+    const data = rows.map((r, i) => ({
+      sr: i + 1,
+      pan: r.party_gstin ? r.party_gstin.slice(2, 12) : 'PANNOTAVBL',
+      party: r.party_name,
+      section: kind === 'tcs' ? '206C' : '194Q',
+      date: r.invoice_date,
+      number: r.number,
+      // 27EQ asks for the amount received or debited; 26Q for the amount paid or credited, before GST.
+      amount: kind === 'tcs' ? r2(n(r.total) - n(r.tcs_amount)) : n(r.taxable_amount),
+      rate: n(kind === 'tcs' ? r.tcs_rate : r.tds_rate),
+      tax: n(kind === 'tcs' ? r.tcs_amount : r.tds_amount),
+    }));
+    const missing = data.filter((r) => r.pan === 'PANNOTAVBL').length;
+    return {
+      subtitle: `${fmt(from)} to ${fmt(to)}${missing ? ` · ${missing} without a PAN (no GSTIN on the party)` : ''}`,
+      columns: [
+        col('sr', 'Sr', 'number'), col('pan', kind === 'tcs' ? 'PAN of Collectee' : 'PAN of Deductee'), col('party', 'Name'), col('section', kind === 'tcs' ? 'Collection Code' : 'Section'),
+        col('date', kind === 'tcs' ? 'Date Received / Debited' : 'Date Paid / Credited', 'date'), col('number', 'Bill No.'),
+        col('amount', kind === 'tcs' ? 'Amount Received / Debited' : 'Amount Paid / Credited', 'money'), col('rate', 'Rate %', 'number'),
+        col('tax', kind === 'tcs' ? 'Tax Collected' : 'Tax Deducted', 'money'),
+      ],
+      rows: data,
+      summary: [
+        money(kind === 'tcs' ? 'Amount Received' : 'Amount Paid', data.reduce((s, r) => s + r.amount, 0)),
+        money(kind === 'tcs' ? 'TCS to Deposit' : 'TDS to Deposit', data.reduce((s, r) => s + r.tax, 0)),
+      ],
+    };
+  }
+
+  /** Every loan's movements in the period: what was borrowed, repaid and charged, with the balance after each. */
+  private async loanStatement(firmId: string, from: string, to: string) {
+    const loans = await this.db.selectFrom('loan_accounts').selectAll().where('firm_id', '=', firmId).where('deleted_at', 'is', null).orderBy('created_at').execute();
+    const txns = await this.db
+      .selectFrom('loan_transactions').selectAll().where('firm_id', '=', firmId).where('deleted_at', 'is', null).where('txn_date', '<=', to)
+      .orderBy('txn_date').orderBy('created_at').execute();
+    const change = (t: (typeof txns)[number]) => (t.kind === 'payment' ? -n(t.principal) : n(t.principal));
+    const rows: Row[] = [];
+    let outstanding = 0;
+    let paid = 0;
+    let interest = 0;
+    for (const l of loans) {
+      const mine = txns.filter((t) => t.loan_id === l.id);
+      const started = String(l.balance_date).slice(0, 10);
+      let balance = (started <= to && started < from ? n(l.opening_balance) : 0) + mine.filter((t) => t.txn_date < from).reduce((s, t) => s + change(t), 0);
+      rows.push({ date: null, loan: l.name, particulars: `Balance on ${fmt(from)}${l.lender ? ` · ${l.lender}` : ''}`, borrowed: null, repaid: null, interest: null, balance: r2(balance), _bold: true });
+      if (started >= from && started <= to) {
+        balance += n(l.opening_balance);
+        rows.push({ date: started, loan: l.name, particulars: 'Loan taken', borrowed: n(l.opening_balance), repaid: null, interest: null, balance: r2(balance) });
+      }
+      for (const t of mine.filter((x) => x.txn_date >= from)) {
+        balance += change(t);
+        if (t.kind === 'payment') paid += n(t.principal);
+        interest += n(t.interest);
+        rows.push({
+          date: t.txn_date, loan: l.name, particulars: t.description ?? { payment: 'Repayment', increase: 'More borrowed', charge: 'Charges' }[t.kind],
+          borrowed: t.kind === 'payment' ? null : n(t.principal), repaid: t.kind === 'payment' ? n(t.principal) : null, interest: n(t.interest) || null, balance: r2(balance),
+        });
+      }
+      outstanding += balance;
+    }
+    return {
+      columns: [
+        col('date', 'Date', 'date'), col('loan', 'Loan Account'), col('particulars', 'Particulars'), col('borrowed', 'Borrowed / Charged', 'money'),
+        col('repaid', 'Principal Repaid', 'money'), col('interest', 'Interest Paid', 'money'), col('balance', 'Balance', 'money'),
+      ],
+      rows,
+      summary: [money('Principal Repaid', paid), money('Interest Paid', interest), money(`Outstanding on ${fmt(to)}`, outstanding)],
     };
   }
 }

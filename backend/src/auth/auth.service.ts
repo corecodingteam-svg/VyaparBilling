@@ -3,7 +3,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { Transaction } from 'kysely';
+import { promises as fs } from 'fs';
+import { sql, Transaction } from 'kysely';
+import * as path from 'path';
 import { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_UNITS } from '../common/default-units';
 import { Db, KYSELY } from '../database/database.module';
 import { Database } from '../database/schema';
@@ -119,6 +121,31 @@ export class AuthService {
       return id;
     });
     return { id: firmId, name: dto.firmName, role: 'owner' as const, current: false };
+  }
+
+  /**
+   * Deletes a company and everything in it, for good. Only its owner can, only while working in another
+   * company, and only by typing its name. People whose only company it was lose their login with it.
+   */
+  async deleteFirm(user: JwtPayload, firmId: string, name: string) {
+    if (firmId === user.firmId) {
+      throw new BadRequestException({ code: 'CURRENT_FIRM', message: 'Switch to another company first; the one you are working in cannot be deleted.' });
+    }
+    const firm = await this.db
+      .selectFrom('firm_members as m').innerJoin('firms as f', 'f.id', 'm.firm_id').select(['f.name', 'm.role'])
+      .where('m.user_id', '=', user.sub).where('m.firm_id', '=', firmId).executeTakeFirst();
+    if (!firm || firm.role !== 'owner') throw new ForbiddenException({ code: 'NOT_OWNER', message: 'Only the owner of a company can delete it.' });
+    if (firm.name.trim().toLowerCase() !== name.trim().toLowerCase()) {
+      throw new BadRequestException({ code: 'NAME_MISMATCH', message: 'Type the company name exactly to confirm.' });
+    }
+    await this.db.transaction().execute(async (trx) => {
+      // A login belongs to a "home" company; move it to another company the person is in before this one goes.
+      await sql`update users u set firm_id = (select m.firm_id from firm_members m where m.user_id = u.id and m.firm_id <> ${firmId} order by m.created_at limit 1)
+                 where u.firm_id = ${firmId}
+                   and exists (select 1 from firm_members m where m.user_id = u.id and m.firm_id <> ${firmId})`.execute(trx);
+      await trx.deleteFrom('firms').where('id', '=', firmId).execute();
+    });
+    await fs.rm(path.join(process.env.BACKUP_DIR ?? path.join(process.cwd(), 'backups'), firmId), { recursive: true, force: true });
   }
 
   async switchFirm(user: JwtPayload, firmId: string) {

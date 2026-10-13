@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
-import { SavePaymentDto } from './payment.dto';
+import { InvoiceLinksDto, SavePaymentDto } from './payment.dto';
 import { FirmService } from '../firm/firm.service';
 import { MessagingService } from '../messaging/messaging.service';
 import { PaymentsService } from './payments.service';
@@ -40,6 +40,16 @@ export class PaymentsController {
   @Get('next-number')
   nextNumber(@CurrentUser() u: JwtPayload, @Query('type') type?: string) {
     return this.payments.nextNumber(u.firmId, assertAllowed(u, parseType(type)));
+  }
+
+  @Get('linkable')
+  async linkable(@CurrentUser() u: JwtPayload, @Query('invoiceId', ParseUUIDPipe) invoiceId: string) {
+    return this.payments.linkable(u.firmId, invoiceId, await this.firm.scope(u));
+  }
+
+  @Put('invoice-links/:invoiceId')
+  async linkToInvoice(@CurrentUser() u: JwtPayload, @Param('invoiceId', ParseUUIDPipe) invoiceId: string, @Body() dto: InvoiceLinksDto) {
+    return this.payments.linkToInvoice(u.firmId, invoiceId, dto.links, await this.firm.scope(u));
   }
 
   @Get(':id')

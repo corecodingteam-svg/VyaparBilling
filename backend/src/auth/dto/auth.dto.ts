@@ -72,3 +72,8 @@ export class UpdateMemberDto {
   @ApiProperty({ enum: ASSIGNABLE_ROLES }) @IsIn(ASSIGNABLE_ROLES)
   role: (typeof ASSIGNABLE_ROLES)[number];
 }
+
+export class DeleteFirmDto {
+  @ApiProperty({ description: 'The company name, typed to confirm' }) @IsString() @MinLength(1) @MaxLength(120)
+  name: string;
+}

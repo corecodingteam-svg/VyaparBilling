@@ -105,7 +105,7 @@ class ServiceReminder extends Equatable {
 class SearchHit extends Equatable {
   const SearchHit({required this.kind, required this.id, required this.title, this.subtitle = '', this.type});
 
-  /// party | item | invoice
+  /// party | item | invoice | payment | expense
   final String kind;
   final String id;
   final String title;

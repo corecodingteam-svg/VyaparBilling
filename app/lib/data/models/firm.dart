@@ -86,6 +86,8 @@ class FirmSettings extends Equatable {
     this.ewayEnabled = false,
     this.upiId = '',
     this.upiQrOnInvoice = false,
+    this.creditLimitMode = 'warn',
+    this.itemImagesOnInvoice = false,
   });
 
   FirmSettings.fromJson(Map<String, dynamic> j)
@@ -145,7 +147,9 @@ class FirmSettings extends Equatable {
         einvoiceEnabled = (j['einvoiceEnabled'] as bool?) ?? false,
         ewayEnabled = (j['ewayEnabled'] as bool?) ?? false,
         upiId = (j['upiId'] as String?) ?? '',
-        upiQrOnInvoice = (j['upiQrOnInvoice'] as bool?) ?? false;
+        upiQrOnInvoice = (j['upiQrOnInvoice'] as bool?) ?? false,
+        creditLimitMode = (j['creditLimitMode'] as String?) ?? 'warn',
+        itemImagesOnInvoice = (j['itemImagesOnInvoice'] as bool?) ?? false;
 
   /// Show GST fields and tax columns.
   final bool gstEnabled;
@@ -266,6 +270,12 @@ class FirmSettings extends Equatable {
   final String upiId;
   final bool upiQrOnInvoice;
 
+  /// Going past a customer's credit limit: 'warn' asks first, 'block' refuses.
+  final String creditLimitMode;
+
+  /// Print each item's picture on invoices.
+  final bool itemImagesOnInvoice;
+
   /// The prefix for new documents of [type] ('sale', 'payment_in', ...).
   String prefixFor(String type) => prefixes[type] ?? (type == 'sale' ? invoicePrefix : '');
 
@@ -322,6 +332,8 @@ class FirmSettings extends Equatable {
         'ewayEnabled': ewayEnabled,
         'upiId': upiId,
         'upiQrOnInvoice': upiQrOnInvoice,
+        'creditLimitMode': creditLimitMode,
+        'itemImagesOnInvoice': itemImagesOnInvoice,
       };
 
   FirmSettings copyWith({
@@ -376,6 +388,8 @@ class FirmSettings extends Equatable {
     bool? ewayEnabled,
     String? upiId,
     bool? upiQrOnInvoice,
+    String? creditLimitMode,
+    bool? itemImagesOnInvoice,
   }) =>
       FirmSettings(
         gstEnabled: gstEnabled ?? this.gstEnabled,
@@ -429,6 +443,8 @@ class FirmSettings extends Equatable {
         ewayEnabled: ewayEnabled ?? this.ewayEnabled,
         upiId: upiId ?? this.upiId,
         upiQrOnInvoice: upiQrOnInvoice ?? this.upiQrOnInvoice,
+        creditLimitMode: creditLimitMode ?? this.creditLimitMode,
+        itemImagesOnInvoice: itemImagesOnInvoice ?? this.itemImagesOnInvoice,
       );
 
   @override
@@ -436,7 +452,7 @@ class FirmSettings extends Equatable {
         gstEnabled, invoicePrefix, prefixes, defaultRoundOff, defaultCashSale, blockNegativeStock, showInvoicePreview, dueDatesEnabled,
         defaultCreditDays, invoiceTerms, signatureLabel, invoiceTheme, themeColor, thermalWidth, shippingAddressEnabled, partyFields,
         paymentReminderDays, stockMaintenance, itemWiseDiscount, quantityDecimals, defaultUnit, wholesalePriceEnabled, accountingEnabled,
-        serviceRemindersEnabled, salesmanOwnDataOnly, locationTrackingEnabled, godownsEnabled, batchTrackingEnabled, serialTrackingEnabled, mrpEnabled, cessEnabled, billDiscountEnabled, additionalChargesEnabled, tcsEnabled, tdsEnabled, loyaltyEnabled, partyGroupsEnabled, chargeNames, loyaltyEarnPer, loyaltyPointValue, autoBackup, autoBackupKeep, autoSendInvoices, autoSendPayments, invoiceMessage, paymentMessage, reminderMessage, einvoiceEnabled, ewayEnabled, upiId, upiQrOnInvoice,
+        serviceRemindersEnabled, salesmanOwnDataOnly, locationTrackingEnabled, godownsEnabled, batchTrackingEnabled, serialTrackingEnabled, mrpEnabled, cessEnabled, billDiscountEnabled, additionalChargesEnabled, tcsEnabled, tdsEnabled, loyaltyEnabled, partyGroupsEnabled, chargeNames, loyaltyEarnPer, loyaltyPointValue, autoBackup, autoBackupKeep, autoSendInvoices, autoSendPayments, invoiceMessage, paymentMessage, reminderMessage, einvoiceEnabled, ewayEnabled, upiId, upiQrOnInvoice, creditLimitMode, itemImagesOnInvoice,
       ];
 }
 

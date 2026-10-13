@@ -268,6 +268,25 @@ class FakePaymentsRepository extends PaymentsRepository {
 
   @override
   Future<String> nextNumber(String type) async => '2';
+
+  /// What [linkable] returns and what [linkToInvoice] was last asked to save.
+  var linkableJson = <String, dynamic>{
+    'due': 1000,
+    'payments': [
+      {'paymentId': 'p1', 'number': '7', 'date': '2026-10-01', 'amount': 600, 'free': 600, 'linked': 0},
+      {'paymentId': 'p2', 'number': '9', 'date': '2026-10-05', 'amount': 900, 'free': 700, 'linked': 200},
+    ],
+  };
+  Map<String, num>? linked;
+
+  @override
+  Future<LinkablePayments> linkable(String invoiceId) async => LinkablePayments.fromJson(linkableJson);
+
+  @override
+  Future<LinkablePayments> linkToInvoice(String invoiceId, Map<String, num> links) async {
+    linked = links;
+    return LinkablePayments.fromJson(linkableJson);
+  }
 }
 
 class FakeExpensesRepository extends ExpensesRepository {
@@ -628,6 +647,26 @@ class FakeLocationRepository extends LocationRepository {
 
   @override
   Future<void> record(GeoFix fix, {String context = 'ping', String? refId}) async => sent.add((fix, context, refId));
+
+  var zones = <Geofence>[];
+
+  @override
+  Future<List<Geofence>> geofences() async => zones;
+
+  @override
+  Future<void> addGeofence({required String name, required double latitude, required double longitude, required int radiusM}) async =>
+      zones = [...zones, Geofence.fromJson({'id': 'z${zones.length + 1}', 'name': name, 'latitude': latitude, 'longitude': longitude, 'radiusM': radiusM})];
+
+  @override
+  Future<void> removeGeofence(String id) async => zones = [for (final z in zones) if (z.id != id) z];
+
+  @override
+  Future<DaySummary> daySummary(String userId, String date) async => DaySummary.fromJson({
+        'distanceKm': 12.4,
+        'visits': [
+          {'zone': 'Shop', 'from': '2026-10-13T04:00:00.000Z', 'to': '2026-10-13T05:30:00.000Z'},
+        ],
+      });
 
   @override
   Future<List<TeamMemberLocation>> latest() async => members;

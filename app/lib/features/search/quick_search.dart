@@ -60,6 +60,8 @@ class SearchCubit extends Cubit<SearchState> {
 String searchHitPath(SearchHit hit) => switch (hit.kind) {
       'party' => '/parties?open=${hit.id}',
       'item' => '/items?open=${hit.id}&type=${hit.type ?? 'product'}',
+      'payment' => '${hit.type == 'out' ? '/payment-out' : '/payment-in'}/${hit.id}/receipt',
+      'expense' => '/expenses/${hit.id}/edit',
       _ => '${InvoiceKind.of(hit.type ?? 'sale').basePath}/${hit.id}/edit',
     };
 
@@ -72,10 +74,10 @@ Future<void> showQuickSearch(BuildContext context) async {
   );
   if (hit == null) return;
   final path = searchHitPath(hit);
-  hit.kind == 'invoice' ? router?.push(path) : router?.go(path);
+  const {'invoice', 'payment', 'expense'}.contains(hit.kind) ? router?.push(path) : router?.go(path);
 }
 
-const _icons = {'party': Icons.person_outline, 'item': Icons.inventory_2_outlined, 'invoice': Icons.receipt_long_outlined};
+const _icons = {'party': Icons.person_outline, 'item': Icons.inventory_2_outlined, 'invoice': Icons.receipt_long_outlined, 'payment': Icons.payments_outlined, 'expense': Icons.account_balance_wallet_outlined};
 
 class _QuickSearchDialog extends StatelessWidget {
   const _QuickSearchDialog();

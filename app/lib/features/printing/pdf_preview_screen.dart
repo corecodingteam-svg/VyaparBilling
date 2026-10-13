@@ -82,7 +82,7 @@ class PdfPreviewScreen extends StatelessWidget {
   final String? initialLayout;
 
   /// Makes the raw ESC/POS bytes for a receipt printer; offered next to the preview when [directPrintLayout] is shown.
-  final Future<Uint8List> Function(BuildContext context)? directPrint;
+  final Future<Uint8List> Function(BuildContext context, PrinterPrefs prefs)? directPrint;
   final String? directPrintLayout;
 
   /// Like [buildPdf], for documents with [layouts]: renders the chosen layout.
@@ -104,7 +104,7 @@ class PdfPreviewScreen extends StatelessWidget {
             ),
             title: Text(title),
             actions: [
-              if (directPrint != null && state.layout == directPrintLayout) DirectPrintButton(makeBytes: () => directPrint!(context)),
+              if (directPrint != null && state.layout == directPrintLayout) DirectPrintButton(makeBytes: (prefs) => directPrint!(context, prefs)),
               if (layouts.isNotEmpty)
                 DropdownButtonHideUnderline(
                   child: DropdownButton<String>(

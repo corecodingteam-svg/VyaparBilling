@@ -33,6 +33,8 @@ const summary = (e: ExpenseRow) => ({
   /** e.g. "Cash + UPI" when paid in parts. */
   paymentLabel: e.payment_modes ?? e.payment_mode,
   bankAccountId: e.bank_account_id,
+  supplierState: e.supplier_state,
+  supplierGstin: e.supplier_gstin,
 });
 
 @Injectable()
@@ -236,6 +238,8 @@ export class ExpensesService {
       payment_mode: parts[0].mode,
       bank_account_id: parts[0].bankAccountId,
       description: dto.description ?? null,
+      supplier_state: dto.supplierState ?? null,
+      supplier_gstin: dto.supplierGstin?.toUpperCase() ?? null,
     };
   }
 

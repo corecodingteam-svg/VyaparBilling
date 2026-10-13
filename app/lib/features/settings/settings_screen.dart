@@ -493,6 +493,20 @@ class _SettingsView extends StatelessWidget {
                       ),
                       if (s.partyGroupsEnabled) link(Icons.folder_outlined, 'Party groups', 'Add and rename groups.', '/party-groups'),
                     ]),
+                    _Section('Credit limit and item pictures', [
+                      const Text('When a sale would take a customer past their credit limit', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [ButtonSegment(value: 'warn', label: Text('Warn and ask')), ButtonSegment(value: 'block', label: Text('Refuse the sale'))],
+                        selected: {s.creditLimitMode},
+                        onSelectionChanged: (v) => cubit.change((d) => d.copyWith(creditLimitMode: v.first)),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6, bottom: 8),
+                        child: Text('Applies to credit sales, sale orders and delivery challans. A sale paid in full is always allowed.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                      ),
+                      toggle('Item pictures on invoices', 'Print each item\'s picture next to its name.', s.itemImagesOnInvoice, (v) => s.copyWith(itemImagesOnInvoice: v)),
+                    ]),
                     _Section('Messages, e-invoice and online payments', [
                       link(Icons.hub_outlined, 'Integrations', 'Connect WhatsApp, SMS, the e-invoice portal, Razorpay and Google.', '/integrations'),
                       const Text('Send new sale invoices to the customer automatically', style: TextStyle(fontWeight: FontWeight.w600)),

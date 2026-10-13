@@ -285,6 +285,8 @@ export interface ExpensesTable {
   payment_mode: Generated<PaymentMode>;
   description: string | null;
   bank_account_id: string | null;
+  supplier_state: string | null;
+  supplier_gstin: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
   deleted_at: Timestamp | null;
@@ -453,6 +455,16 @@ export interface GodownsTable {
 
 export type Provider = 'whatsapp' | 'sms' | 'einvoice' | 'razorpay' | 'google_profile';
 
+export interface GeofencesTable {
+  id: Generated<string>;
+  firm_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_m: number;
+  created_at: Timestamp;
+}
+
 export interface IntegrationsTable {
   id: Generated<string>;
   firm_id: string;
@@ -616,6 +628,7 @@ export interface Database {
   godowns: GodownsTable;
   backups: BackupsTable;
   integrations: IntegrationsTable;
+  geofences: GeofencesTable;
   message_log: MessageLogTable;
   payment_links: PaymentLinksTable;
   payment_allocations: PaymentAllocationsTable;

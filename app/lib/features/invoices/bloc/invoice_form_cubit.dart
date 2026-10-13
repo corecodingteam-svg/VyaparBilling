@@ -454,11 +454,19 @@ class InvoiceFormState extends Equatable {
   /// Set when this credit sale would take the customer past their credit limit.
   String? get creditLimitWarning {
     final p = party;
-    if (!kind.isSale || isCash || p == null || p.creditLimit == null) return null;
-    final after = _r2(p.balance - originalUnpaid + (total - receivedValue - deductions) * _rate);
+    if (p == null || p.creditLimit == null) return null;
+    // An order or a challan is not owed yet, but delivering it would add its value.
+    final promise = kind.type == 'sale_order' || kind.type == 'delivery_challan';
+    if (!promise && (!kind.isSale || isCash)) return null;
+    final after = promise ? _r2(p.balance + total * _rate) : _r2(p.balance - originalUnpaid + (total - receivedValue - deductions) * _rate);
     if (after <= p.creditLimit!) return null;
-    return '${p.name} will owe ${money(after)}, over the credit limit of ${money(p.creditLimit)}.';
+    return promise
+        ? 'With this ${kind.singular.toLowerCase()} ${p.name} would owe ${money(after)}, over the credit limit of ${money(p.creditLimit)}.'
+        : '${p.name} will owe ${money(after)}, over the credit limit of ${money(p.creditLimit)}.';
   }
+
+  /// The company refuses documents beyond the credit limit instead of asking.
+  bool get creditLimitBlocks => settings.creditLimitMode == 'block';
 
   InvoiceFormState copyWith({
     LoadStatus? loadStatus,
@@ -1133,6 +1141,14 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
     final problem = validate();
     if (problem != null) {
       emit(state.copyWith(submitStatus: SubmitStatus.failure, result: InvoiceFormResult.none, error: problem));
+      return;
+    }
+    if (state.creditLimitWarning != null && state.creditLimitBlocks) {
+      emit(state.copyWith(
+        submitStatus: SubmitStatus.failure,
+        result: InvoiceFormResult.none,
+        error: '${state.creditLimitWarning} Take a payment first or raise the limit.',
+      ));
       return;
     }
     if (state.creditLimitWarning != null && !overLimitConfirmed) {

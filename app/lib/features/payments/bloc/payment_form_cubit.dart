@@ -83,7 +83,7 @@ class PaymentFormState extends Equatable {
   final String? currencyCode;
   final String exchangeRate;
 
-  /// The party's unpaid invoices (sales for Payment-In, purchases for Payment-Out).
+  /// The party's unpaid documents: sales and debit notes for Payment-In, purchases and credit notes for Payment-Out.
   final List<LinkRow> links;
 
   /// Bumped when the link amounts are filled in for the user, so their inputs show the new text.
@@ -249,8 +249,13 @@ class PaymentFormCubit extends Cubit<PaymentFormState> {
     final invoices = _invoices;
     if (invoices == null || partyId == null) return const [];
     // Only documents in the payment's currency can be settled by it.
+    // Money in settles sales and purchase returns (debit notes); money out settles purchases and sale returns (credit notes).
+    final (bills, notes) = await (
+      invoices.unpaid(kind.type == 'in' ? 'sale' : 'purchase', partyId),
+      invoices.unpaid(kind.type == 'in' ? 'debit_note' : 'credit_note', partyId),
+    ).wait;
     final unpaid = [
-      for (final i in await invoices.unpaid(kind.type == 'in' ? 'sale' : 'purchase', partyId))
+      for (final i in [...bills, ...notes])
         if (i.currencyCode == state.currencyCode) i,
     ];
     final own = editing && partyId == payment!.partyId ? (await _payments.get(payment!.id)).allocations : const <PaymentAllocation>[];
@@ -262,7 +267,7 @@ class PaymentFormCubit extends Cubit<PaymentFormState> {
           final mine = own.where((a) => a.invoiceId == i.id).firstOrNull?.amount ?? 0;
           return LinkRow(
             invoiceId: i.id,
-            number: i.number,
+            number: i.type == 'credit_note' || i.type == 'debit_note' ? '${i.number} · ${InvoiceKind.of(i.type).singular}' : i.number,
             date: i.invoiceDate,
             total: i.isForeign ? (i.fxTotal ?? i.total) : i.total,
             due: _r2((i.isForeign ? (i.fxBalance ?? i.balance) : i.balance) + mine),

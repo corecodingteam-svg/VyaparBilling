@@ -5,6 +5,7 @@ import {
   Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested,
 } from 'class-validator';
 import { PAYMENT_MODES } from '../common/party-balance';
+import { GSTIN_PATTERN, STATE_CODES } from '../common/states';
 import { emptyToNull } from '../firm/firm.dto';
 import { PaymentPartDto } from '../invoices/invoice.dto';
 
@@ -76,4 +77,11 @@ export class SaveExpenseDto {
 
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(1000)
   description?: string | null;
+
+  @ApiPropertyOptional({ description: 'State the supplier billed from; when it is not the company’s state the GST is IGST' })
+  @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @IsIn(STATE_CODES)
+  supplierState?: string | null;
+
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(GSTIN_PATTERN, { message: 'GSTIN is not valid' })
+  supplierGstin?: string | null;
 }

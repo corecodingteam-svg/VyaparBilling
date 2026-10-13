@@ -73,4 +73,16 @@ class LocationRepository {
 
   Future<List<TrailPoint>> trail(String userId, String date) async =>
       [for (final j in await _api.get<List<dynamic>>('/locations/trail', query: {'userId': userId, 'date': date})) TrailPoint.fromJson(j as Map<String, dynamic>)];
+
+  Future<DaySummary> daySummary(String userId, String date) async =>
+      DaySummary.fromJson(await _api.get<Map<String, dynamic>>('/locations/summary', query: {'userId': userId, 'date': date}));
+
+  List<Geofence> _zones(dynamic json) => [for (final j in json as List) Geofence.fromJson(j as Map<String, dynamic>)];
+
+  Future<List<Geofence>> geofences() async => _zones(await _api.get<List<dynamic>>('/locations/geofences'));
+
+  Future<void> addGeofence({required String name, required double latitude, required double longitude, required int radiusM}) =>
+      _api.post<dynamic>('/locations/geofences', {'name': name, 'latitude': latitude, 'longitude': longitude, 'radiusM': radiusM});
+
+  Future<void> removeGeofence(String id) => _api.delete('/locations/geofences/$id');
 }

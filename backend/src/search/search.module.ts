@@ -25,11 +25,12 @@ export class SearchController {
   @Get()
   async search(@CurrentUser() u: JwtPayload, @Query('q') q?: string) {
     const text = (q ?? '').trim();
-    if (text.length < 2) return { parties: [], items: [], invoices: [] };
+    if (text.length < 2) return { parties: [], items: [], invoices: [], payments: [], expenses: [] };
     // Escape LIKE wildcards so the text is matched literally.
     const term = `%${text.replace(/[\\%_]/g, '\\$&')}%`;
     const own = (await this.firm.scope(u)).ownerUserId;
-    const [parties, items, invoices] = await Promise.all([
+    const staff = u.role !== 'salesman';
+    const [parties, items, invoices, payments, expenses] = await Promise.all([
       this.db
         .selectFrom('parties')
         .select(['id', 'name', 'phone'])
@@ -64,6 +65,31 @@ export class SearchController {
         .orderBy('invoice_date', 'desc')
         .limit(10)
         .execute(),
+      this.db
+        .selectFrom('payments as p')
+        .innerJoin('parties as pa', 'pa.id', 'p.party_id')
+        .select(['p.id', 'p.type', 'p.number', 'p.payment_date', 'p.amount', 'pa.name'])
+        .where('p.firm_id', '=', u.firmId)
+        .where('p.deleted_at', 'is', null)
+        .$if(!staff, (q) => q.where('p.type', '=', 'in'))
+        .where((eb) => eb.or([eb('p.number', 'ilike', term), eb('pa.name', 'ilike', term), eb('p.description', 'ilike', term)]))
+        .$if(!!own, (q) => q.where((eb) => eb.or([eb('p.created_by', '=', own!), eb('pa.assigned_user_id', '=', own!)])))
+        .orderBy('p.payment_date', 'desc')
+        .limit(8)
+        .execute(),
+      // Expenses are part of the books salesmen do not see.
+      staff
+        ? this.db
+            .selectFrom('expenses as e')
+            .innerJoin('expense_categories as c', 'c.id', 'e.category_id')
+            .select(['e.id', 'e.number', 'e.expense_date', 'e.total', 'e.description', 'c.name'])
+            .where('e.firm_id', '=', u.firmId)
+            .where('e.deleted_at', 'is', null)
+            .where((eb) => eb.or([eb('e.number', 'ilike', term), eb('c.name', 'ilike', term), eb('e.description', 'ilike', term)]))
+            .orderBy('e.expense_date', 'desc')
+            .limit(8)
+            .execute()
+        : Promise.resolve([]),
     ]);
     return {
       parties: parties.map((p) => ({ id: p.id, name: p.name, phone: p.phone })),
@@ -71,6 +97,8 @@ export class SearchController {
       invoices: invoices.map((i) => ({
         id: i.id, type: i.type, typeLabel: INVOICE_TYPES[i.type].label, number: i.number, partyName: i.party_name, date: i.invoice_date, total: num(i.total),
       })),
+      payments: payments.map((p) => ({ id: p.id, type: p.type, number: p.number, partyName: p.name, date: p.payment_date, amount: num(p.amount) })),
+      expenses: expenses.map((e) => ({ id: e.id, number: e.number, category: e.name, date: e.expense_date, total: num(e.total), description: e.description })),
     };
   }
 }

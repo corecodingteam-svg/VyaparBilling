@@ -2,7 +2,7 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './current-user.decorator';
-import { AddMemberDto, ChangePasswordDto, CreateFirmDto, LoginDto, RegisterDto, SwitchFirmDto, UpdateMemberDto } from './dto/auth.dto';
+import { AddMemberDto, ChangePasswordDto, CreateFirmDto, DeleteFirmDto, LoginDto, RegisterDto, SwitchFirmDto, UpdateMemberDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtPayload } from './jwt.strategy';
 import { ADMINS, Roles, STAFF } from './roles';
@@ -59,6 +59,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   createFirm(@CurrentUser() user: JwtPayload, @Body() dto: CreateFirmDto) {
     return this.auth.createFirm(user, dto);
+  }
+
+  @Delete('firms/:id')
+  @HttpCode(204)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  deleteFirm(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string, @Body() dto: DeleteFirmDto) {
+    return this.auth.deleteFirm(user, id, dto.name);
   }
 
   @Get('users')

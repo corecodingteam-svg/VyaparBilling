@@ -81,6 +81,8 @@ class Expense extends ExpenseSummary {
         payments = [for (final p in (j['payments'] as List?) ?? const []) PaymentPart.fromJson(p as Map<String, dynamic>)],
         roundOff = j['roundOff'] as num,
         description = j['description'] as String?,
+        supplierState = j['supplierState'] as String?,
+        supplierGstin = j['supplierGstin'] as String?,
         lines = [for (final l in j['lines'] as List) ExpenseLine.fromJson(l as Map<String, dynamic>)],
         super.fromJson();
 
@@ -92,6 +94,8 @@ class Expense extends ExpenseSummary {
   final List<PaymentPart> payments;
   final num roundOff;
   final String? description;
+  final String? supplierState;
+  final String? supplierGstin;
   final List<ExpenseLine> lines;
 
   @override

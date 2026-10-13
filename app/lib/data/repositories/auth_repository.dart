@@ -68,4 +68,7 @@ class AuthRepository {
       Member.fromJson(await _api.patch<Map<String, dynamic>>('/users/$userId', {'role': role}));
 
   Future<void> removeMember(String userId) => _api.delete('/users/$userId');
+
+  /// Deletes a company for good; [name] is its name, typed to confirm.
+  Future<void> deleteFirm(String id, String name) => _api.deleteWithBody('/firms/$id', {'name': name});
 }
