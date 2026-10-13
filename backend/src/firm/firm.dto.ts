@@ -44,6 +44,12 @@ export class UpdateFirmDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(100)
   city?: string | null;
 
+  @ApiPropertyOptional({ description: 'Tax deduction account number' }) @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() || null : value)) @ValidateIf((_, v) => v !== null) @Matches(/^[A-Z]{4}[0-9]{5}[A-Z]$/, { message: 'TAN looks like PNEA12345B' })
+  tan?: string | null;
+
+  @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() || null : value)) @ValidateIf((_, v) => v !== null) @Matches(/^[A-Z]{5}[0-9]{4}[A-Z]$/, { message: 'PAN looks like ABCDE1234F' })
+  pan?: string | null;
+
   @ApiPropertyOptional({ description: 'Uploaded logo (see POST /files); null removes it' }) @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID()
   logoFileId?: string | null;
 

@@ -39,6 +39,8 @@ export interface FirmsTable {
   drive_refresh_token: string | null;
   drive_email: string | null;
   city: string | null;
+  tan: string | null;
+  pan: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }
@@ -73,6 +75,10 @@ export interface PartiesTable {
   loyalty_opening: Generated<number>;
   city: string | null;
   pincode: string | null;
+  pan: string | null;
+  tds_section: string | null;
+  tcs_code: string | null;
+  collectee_code: number | null;
   additional_fields: Json<AdditionalField[]>;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -455,6 +461,24 @@ export interface GodownsTable {
 
 export type Provider = 'whatsapp' | 'sms' | 'einvoice' | 'razorpay' | 'google_profile';
 
+export interface TaxChallansTable {
+  id: Generated<string>;
+  firm_id: string;
+  kind: 'tds' | 'tcs';
+  tax_year: string;
+  quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  bsr_code: string;
+  challan_no: string;
+  deposit_date: DateCol;
+  tax: Numeric;
+  interest: Numeric;
+  fee: Numeric;
+  other: Numeric;
+  minor_head: Generated<string>;
+  created_at: Timestamp;
+  deleted_at: Timestamp | null;
+}
+
 export interface GeofencesTable {
   id: Generated<string>;
   firm_id: string;
@@ -629,6 +653,7 @@ export interface Database {
   backups: BackupsTable;
   integrations: IntegrationsTable;
   geofences: GeofencesTable;
+  tax_challans: TaxChallansTable;
   message_log: MessageLogTable;
   payment_links: PaymentLinksTable;
   payment_allocations: PaymentAllocationsTable;

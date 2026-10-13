@@ -22,6 +22,10 @@ class Party extends Equatable {
         shippingAddress = j['shippingAddress'] as String?,
         city = j['city'] as String?,
         pincode = j['pincode'] as String?,
+        pan = j['pan'] as String?,
+        tdsSection = j['tdsSection'] as String?,
+        tcsCode = j['tcsCode'] as String?,
+        collecteeCode = (j['collecteeCode'] as num?)?.toInt(),
         openingBalance = j['openingBalance'] as num,
         openingBalanceDate = j['openingBalanceDate'] as String,
         creditLimit = j['creditLimit'] as num?,
@@ -49,6 +53,12 @@ class Party extends Equatable {
   final String? shippingAddress;
   final String? city;
   final String? pincode;
+
+  /// For TDS / TCS statements: the party's PAN, the section TDS is deducted under, the TCS collection code and collectee type.
+  final String? pan;
+  final String? tdsSection;
+  final String? tcsCode;
+  final int? collecteeCode;
   final num openingBalance;
   final String openingBalanceDate;
   final num? creditLimit;
@@ -73,7 +83,7 @@ class Party extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, name, phone, gstin, gstType, stateCode, email, billingAddress, shippingAddress, city, pincode,
+        id, name, phone, gstin, gstType, stateCode, email, billingAddress, shippingAddress, city, pincode, pan, tdsSection, tcsCode, collecteeCode,
         openingBalance, openingBalanceDate, creditLimit, additionalFields, balance, groupId, groupName, assignedUserId, assignedUserName,
         currencyCode, loyaltyOpening, loyaltyPoints, fxBalance,
       ];

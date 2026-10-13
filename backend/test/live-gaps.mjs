@@ -93,7 +93,7 @@ ok(row('5D–5F').taxable === 100, 'GSTR-9 exempt / nil-rated supplies ' + row('
 ok(row('6B', 'purchases').igst === 216 && row('6B', 'expenses').igst === 180, 'GSTR-9 input tax credit from purchases and expenses');
 ok(row('9').total === Math.round((5600 - 100) * 0.18 * 100) / 100, 'GSTR-9 tax payable ' + row('9').total);
 const tds = await report('tds-return');
-ok(tds.rows.length === 1 && tds.rows[0].pan === 'AAAAA1111A' && tds.rows[0].section === '194Q' && tds.rows[0].amount === 1200 && tds.rows[0].tax === 12, 'TDS return row: PAN from GSTIN, 1% of 1200');
+ok(tds.rows.length === 1 && tds.rows[0].pan === 'AAAAA1111A' && tds.rows[0].section === '1031' && tds.rows[0].amount === 1200 && tds.rows[0].tax === 12, 'TDS return row: PAN from GSTIN, 1% of 1200');
 await call('PATCH', '/firm', { settings: { tcsEnabled: true } });
 const tcsSale = await doc('sale', 'S-6', cust, [L(item, 1)], { tcsRate: 1 });
 const tcs = await report('tcs-return');

@@ -1,3 +1,4 @@
+import { FirmService } from '../firm/firm.service';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { sql } from 'kysely';
 import { INVOICE_TYPES, InvoiceType, POSTING_TYPES } from '../common/invoice-types';
@@ -68,8 +69,8 @@ export const REPORT_CATALOG: Array<{ id: string; title: string; group: string; p
   { id: 'gst-by-party', title: 'GST Report by Party', group: 'GST', params: ['period'] },
   { id: 'tcs', title: 'TCS Report', group: 'GST', params: ['period'] },
   { id: 'tds', title: 'TDS Report', group: 'GST', params: ['period'] },
-  { id: 'tcs-return', title: 'TCS Return (Form 27EQ details)', group: 'GST', params: ['period'] },
-  { id: 'tds-return', title: 'TDS Return (Form 26Q details)', group: 'GST', params: ['period'] },
+  { id: 'tcs-return', title: 'TCS Return (Form 143 / 27EQ details)', group: 'GST', params: ['period'] },
+  { id: 'tds-return', title: 'TDS Return (Form 140 / 26Q details)', group: 'GST', params: ['period'] },
   { id: 'stock-summary', title: 'Stock Summary', group: 'Item / Stock', params: [] },
   { id: 'low-stock', title: 'Low Stock Summary', group: 'Item / Stock', params: [] },
   { id: 'stock-detail', title: 'Stock Detail', group: 'Item / Stock', params: ['period'] },
@@ -102,6 +103,7 @@ export class ReportsService {
   constructor(
     @Inject(KYSELY) private readonly db: Db,
     private readonly parties: PartiesService,
+    private readonly firms: FirmService,
   ) {}
 
   async run(firmId: string, id: string, params: ReportParams): Promise<Report> {
@@ -1669,11 +1671,16 @@ export class ReportsService {
     const rows = (await this.invoices(firmId, [type], from, to).orderBy('invoice_date').orderBy('created_at').execute()).filter(
       (r) => n(kind === 'tcs' ? r.tcs_amount : r.tds_amount) > 0,
     );
+    const settings = await this.firms.settings(firmId);
+    const partyIds = [...new Set(rows.map((r) => r.party_id).filter((x): x is string => !!x))];
+    const parties = new Map(
+      partyIds.length ? (await this.db.selectFrom('parties').select(['id', 'pan', 'tds_section', 'tcs_code']).where('id', 'in', partyIds).execute()).map((p) => [p.id, p] as const) : [],
+    );
     const data = rows.map((r, i) => ({
       sr: i + 1,
-      pan: r.party_gstin ? r.party_gstin.slice(2, 12) : 'PANNOTAVBL',
+      pan: parties.get(r.party_id ?? '')?.pan ?? (r.party_gstin ? r.party_gstin.slice(2, 12) : 'PANNOTAVBL'),
       party: r.party_name,
-      section: kind === 'tcs' ? '206C' : '194Q',
+      section: kind === 'tcs' ? (parties.get(r.party_id ?? '')?.tcs_code ?? (settings.tcsDefaultCode || '—')) : (parties.get(r.party_id ?? '')?.tds_section ?? settings.tdsDefaultSection),
       date: r.invoice_date,
       number: r.number,
       // 27EQ asks for the amount received or debited; 26Q for the amount paid or credited, before GST.
@@ -1685,7 +1692,7 @@ export class ReportsService {
     return {
       subtitle: `${fmt(from)} to ${fmt(to)}${missing ? ` · ${missing} without a PAN (no GSTIN on the party)` : ''}`,
       columns: [
-        col('sr', 'Sr', 'number'), col('pan', kind === 'tcs' ? 'PAN of Collectee' : 'PAN of Deductee'), col('party', 'Name'), col('section', kind === 'tcs' ? 'Collection Code' : 'Section'),
+        col('sr', 'Sr', 'number'), col('pan', kind === 'tcs' ? 'PAN of Collectee' : 'PAN of Deductee'), col('party', 'Name'), col('section', kind === 'tcs' ? 'Collection Code' : 'Section Code'),
         col('date', kind === 'tcs' ? 'Date Received / Debited' : 'Date Paid / Credited', 'date'), col('number', 'Bill No.'),
         col('amount', kind === 'tcs' ? 'Amount Received / Debited' : 'Amount Paid / Credited', 'money'), col('rate', 'Rate %', 'number'),
         col('tax', kind === 'tcs' ? 'Tax Collected' : 'Tax Deducted', 'money'),

@@ -23,6 +23,8 @@ import 'data/repositories/location_repository.dart';
 import 'data/repositories/parties_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/reports_repository.dart';
+import 'data/repositories/tax_statements_repository.dart';
+import 'features/tax/tax_statements_screen.dart';
 import 'data/repositories/integrations_repository.dart';
 import 'data/repositories/utilities_repository.dart';
 import 'features/auth/bloc/auth_bloc.dart';
@@ -91,6 +93,7 @@ void main() {
         RepositoryProvider(create: (_) => AccountingRepository(api, bus)),
         RepositoryProvider(create: (_) => UtilitiesRepository(api, bus)),
         RepositoryProvider(create: (_) => IntegrationsRepository(api, bus)),
+        RepositoryProvider(create: (_) => TaxStatementsRepository(api, bus)),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -268,6 +271,7 @@ GoRouter buildRouter(AuthBloc auth) {
             builder: (_, state) =>
                 BackupScreen(key: ValueKey('backup-${state.uri.queryParameters['drive']}'), driveResult: state.uri.queryParameters['drive']),
           ),
+          GoRoute(path: '/tax-statements', builder: (_, _) => const TaxStatementsScreen()),
           GoRoute(path: '/integrations', builder: (_, _) => const IntegrationsScreen()),
           GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
           GoRoute(

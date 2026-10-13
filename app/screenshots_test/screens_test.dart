@@ -32,6 +32,8 @@ import 'package:billing_app/features/printing/thermal/escpos.dart';
 import 'package:billing_app/data/repositories/firm_repository.dart';
 import 'package:billing_app/data/repositories/loans_repository.dart';
 import 'package:billing_app/data/repositories/integrations_repository.dart';
+import 'package:billing_app/data/repositories/tax_statements_repository.dart';
+import 'package:billing_app/features/tax/tax_statements_screen.dart';
 import 'package:billing_app/features/integrations/integrations_screens.dart';
 import 'package:billing_app/data/repositories/reports_repository.dart';
 import 'package:billing_app/data/repositories/invoices_repository.dart';
@@ -146,6 +148,7 @@ Widget _app(String location, Widget child, {bool shell = true, Map<String, dynam
       ),
       RepositoryProvider<LoansRepository>.value(value: FakeLoansRepository()),
       RepositoryProvider<IntegrationsRepository>.value(value: integrations),
+      RepositoryProvider<TaxStatementsRepository>.value(value: FakeTaxStatementsRepository()),
       RepositoryProvider<ReportsRepository>.value(value: FakeReportsRepository()),
       RepositoryProvider<PartiesRepository>.value(value: parties),
       RepositoryProvider<ItemsRepository>.value(value: items),
@@ -378,6 +381,7 @@ void main() {
         await t.pumpAndSettle();
         await t.tap(find.text('Link payments'));
       }));
+  testWidgets('tax statements', (t) => _shot(t, const Size(1440, 1300), _app('/tax-statements', const TaxStatementsScreen(), settings: everything), 'tax_statements'));
   testWidgets('backups', (t) => _shot(t, const Size(1440, 1100), _app('/backup', const BackupScreen(), settings: everything), 'backups'));
   testWidgets('item detail with stores', (t) => _shot(t, desktop, _app('/items', const ItemsScreen(), settings: everything), 'item_detail_stores'));
   testWidgets('party form more', (t) => _shot(t, desktop, _app('/parties', const PartiesScreen(), settings: everything), 'party_form_more', then: () async {

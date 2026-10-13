@@ -470,6 +470,8 @@ class Firm extends Equatable {
         pincode = j['pincode'] as String?,
         address = j['address'] as String?,
         city = j['city'] as String?,
+        tan = j['tan'] as String?,
+        pan = j['pan'] as String?,
         logoFileId = j['logoFileId'] as String?,
         signatureFileId = j['signatureFileId'] as String?,
         booksLockDate = j['booksLockDate'] as String?,
@@ -488,6 +490,10 @@ class Firm extends Equatable {
   final String? address;
   final String? city;
 
+  /// Tax deduction account number and the company's PAN, for TDS / TCS statements.
+  final String? tan;
+  final String? pan;
+
   /// Uploaded images printed on documents.
   final String? logoFileId;
   final String? signatureFileId;
@@ -498,7 +504,7 @@ class Firm extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, name, phone, gstin, email, booksStartDate, businessType, businessCategory, stateCode, pincode, address, city, logoFileId, signatureFileId,
+        id, name, phone, gstin, email, booksStartDate, businessType, businessCategory, stateCode, pincode, address, city, tan, pan, logoFileId, signatureFileId,
         booksLockDate, settings,
       ];
 }

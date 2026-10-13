@@ -73,11 +73,25 @@ Limits, stated plainly:
 - Profit reports cost goods at the item's current purchase price, not FIFO/average cost.
 - GSTR reports are for reading and export (CSV/PDF); there is no JSON for the GST portal.
 
-Also built: receivables and payables ageing (not due, 1–30, 31–60, 61–90, over 90 days), a loan statement, a GSTR-9
-working paper (tables 4, 5, 6 and 9 from the books), and party-wise TCS (Form 27EQ) and TDS (Form 26Q) details with PAN taken
-from the GSTIN. **These are figures to key into the portals, not files the portals accept**: GSTR-9 is filled online and
-26Q/27EQ are filed through the tax department's own utility. The section shown (194Q / 206C) is the usual one for goods and
-must be checked for the period. They have not been reviewed by an accountant.
+Also built: receivables and payables ageing (not due, 1–30, 31–60, 61–90, over 90 days) and a loan statement.
+
+**Filing files (Utilities → TDS / TCS Statements):**
+- **Form 140 (TDS, was 26Q) and Form 143 (TCS, was 27EQ)** for tax year 2026-27 onwards: the "^"-delimited text file
+  the department's File Validation Utility (FVU 1.2) reads, built from Protean's published formats (version 1.1, dated
+  22-07-2026). The screen lists what is missing (TAN, PAN, responsible person, challans, section codes) and only offers the
+  file when nothing is. You record each challan (BSR code, serial number, date, amounts); bills are placed under challans
+  automatically. Section codes follow the Income-tax Act 2025: purchase of goods is **1031** (the old 194Q); each party can
+  have its own TDS section and TCS collection code, and PAN (taken from the GSTIN when not entered).
+- **TCS from tax year 2026-27 applies only to the listed goods** (scrap, minerals, motor vehicles and luxury items, liquor,
+  forest produce…); there is no general "sale of goods" code any more, so the default TCS code is "none".
+- **GSTR-9**: a JSON file in the GST portal's GSTR-9 layout with tables 4, 5, 6, 9, 17 and 18 from the books, to open in the
+  GSTR-9 offline tool. Exempt and nil-rated sales are both reported as nil-rated; tables 7, 8 and 10–16 are left to you.
+
+**Not checked:** I could not run the FVU here — it only works through its own window and needs your challan file (.csi)
+from the TIN site — so the first statement must be put through the FVU on your computer, and any error it reports fixed.
+The GSTR-9 key names come from GST Suvidha Providers' published copy of the GSTN schema, not GSTN itself, and the file has not
+been imported into the offline tool. Statements for years before 2026-27 (old 26Q/27EQ) are not produced. **No accountant
+has reviewed any of these figures.**
 
 ## 7. Remaining settings — built
 
@@ -214,14 +228,14 @@ Each service is connected by an admin entering the provider's details in the app
 
 ## How this was checked
 
-- `backend`: 37 unit tests, plus `backend/test/live-gaps.mjs` (45 checks of the last batch against the running server). They cover (invoice and document maths, Google Drive backup against a simulated Google, WhatsApp/SMS request
+- `backend`: 46 unit tests, plus `backend/test/live-tax.mjs` (17 checks of the statement files and GSTR-9) and `backend/test/live-gaps.mjs` (45 checks of the last batch against the running server). They cover (invoice and document maths, Google Drive backup against a simulated Google, WhatsApp/SMS request
   shapes, e-invoice and e-way JSON, the NIC client against a simulated NIC, webhook signatures, secret encryption), plus
   `backend/test/live-integrations.mjs` — 45 checks against the running server and fake WhatsApp/Twilio/NIC/Razorpay servers.
-- `app`: 144 unit tests (the last batch is in `test/gaps_test.dart`), including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
+- `app`: 149 unit tests (the last batches are in `test/gaps_test.dart` and `test/tax_statements_test.dart`), including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
 - `app/web_printer_test`: the browser printer code under Node against fake WebUSB / Web Serial (run separately).
 - `app/live_api_test`: three end-to-end runs of the app's own repositories and form logic against the running backend,
   covering every item above, including restore and a new year with stores, batches and loyalty points carried over.
-- `app/screenshots_test`: 87 screen renders, checked by eye for the new screens.
+- `app/screenshots_test`: 88 screen renders, checked by eye for the new screens.
 
 Not checked by any of these: the browser's file chooser (uploads and restore start from it), real browsers' location and
 USB/serial permission prompts, the WhatsApp link, real receipt printers, Bluetooth, background location on a phone, and every real outside provider.

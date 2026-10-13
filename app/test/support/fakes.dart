@@ -16,6 +16,8 @@ import 'package:billing_app/data/repositories/location_repository.dart';
 import 'package:billing_app/data/repositories/utilities_repository.dart';
 import 'package:billing_app/data/models/integrations.dart';
 import 'package:billing_app/data/repositories/integrations_repository.dart';
+import 'package:billing_app/data/models/tax_statement.dart';
+import 'package:billing_app/data/repositories/tax_statements_repository.dart';
 import 'package:billing_app/data/models/expense.dart';
 import 'package:billing_app/data/models/firm.dart';
 import 'package:billing_app/data/models/loan.dart';
@@ -847,4 +849,52 @@ class FakeIntegrationsRepository extends IntegrationsRepository {
 
   @override
   Future<void> replyToReview(String reviewId, String comment) => _do('reply $reviewId $comment', () {});
+}
+
+
+/// Tax statements answered from memory: a statement is ready once a challan covers the tax.
+class FakeTaxStatementsRepository extends TaxStatementsRepository {
+  FakeTaxStatementsRepository() : super(_api, ChangeBus());
+  final calls = <String>[];
+  var challanList = <TaxChallan>[];
+  var saved = const Deductor();
+
+  @override
+  Future<(Map<String, String>, Map<String, String>)> codes() async =>
+      (const {'1031': 'Purchase of goods', '1027': 'Professional fees'}, const {'1073': 'Sale of scrap'});
+
+  @override
+  Future<List<TaxChallan>> challans(String kind, String taxYear, String quarter) async {
+    calls.add('challans $kind $taxYear $quarter');
+    return challanList;
+  }
+
+  @override
+  Future<void> addChallan({
+    required String kind, required String taxYear, required String quarter, required String bsrCode, required String challanNo,
+    required String depositDate, required num tax, num interest = 0, num fee = 0, num other = 0,
+  }) async {
+    calls.add('add $kind $taxYear $quarter $bsrCode $tax');
+    challanList = [...challanList, TaxChallan.fromJson({'id': 'c${challanList.length + 1}', 'kind': kind, 'taxYear': taxYear, 'quarter': quarter, 'bsrCode': bsrCode,
+      'challanNo': challanNo, 'depositDate': depositDate, 'tax': tax, 'interest': interest, 'fee': fee, 'other': other})];
+  }
+
+  @override
+  Future<void> removeChallan(String id) async => challanList = [for (final c in challanList) if (c.id != id) c];
+
+  @override
+  Future<TaxStatement> statement(String form, String taxYear, String quarter) async {
+    final ready = challanList.fold<num>(0, (t, c) => t + c.tax) >= 80;
+    return TaxStatement.fromJson({
+      'form': form, 'deductees': 1, 'tax': 80, 'deposited': challanList.fold<num>(0, (t, c) => t + c.tax),
+      'problems': ready ? <String>[] : ['Bill B1 (Mega Supplier): 80.00 of tax does not fit in any challan of this quarter.'],
+      'warnings': <String>[], 'fileName': 'PNEA12345B_${form}_${quarter}_$taxYear.txt', 'file': ready ? '1^FH^NS1\r\n' : null,
+    });
+  }
+
+  @override
+  Future<Deductor> deductor() async => saved;
+
+  @override
+  Future<void> saveDeductor(Deductor d) async => saved = d;
 }

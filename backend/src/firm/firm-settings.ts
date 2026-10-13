@@ -135,6 +135,22 @@ export const DEFAULT_SETTINGS = {
   /** Only sale invoices of at least this amount are offered for e-invoicing. */
   einvoiceMinAmount: 0,
 
+  // ---- TDS / TCS statements (Forms 140 and 143)
+  /** Section code used for TDS deducted from suppliers unless a party has its own; 1031 = purchase of goods. */
+  tdsDefaultSection: '1031',
+  /** Collection code for TCS unless a party has its own; empty = none (there is no general "sale of goods" code from tax year 2026-27). */
+  tcsDefaultCode: '',
+  /** Deductor / collector category (Annexure 4): K company, F firm, Q individual/HUF, … */
+  deductorType: 'K',
+  responsibleName: '',
+  responsibleDesignation: '',
+  responsiblePan: '',
+  responsibleMobile: '',
+  responsibleEmail: '',
+  /** 15-digit token of the previous regular statement, when one was filed (needed by Forms 140 and 143). */
+  tdsPreviousToken: '',
+  tcsPreviousToken: '',
+
   // ---- online payments
   /** Your UPI ID; shown as a scannable QR on printed invoices. */
   upiId: '',
@@ -243,4 +259,14 @@ export class FirmSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() upiQrOnInvoice?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsIn(['warn', 'block']) creditLimitMode?: 'warn' | 'block';
   @ApiPropertyOptional() @IsOptional() @IsBoolean() itemImagesOnInvoice?: boolean;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^1\d{3}$/) tdsDefaultSection?: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^(1\d{3})?$/) tcsDefaultCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['A', 'S', 'D', 'E', 'G', 'H', 'L', 'N', 'K', 'M', 'P', 'T', 'J', 'B', 'Q', 'F']) deductorType?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(75) responsibleName?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(20) responsibleDesignation?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @Matches(/^([A-Za-z]{5}[0-9]{4}[A-Za-z])?$/, { message: 'PAN looks like ABCDE1234F' }) responsiblePan?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @Matches(/^([0-9]{10})?$/, { message: 'Mobile number has 10 digits' }) responsibleMobile?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(75) responsibleEmail?: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^([0-9]{15})?$/, { message: 'Token number has 15 digits' }) tdsPreviousToken?: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^([0-9]{15})?$/, { message: 'Token number has 15 digits' }) tcsPreviousToken?: string;
 }

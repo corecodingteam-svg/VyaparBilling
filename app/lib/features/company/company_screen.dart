@@ -38,11 +38,13 @@ class _CompanyFormState extends State<_CompanyForm> {
   final _email = TextEditingController();
   final _pincode = TextEditingController();
   final _city = TextEditingController();
+  final _tan = TextEditingController();
+  final _pan = TextEditingController();
   final _address = TextEditingController();
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _gstin, _email, _pincode, _city, _address]) {
+    for (final c in [_name, _phone, _gstin, _email, _pincode, _city, _tan, _pan, _address]) {
       c.dispose();
     }
     super.dispose();
@@ -55,6 +57,8 @@ class _CompanyFormState extends State<_CompanyForm> {
     _email.text = f.email ?? '';
     _pincode.text = f.pincode ?? '';
     _city.text = f.city ?? '';
+    _tan.text = f.tan ?? '';
+    _pan.text = f.pan ?? '';
     _address.text = f.address ?? '';
   }
 
@@ -67,6 +71,8 @@ class _CompanyFormState extends State<_CompanyForm> {
       'email': _email.text.trim(),
       'pincode': _pincode.text.trim(),
       'city': _city.text.trim(),
+      'tan': _tan.text.trim().toUpperCase(),
+      'pan': _pan.text.trim().toUpperCase(),
       'address': _address.text.trim(),
     });
   }
@@ -151,6 +157,18 @@ class _CompanyFormState extends State<_CompanyForm> {
                             onChanged: cubit.stateChanged,
                           )),
                           box(TextFormField(controller: _city, decoration: const InputDecoration(labelText: 'City'))),
+                          box(TextFormField(
+                            controller: _pan,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(labelText: 'PAN', helperText: 'For TDS / TCS statements'),
+                            validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'PAN looks like ABCDE1234F',
+                          )),
+                          box(TextFormField(
+                            controller: _tan,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: const InputDecoration(labelText: 'TAN', helperText: 'Needed only if you deduct or collect tax'),
+                            validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{4}[0-9]{5}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'TAN looks like PNEA12345B',
+                          )),
                           box(TextFormField(
                             controller: _pincode,
                             keyboardType: TextInputType.number,

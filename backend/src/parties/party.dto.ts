@@ -46,6 +46,18 @@ export class CreatePartyDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(/^[1-9][0-9]{5}$/, { message: 'Pincode must be 6 digits' })
   pincode?: string | null;
 
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/, { message: 'PAN looks like ABCDE1234F' })
+  pan?: string | null;
+
+  @ApiPropertyOptional({ description: 'TDS section code (Form 140), overriding the company default' }) @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(/^1\d{3}$/)
+  tdsSection?: string | null;
+
+  @ApiPropertyOptional({ description: 'TCS collection code (Form 143), overriding the company default' }) @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(/^1\d{3}$/)
+  tcsCode?: string | null;
+
+  @ApiPropertyOptional({ description: 'Form 143 collectee type, 1–10' }) @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(10)
+  collecteeCode?: number | null;
+
   @ApiPropertyOptional({ description: 'Positive = to receive, negative = to pay' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 })
   openingBalance?: number;
 

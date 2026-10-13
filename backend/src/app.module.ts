@@ -17,6 +17,7 @@ import { MessagingModule } from './messaging/messaging.module';
 import { EinvoiceModule } from './einvoice/einvoice.module';
 import { OnlinePaymentsModule } from './payments-online/payments-online.module';
 import { GoogleProfileModule } from './google-profile/google-profile.module';
+import { TaxStatementsModule } from './tax-statements/tax-statements.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ItemsModule } from './items/items.module';
 import { LoansModule } from './loans/loans.module';
@@ -57,6 +58,7 @@ import { UtilitiesModule } from './utilities/utilities.module';
     EinvoiceModule,
     OnlinePaymentsModule,
     GoogleProfileModule,
+    TaxStatementsModule,
   ],
   controllers: [HealthController],
 })

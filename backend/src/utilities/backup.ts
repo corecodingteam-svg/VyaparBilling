@@ -35,6 +35,7 @@ const TABLES: Array<{ name: string; via?: { column: string; parent: string } }> 
   { name: 'fund_adjustments' },
   { name: 'loan_accounts' },
   { name: 'loan_transactions' },
+  { name: 'tax_challans' },
   { name: 'ledger_accounts' },
   { name: 'journal_entries' },
   { name: 'journal_lines' },
@@ -44,7 +45,7 @@ const TABLES: Array<{ name: string; via?: { column: string; parent: string } }> 
 ];
 
 const FIRM_COLUMNS = [
-  'name', 'phone', 'gstin', 'email', 'books_start_date', 'business_type', 'business_category', 'state_code', 'pincode', 'address', 'city', 'settings',
+  'name', 'phone', 'gstin', 'email', 'books_start_date', 'business_type', 'business_category', 'state_code', 'pincode', 'address', 'city', 'tan', 'pan', 'settings',
   'logo_file_id', 'signature_file_id', 'books_lock_date',
 ] as const;
 

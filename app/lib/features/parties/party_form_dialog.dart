@@ -47,6 +47,9 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   final _billing = TextEditingController();
   final _city = TextEditingController();
   final _pincode = TextEditingController();
+  final _pan = TextEditingController();
+  final _tdsSection = TextEditingController();
+  final _tcsCode = TextEditingController();
   final _shipping = TextEditingController();
   final _opening = TextEditingController();
   final _creditLimit = TextEditingController();
@@ -70,6 +73,9 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
     _billing.text = p?.billingAddress ?? '';
     _city.text = p?.city ?? '';
     _pincode.text = p?.pincode ?? '';
+    _pan.text = p?.pan ?? '';
+    _tdsSection.text = p?.tdsSection ?? '';
+    _tcsCode.text = p?.tcsCode ?? '';
     _shipping.text = p?.shippingAddress ?? '';
     final ob = p?.openingBalance ?? 0;
     _opening.text = ob == 0 ? '' : numText(ob.abs());
@@ -92,7 +98,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   @override
   void dispose() {
     _tabs.dispose();
-    for (final c in [_name, _gstin, _phone, _email, _billing, _city, _pincode, _shipping, _opening, _creditLimit, _loyalty, ..._fieldNames, ..._fieldValues]) {
+    for (final c in [_name, _gstin, _phone, _email, _billing, _city, _pincode, _pan, _tdsSection, _tcsCode, _shipping, _opening, _creditLimit, _loyalty, ..._fieldNames, ..._fieldValues]) {
       c.dispose();
     }
     super.dispose();
@@ -116,6 +122,9 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
       'billingAddress': _billing.text.trim(),
       'city': _city.text.trim(),
       'pincode': _pincode.text.trim(),
+      'pan': _pan.text.trim().toUpperCase(),
+      'tdsSection': _tdsSection.text.trim(),
+      'tcsCode': _tcsCode.text.trim(),
       'shippingAddress': _shipping.text.trim(),
       'openingAmount': parseNum(_opening.text),
       'creditLimitAmount': parseNum(_creditLimit.text),
@@ -355,9 +364,39 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   }
 
   Widget _creditTab(PartyFormState state, bool narrow) {
+    final taxFields = widget.settings.tdsEnabled || widget.settings.tcsEnabled;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (taxFields) ...[
+          _row(narrow, [
+            TextFormField(
+              controller: _pan,
+              textCapitalization: TextCapitalization.characters,
+              decoration: const InputDecoration(labelText: 'PAN', helperText: 'Taken from the GSTIN when empty'),
+              validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[A-Za-z]{5}[0-9]{4}[A-Za-z]$').hasMatch(v!.trim()) ? null : 'PAN looks like ABCDE1234F',
+            ),
+            if (widget.settings.tdsEnabled)
+              TextFormField(
+                controller: _tdsSection,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'TDS section code', helperText: 'Empty = company default (1031 goods)'),
+                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^1\d{3}$').hasMatch(v!.trim()) ? null : '4-digit code, e.g. 1031',
+              )
+            else
+              const SizedBox.shrink(),
+            if (widget.settings.tcsEnabled)
+              TextFormField(
+                controller: _tcsCode,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'TCS collection code', helperText: 'e.g. 1073 scrap'),
+                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^1\d{3}$').hasMatch(v!.trim()) ? null : '4-digit code, e.g. 1073',
+              )
+            else
+              const SizedBox.shrink(),
+          ]),
+          const SizedBox(height: 12),
+        ],
         _row(narrow, [
           TextFormField(
             controller: _opening,
