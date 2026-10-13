@@ -37,6 +37,8 @@ services:
       JWT_SECRET: ${BILLING_JWT_SECRET}
       # Optional: a separate key for the encrypted integration credentials (defaults to JWT_SECRET).
       SECRETS_KEY: ${BILLING_SECRETS_KEY:-}
+      # "false" closes public sign-up once the first account exists (set BILLING_ALLOW_SIGNUP=false in .env).
+      ALLOW_SIGNUP: ${BILLING_ALLOW_SIGNUP:-true}
       BACKUP_DIR: /var/lib/billing/backups
       APP_URL: https://${BILLING_DOMAIN}
       PUBLIC_API_URL: https://${BILLING_DOMAIN}

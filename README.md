@@ -177,6 +177,9 @@ Anything entered after that dump is lost, so roll back only when the new version
 
 ### More settings
 
+`BILLING_ALLOW_SIGNUP=false` closes public sign-up once the first account exists, so strangers cannot create companies on
+your server; people are then added by the owner under Users. (It is open by default.)
+
 `BILLING_SECRETS_KEY` (optional) is a separate key for the encrypted integration credentials; without it
 `BILLING_JWT_SECRET` is used. Changing either later makes the saved WhatsApp, SMS, Razorpay, e-invoice and Google
 keys unreadable, and they would have to be entered again. The public online shop of a company is at

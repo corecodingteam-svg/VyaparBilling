@@ -31,6 +31,11 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    // Once the owner has an account, a public server can close sign-up (ALLOW_SIGNUP=false). The first account is always allowed.
+    if (process.env.ALLOW_SIGNUP === 'false') {
+      const any = await this.db.selectFrom('users').select('id').limit(1).executeTakeFirst();
+      if (any) throw new ForbiddenException({ code: 'SIGNUP_CLOSED', message: 'Sign-up is closed on this server. Ask the owner to add you as a user.' });
+    }
     const existing = await this.db.selectFrom('users').select('id').where('email', '=', dto.email).executeTakeFirst();
     if (existing) throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' });
 
