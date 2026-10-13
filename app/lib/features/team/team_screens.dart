@@ -82,49 +82,51 @@ class CompaniesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => ListCubit<Company>(ctx.read<AuthRepository>().companies)..load(),
-        child: ListCubitView<Company>(builder: (context, state) {
-          final cubit = context.read<ListCubit<Company>>();
-          return TitledPage(
-            title: 'Companies',
-            subtitle: 'Each company has its own parties, items, transactions and settings.',
-            actions: [
-              OutlinedButton.icon(
-                onPressed: state.busy ? null : () => _restore(context),
-                icon: const Icon(Icons.restore, size: 18),
-                label: Text(state.busy ? 'Restoring…' : 'Restore Backup'),
-              ),
-              FilledButton.icon(
-                onPressed: () async {
-                  final created = await _showAddCompanyDialog(context);
-                  if (created != null) cubit.load();
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Company'),
-              ),
-            ],
-            children: [
-              RowsCard(
-                empty: const EmptyState(icon: Icons.business_outlined, title: 'No companies'),
-                rows: [
-                  for (final c in state.items)
-                    ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: c.current ? brandBlue : brandBlue.withValues(alpha: 0.1),
-                        child: Text(c.name.characters.first.toUpperCase(), style: TextStyle(color: c.current ? Colors.white : brandBlue)),
-                      ),
-                      title: Text(c.name),
-                      subtitle: Text('You are: ${roleLabels[c.role] ?? c.role}'),
-                      trailing: c.current
-                          ? const Chip(label: Text('Open now'), visualDensity: VisualDensity.compact)
-                          : OutlinedButton(onPressed: () => switchToCompany(context, c.id), child: const Text('Open')),
+    create: (ctx) => ListCubit<Company>(ctx.read<AuthRepository>().companies)..load(),
+    child: ListCubitView<Company>(
+      builder: (context, state) {
+        final cubit = context.read<ListCubit<Company>>();
+        return TitledPage(
+          title: 'Companies',
+          subtitle: 'Each company has its own parties, items, transactions and settings.',
+          actions: [
+            OutlinedButton.icon(
+              onPressed: state.busy ? null : () => _restore(context),
+              icon: const Icon(Icons.restore, size: 18),
+              label: Text(state.busy ? 'Restoring…' : 'Restore Backup'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                final created = await _showAddCompanyDialog(context);
+                if (created != null) cubit.load();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Company'),
+            ),
+          ],
+          children: [
+            RowsCard(
+              empty: const EmptyState(icon: Icons.business_outlined, title: 'No companies'),
+              rows: [
+                for (final c in state.items)
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: c.current ? brandBlue : brandBlue.withValues(alpha: 0.1),
+                      child: Text(c.name.characters.first.toUpperCase(), style: TextStyle(color: c.current ? Colors.white : brandBlue)),
                     ),
-                ],
-              ),
-            ],
-          );
-        }),
-      );
+                    title: Text(c.name),
+                    subtitle: Text('You are: ${roleLabels[c.role] ?? c.role}'),
+                    trailing: c.current
+                        ? const Chip(label: Text('Open now'), visualDensity: VisualDensity.compact)
+                        : OutlinedButton(onPressed: () => switchToCompany(context, c.id), child: const Text('Open')),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 Future<void> _showAddUserDialog(BuildContext context) {
@@ -187,27 +189,32 @@ class UsersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => ListCubit<Member>(ctx.read<AuthRepository>().members)..load(),
-        child: ListCubitView<Member>(builder: (context, state) {
-          final cubit = context.read<ListCubit<Member>>();
-          final repo = context.read<AuthRepository>();
-          final me = context.select((AuthBloc b) => b.state.user?.id);
-          return TitledPage(
-            title: 'Users',
-            subtitle: 'Give your accountant or salesmen their own login. Sales and payments record who entered them (see the "Sale by User" report).',
-            actions: [FilledButton.icon(onPressed: () => _showAddUserDialog(context), icon: const Icon(Icons.person_add_alt), label: const Text('Add User'))],
-            children: [
-              RowsCard(
-                empty: const EmptyState(icon: Icons.group_outlined, title: 'No users'),
-                rows: [
-                  for (final m in state.items)
-                    ListTile(
-                      leading: CircleAvatar(child: Text(m.fullName.characters.first.toUpperCase())),
-                      title: Text(m.id == me ? '${m.fullName} (you)' : m.fullName),
-                      subtitle: Text(m.email),
-                      trailing: m.role == 'owner' || m.id == me
-                          ? Chip(label: Text(roleLabels[m.role] ?? m.role), visualDensity: VisualDensity.compact)
-                          : Row(mainAxisSize: MainAxisSize.min, children: [
+    create: (ctx) => ListCubit<Member>(ctx.read<AuthRepository>().members)..load(),
+    child: ListCubitView<Member>(
+      builder: (context, state) {
+        final cubit = context.read<ListCubit<Member>>();
+        final repo = context.read<AuthRepository>();
+        final me = context.select((AuthBloc b) => b.state.user?.id);
+        return TitledPage(
+          title: 'Users',
+          subtitle: 'Give your accountant or salesmen their own login. Sales and payments record who entered them (see the "Sale by User" report).',
+          actions: [
+            FilledButton.icon(onPressed: () => _showAddUserDialog(context), icon: const Icon(Icons.person_add_alt), label: const Text('Add User')),
+          ],
+          children: [
+            RowsCard(
+              empty: const EmptyState(icon: Icons.group_outlined, title: 'No users'),
+              rows: [
+                for (final m in state.items)
+                  ListTile(
+                    leading: CircleAvatar(child: Text(m.fullName.characters.first.toUpperCase())),
+                    title: Text(m.id == me ? '${m.fullName} (you)' : m.fullName),
+                    subtitle: Text(m.email),
+                    trailing: m.role == 'owner' || m.id == me
+                        ? Chip(label: Text(roleLabels[m.role] ?? m.role), visualDensity: VisualDensity.compact)
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
                               DropdownButtonHideUnderline(
                                 child: DropdownButton<String>(
                                   value: m.role,
@@ -219,17 +226,23 @@ class UsersScreen extends StatelessWidget {
                                 tooltip: 'Remove access',
                                 icon: const Icon(Icons.person_remove_outlined, size: 20),
                                 onPressed: () async {
-                                  if (await confirmDelete(context, title: 'Remove user', message: 'Remove ${m.fullName}\'s access to this company?')) {
+                                  if (await confirmDelete(
+                                    context,
+                                    title: 'Remove user',
+                                    message: 'Remove ${m.fullName}\'s access to this company?',
+                                  )) {
                                     cubit.run(() => repo.removeMember(m.id));
                                   }
                                 },
                               ),
-                            ]),
-                    ),
-                ],
-              ),
-            ],
-          );
-        }),
-      );
+                            ],
+                          ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

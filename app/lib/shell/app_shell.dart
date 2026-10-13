@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../data/models/app_user.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/company/firm_cubit.dart';
+import '../features/lock/lock_cubit.dart';
 import '../features/search/quick_search.dart';
+import '../features/team/tracking_cubit.dart';
 import '../shared/theme.dart';
 import '../shared/widgets.dart';
 import 'nav.dart';
@@ -33,12 +35,35 @@ class AppShell extends StatelessWidget {
       automaticallyImplyLeading: !wide,
       title: Text(firmName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
       actions: [
+        BlocBuilder<TrackingCubit, TrackingState>(
+          builder: (context, t) => switch (t.status) {
+            TrackingStatus.active => const Tooltip(
+              message: 'Your location is being recorded while this app is open.',
+              child: Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(Icons.my_location, size: 18, color: receiveGreen),
+              ),
+            ),
+            TrackingStatus.denied => const Tooltip(
+              message: 'Location tracking is on for this business, but this device is not sharing its location. Allow it in your browser or phone settings.',
+              child: Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(Icons.location_off_outlined, size: 18, color: payRed),
+              ),
+            ),
+            TrackingStatus.off => const SizedBox.shrink(),
+          },
+        ),
         if (MediaQuery.sizeOf(context).width >= 760)
           OutlinedButton.icon(
             onPressed: () => showQuickSearch(context),
             icon: const Icon(Icons.search, size: 18),
             label: const Text('Search   Ctrl K'),
-            style: OutlinedButton.styleFrom(foregroundColor: Colors.black54, shape: const StadiumBorder(), side: const BorderSide(color: Color(0xFFE3E8EF))),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.black54,
+              shape: const StadiumBorder(),
+              side: const BorderSide(color: Color(0xFFE3E8EF)),
+            ),
           )
         else
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => showQuickSearch(context)),
@@ -53,14 +78,24 @@ class AppShell extends StatelessWidget {
     );
 
     if (!wide) {
-      return QuickSearchShortcut(child: Scaffold(appBar: topBar, drawer: Drawer(width: 270, child: sidebar), body: child));
+      return QuickSearchShortcut(
+        child: Scaffold(
+          appBar: topBar,
+          drawer: Drawer(width: 270, child: sidebar),
+          body: child,
+        ),
+      );
     }
     return QuickSearchShortcut(
       child: Scaffold(
-        body: Row(children: [
-          SizedBox(width: 250, child: sidebar),
-          Expanded(child: Scaffold(appBar: topBar, body: child)),
-        ]),
+        body: Row(
+          children: [
+            SizedBox(width: 250, child: sidebar),
+            Expanded(
+              child: Scaffold(appBar: topBar, body: child),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -74,11 +109,11 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => FilledButton.icon(
-        onPressed: onTap,
-        style: FilledButton.styleFrom(backgroundColor: color.withValues(alpha: 0.1), foregroundColor: color, shape: const StadiumBorder()),
-        icon: const Icon(Icons.add, size: 18),
-        label: Text(label),
-      );
+    onPressed: onTap,
+    style: FilledButton.styleFrom(backgroundColor: color.withValues(alpha: 0.1), foregroundColor: color, shape: const StadiumBorder()),
+    icon: const Icon(Icons.add, size: 18),
+    label: Text(label),
+  );
 }
 
 class _Sidebar extends StatelessWidget {
@@ -101,52 +136,79 @@ class _Sidebar extends StatelessWidget {
     return Material(
       color: sidebarBg,
       child: SafeArea(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            child: Row(children: const [
-              Icon(Icons.receipt_long_rounded, color: Colors.white, size: 26),
-              SizedBox(width: 10),
-              Text('Billing', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-            ]),
-          ),
-          Expanded(
-            child: ListView(padding: const EdgeInsets.symmetric(vertical: 4), children: [
-              for (final s in sections) ..._section(context, s, expanded),
-            ]),
-          ),
-          const Divider(color: Colors.white12, height: 1),
-          ListTile(
-            contentPadding: const EdgeInsets.only(left: 14, right: 4),
-            horizontalTitleGap: 10,
-            // Salesmen cannot change the company profile; for them this opens the list of companies.
-            onTap: () => _go(context, (user?.isSalesman ?? false) ? '/companies' : '/company'),
-            selected: _active('/company'),
-            selectedTileColor: Colors.white10,
-            leading: CircleAvatar(
-              radius: 15,
-              backgroundColor: brandBlue,
-              child: Text((user?.firmName ?? '?').characters.first.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
-            ),
-            title: Text(user?.firmName ?? '', style: const TextStyle(color: Colors.white), overflow: TextOverflow.ellipsis),
-            subtitle: Text(
-              '${user?.fullName ?? ''} · ${roleLabels[user?.role] ?? ''}',
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              _CompanyMenu(closeDrawer: closeOnNavigate),
-              IconButton(
-                tooltip: 'Log out',
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.logout, color: Colors.white54, size: 19),
-                onPressed: () => context.read<AuthBloc>().add(const AuthLogoutRequested()),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Row(
+                children: const [
+                  Icon(Icons.receipt_long_rounded, color: Colors.white, size: 26),
+                  SizedBox(width: 10),
+                  Text(
+                    'Billing',
+                    style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                ],
               ),
-            ]),
-          ),
-        ]),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                children: [for (final s in sections) ..._section(context, s, expanded)],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            ListTile(
+              contentPadding: const EdgeInsets.only(left: 14, right: 4),
+              horizontalTitleGap: 10,
+              // Salesmen cannot change the company profile; for them this opens the list of companies.
+              onTap: () => _go(context, (user?.isSalesman ?? false) ? '/companies' : '/company'),
+              selected: _active('/company'),
+              selectedTileColor: Colors.white10,
+              leading: CircleAvatar(
+                radius: 15,
+                backgroundColor: brandBlue,
+                child: Text((user?.firmName ?? '?').characters.first.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 13)),
+              ),
+              title: Text(
+                user?.firmName ?? '',
+                style: const TextStyle(color: Colors.white),
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${user?.fullName ?? ''} · ${roleLabels[user?.role] ?? ''}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  BlocBuilder<LockCubit, AppLockState>(
+                    builder: (context, lock) => lock.hasPin
+                        ? IconButton(
+                            tooltip: 'Lock now',
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(Icons.lock_outline, color: Colors.white54, size: 19),
+                            onPressed: () => context.read<LockCubit>().lockNow(),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  _CompanyMenu(closeDrawer: closeOnNavigate),
+                  IconButton(
+                    tooltip: 'Log out',
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Icons.logout, color: Colors.white54, size: 19),
+                    onPressed: () => context.read<AuthBloc>().add(const AuthLogoutRequested()),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -179,7 +241,10 @@ class _Sidebar extends StatelessWidget {
         contentPadding: EdgeInsets.only(left: indent ? 52 : 17, right: 12),
         leading: icon == null ? null : Icon(icon, color: active ? Colors.white : Colors.white70, size: 21),
         minLeadingWidth: 20,
-        title: Text(label, style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: indent ? 13.5 : 14.5)),
+        title: Text(
+          label,
+          style: TextStyle(color: active ? Colors.white : Colors.white70, fontSize: indent ? 13.5 : 14.5),
+        ),
         trailing: trailing,
         onTap: onTap,
       ),
@@ -194,14 +259,14 @@ class _CompanyMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: 'Switch company',
-        visualDensity: VisualDensity.compact,
-        constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-        padding: EdgeInsets.zero,
-        icon: const Icon(Icons.swap_horiz, color: Colors.white54, size: 19),
-        onPressed: () {
-          if (closeDrawer) Navigator.of(context).pop();
-          context.go('/companies');
-        },
-      );
+    tooltip: 'Switch company',
+    visualDensity: VisualDensity.compact,
+    constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+    padding: EdgeInsets.zero,
+    icon: const Icon(Icons.swap_horiz, color: Colors.white54, size: 19),
+    onPressed: () {
+      if (closeDrawer) Navigator.of(context).pop();
+      context.go('/companies');
+    },
+  );
 }

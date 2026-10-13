@@ -22,3 +22,6 @@ String numText(num? v) {
   if (v == null) return '';
   return v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 }
+
+/// An amount in a foreign currency, e.g. "$ 1,250.00"; rupees (null or ₹) use [money].
+String moneyIn(String? symbol, num? v) => symbol == null || symbol == '₹' ? money(v) : (v == null ? '-' : '$symbol ${NumberFormat('#,##0.00').format(v)}');

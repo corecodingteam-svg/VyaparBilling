@@ -30,17 +30,17 @@ class ItemFormState extends Equatable {
 
   /// [defaultUnit] is the unit new items start with (from settings).
   factory ItemFormState.from(Item? i, String type, {String defaultUnit = ''}) => ItemFormState(
-        type: i?.type ?? type,
-        unit: i == null ? (defaultUnit.isEmpty ? null : defaultUnit) : i.unit,
-        imageFileId: i?.imageFileId,
-        categoryId: i?.categoryId,
-        saleIncludesTax: i?.salePriceIncludesTax ?? false,
-        discountType: i?.saleDiscountType ?? 'percent',
-        wholesale: i?.wholesalePrice != null,
-        purchaseIncludesTax: i?.purchasePriceIncludesTax ?? false,
-        gstRate: i?.gstRate,
-        openingDate: i?.openingDate ?? isoDate(DateTime.now()),
-      );
+    type: i?.type ?? type,
+    unit: i == null ? (defaultUnit.isEmpty ? null : defaultUnit) : i.unit,
+    imageFileId: i?.imageFileId,
+    categoryId: i?.categoryId,
+    saleIncludesTax: i?.salePriceIncludesTax ?? false,
+    discountType: i?.saleDiscountType ?? 'percent',
+    wholesale: i?.wholesalePrice != null,
+    purchaseIncludesTax: i?.purchasePriceIncludesTax ?? false,
+    gstRate: i?.gstRate,
+    openingDate: i?.openingDate ?? isoDate(DateTime.now()),
+  );
 
   final String type;
   final String? unit;
@@ -72,33 +72,43 @@ class ItemFormState extends Equatable {
     SubmitStatus? status,
     ItemFormResult? result,
     String? error,
-  }) =>
-      ItemFormState(
-        type: type ?? this.type,
-        unit: unit != null ? unit() : this.unit,
-        categoryId: categoryId != null ? categoryId() : this.categoryId,
-        saleIncludesTax: saleIncludesTax ?? this.saleIncludesTax,
-        discountType: discountType ?? this.discountType,
-        wholesale: wholesale ?? this.wholesale,
-        purchaseIncludesTax: purchaseIncludesTax ?? this.purchaseIncludesTax,
-        gstRate: gstRate != null ? gstRate() : this.gstRate,
-        openingDate: openingDate ?? this.openingDate,
-        imageFileId: imageFileId != null ? imageFileId() : this.imageFileId,
-        status: status ?? this.status,
-        result: result ?? this.result,
-        error: error,
-      );
+  }) => ItemFormState(
+    type: type ?? this.type,
+    unit: unit != null ? unit() : this.unit,
+    categoryId: categoryId != null ? categoryId() : this.categoryId,
+    saleIncludesTax: saleIncludesTax ?? this.saleIncludesTax,
+    discountType: discountType ?? this.discountType,
+    wholesale: wholesale ?? this.wholesale,
+    purchaseIncludesTax: purchaseIncludesTax ?? this.purchaseIncludesTax,
+    gstRate: gstRate != null ? gstRate() : this.gstRate,
+    openingDate: openingDate ?? this.openingDate,
+    imageFileId: imageFileId != null ? imageFileId() : this.imageFileId,
+    status: status ?? this.status,
+    result: result ?? this.result,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [
-        type, unit, categoryId, saleIncludesTax, discountType, wholesale, purchaseIncludesTax, gstRate, openingDate, imageFileId,
-        status, result, error,
-      ];
+    type,
+    unit,
+    categoryId,
+    saleIncludesTax,
+    discountType,
+    wholesale,
+    purchaseIncludesTax,
+    gstRate,
+    openingDate,
+    imageFileId,
+    status,
+    result,
+    error,
+  ];
 }
 
 class ItemFormCubit extends Cubit<ItemFormState> {
   ItemFormCubit(this._repo, this.item, String type, {this.settings = const FirmSettings()})
-      : super(ItemFormState.from(item, type, defaultUnit: settings.defaultUnit));
+    : super(ItemFormState.from(item, type, defaultUnit: settings.defaultUnit));
 
   final ItemsRepository _repo;
   final Item? item;
@@ -142,6 +152,9 @@ class ItemFormCubit extends Cubit<ItemFormState> {
         'purchasePriceIncludesTax': s.purchaseIncludesTax,
         'gstRate': s.gstRate,
         'imageFileId': s.imageFileId,
+        // Only sent when the business uses them (or the item already has a value), so they are never cleared by accident.
+        if (settings.cessEnabled || item?.cessRate != null) 'cessRate': fields['cessRate'],
+        if (settings.mrpEnabled || item?.mrp != null) 'mrp': fields['mrp'],
         // Only services have follow-up reminders.
         'serviceReminderDays': s.isProduct ? null : fields['serviceReminderDays'],
         if (s.isProduct) ...{
@@ -152,9 +165,15 @@ class ItemFormCubit extends Cubit<ItemFormState> {
           'location': fields['location'],
         },
       });
-      emit(andNew
-          ? ItemFormState.from(null, s.type, defaultUnit: settings.defaultUnit).copyWith(status: SubmitStatus.success, result: ItemFormResult.savedAndNew)
-          : state.copyWith(status: SubmitStatus.success, result: ItemFormResult.saved));
+      emit(
+        andNew
+            ? ItemFormState.from(
+                null,
+                s.type,
+                defaultUnit: settings.defaultUnit,
+              ).copyWith(status: SubmitStatus.success, result: ItemFormResult.savedAndNew)
+            : state.copyWith(status: SubmitStatus.success, result: ItemFormResult.saved),
+      );
     } catch (e) {
       emit(state.copyWith(status: SubmitStatus.failure, error: ApiException.from(e).message));
     }

@@ -11,7 +11,9 @@ import '../../../data/models/expense.dart';
 import '../../../data/repositories/cash_bank_repository.dart';
 import '../../../data/repositories/expenses_repository.dart';
 import '../../../data/repositories/firm_repository.dart';
+import '../../../data/models/invoice.dart' show paymentModes;
 import '../../../shared/format.dart';
+import '../../invoices/bloc/invoice_form_cubit.dart' show PartDraft;
 
 num _r2(num v) => (v * 100).round() / 100;
 
@@ -40,13 +42,13 @@ class ExpenseLineDraft extends Equatable {
   num amount([bool pricesIncludeTax = false]) => _r2(taxable(pricesIncludeTax) + tax(pricesIncludeTax));
 
   ExpenseLineDraft copyWith({String? name, String? qty, String? price, num? Function()? gstRate, int? rev}) => ExpenseLineDraft(
-        uid: uid,
-        name: name ?? this.name,
-        qty: qty ?? this.qty,
-        price: price ?? this.price,
-        gstRate: gstRate != null ? gstRate() : this.gstRate,
-        rev: rev ?? this.rev,
-      );
+    uid: uid,
+    name: name ?? this.name,
+    qty: qty ?? this.qty,
+    price: price ?? this.price,
+    gstRate: gstRate != null ? gstRate() : this.gstRate,
+    rev: rev ?? this.rev,
+  );
 
   @override
   List<Object?> get props => [uid, name, qty, price, gstRate, rev];
@@ -69,6 +71,7 @@ class ExpenseFormState extends Equatable {
     this.pricesIncludeTax = false,
     this.roundOff = true,
     this.paymentMode = 'cash',
+    this.extraParts = const [],
     this.description = '',
     this.formRev = 0,
     this.submitStatus = SubmitStatus.idle,
@@ -98,6 +101,9 @@ class ExpenseFormState extends Equatable {
   final bool pricesIncludeTax;
   final bool roundOff;
   final String paymentMode;
+
+  /// More payment types after the first (split payment).
+  final List<PartDraft> extraParts;
   final String description;
 
   /// Bumped to rebuild every input (form loaded / reset for the next expense).
@@ -110,6 +116,7 @@ class ExpenseFormState extends Equatable {
   num amountOf(ExpenseLineDraft l) => l.amount(pricesIncludeTax);
   num get taxTotal => _r2(lines.fold<num>(0, (s, l) => s + l.tax(pricesIncludeTax)));
   num get taxableTotal => _r2(lines.fold<num>(0, (s, l) => s + l.taxable(pricesIncludeTax)));
+  num get extraPartsTotal => _r2(extraParts.fold<num>(0, (s, p) => s + p.value));
   num get subtotal => _r2(lines.fold<num>(0, (s, l) => s + amountOf(l)));
   num get total => roundOff ? subtotal.round() : subtotal;
   num get roundOffValue => _r2(total - subtotal);
@@ -129,44 +136,65 @@ class ExpenseFormState extends Equatable {
     bool? pricesIncludeTax,
     bool? roundOff,
     String? paymentMode,
+    List<PartDraft>? extraParts,
     String? description,
     int? formRev,
     SubmitStatus? submitStatus,
     ExpenseFormResult? result,
     String? savedId,
     String? error,
-  }) =>
-      ExpenseFormState(
-        loadStatus: loadStatus ?? this.loadStatus,
-        categories: categories ?? this.categories,
-        bankAccounts: bankAccounts ?? this.bankAccounts,
-        bankAccountId: bankAccountId != null ? bankAccountId() : this.bankAccountId,
-        categoryId: categoryId != null ? categoryId() : this.categoryId,
-        number: number ?? this.number,
-        date: date ?? this.date,
-        lines: lines ?? this.lines,
-        itemDefs: itemDefs ?? this.itemDefs,
-        gstEnabled: gstEnabled ?? this.gstEnabled,
-        pricesIncludeTax: pricesIncludeTax ?? this.pricesIncludeTax,
-        roundOff: roundOff ?? this.roundOff,
-        paymentMode: paymentMode ?? this.paymentMode,
-        description: description ?? this.description,
-        formRev: formRev ?? this.formRev,
-        submitStatus: submitStatus ?? this.submitStatus,
-        result: result ?? this.result,
-        savedId: savedId ?? this.savedId,
-        error: error,
-      );
+  }) => ExpenseFormState(
+    loadStatus: loadStatus ?? this.loadStatus,
+    categories: categories ?? this.categories,
+    bankAccounts: bankAccounts ?? this.bankAccounts,
+    bankAccountId: bankAccountId != null ? bankAccountId() : this.bankAccountId,
+    categoryId: categoryId != null ? categoryId() : this.categoryId,
+    number: number ?? this.number,
+    date: date ?? this.date,
+    lines: lines ?? this.lines,
+    itemDefs: itemDefs ?? this.itemDefs,
+    gstEnabled: gstEnabled ?? this.gstEnabled,
+    pricesIncludeTax: pricesIncludeTax ?? this.pricesIncludeTax,
+    roundOff: roundOff ?? this.roundOff,
+    paymentMode: paymentMode ?? this.paymentMode,
+    extraParts: extraParts ?? this.extraParts,
+    description: description ?? this.description,
+    formRev: formRev ?? this.formRev,
+    submitStatus: submitStatus ?? this.submitStatus,
+    result: result ?? this.result,
+    savedId: savedId ?? this.savedId,
+    error: error,
+  );
 
   @override
-  List<Object?> get props =>
-      [loadStatus, categories, bankAccounts, bankAccountId, categoryId, number, date, lines, itemDefs, gstEnabled, pricesIncludeTax, roundOff, paymentMode, description, formRev, submitStatus, result, savedId, error];
+  List<Object?> get props => [
+    loadStatus,
+    categories,
+    bankAccounts,
+    bankAccountId,
+    categoryId,
+    number,
+    date,
+    lines,
+    itemDefs,
+    gstEnabled,
+    pricesIncludeTax,
+    roundOff,
+    paymentMode,
+    extraParts,
+    description,
+    formRev,
+    submitStatus,
+    result,
+    savedId,
+    error,
+  ];
 }
 
 /// State and rules of the create/edit expense screen.
 class ExpenseFormCubit extends Cubit<ExpenseFormState> {
   ExpenseFormCubit(this._repo, this._accounts, ChangeBus bus, {this.expenseId, String? categoryId, FirmRepository? firm})
-      : super(ExpenseFormState(date: isoDate(DateTime.now()), categoryId: categoryId)) {
+    : super(ExpenseFormState(date: isoDate(DateTime.now()), categoryId: categoryId)) {
     // A category added from this screen should appear in the picker.
     _sub = bus.on({DataTopic.expenses}).listen((_) => _reloadCategories());
     _firm = firm;
@@ -192,39 +220,52 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
       final gstEnabled = (await _firm?.get())?.settings.gstEnabled ?? false;
       if (editing) {
         final e = await _repo.get(expenseId!);
-        emit(state.copyWith(
-          loadStatus: LoadStatus.success,
-          categories: categories,
-          bankAccounts: bankAccounts,
-          itemDefs: itemDefs,
-          // Tax already recorded on the expense stays visible even if GST was switched off since.
-          gstEnabled: gstEnabled || e.taxAmount > 0,
-          pricesIncludeTax: e.pricesIncludeTax,
-          bankAccountId: () => e.bankAccountId,
-          categoryId: () => e.categoryId,
-          number: e.number ?? '',
-          date: e.expenseDate,
-          lines: [
-            for (final l in e.lines)
-              ExpenseLineDraft(uid: _nextUid++, name: l.name, qty: numText(l.quantity), price: numText(l.price), gstRate: l.gstRate == 0 ? null : l.gstRate),
-          ],
-          roundOff: e.roundOff != 0 || e.total == e.total.roundToDouble(),
-          paymentMode: e.paymentMode,
-          description: e.description ?? '',
-          formRev: state.formRev + 1,
-        ));
+        emit(
+          state.copyWith(
+            loadStatus: LoadStatus.success,
+            categories: categories,
+            bankAccounts: bankAccounts,
+            itemDefs: itemDefs,
+            // Tax already recorded on the expense stays visible even if GST was switched off since.
+            gstEnabled: gstEnabled || e.taxAmount > 0,
+            pricesIncludeTax: e.pricesIncludeTax,
+            bankAccountId: () => e.bankAccountId,
+            categoryId: () => e.categoryId,
+            number: e.number ?? '',
+            date: e.expenseDate,
+            lines: [
+              for (final l in e.lines)
+                ExpenseLineDraft(
+                  uid: _nextUid++,
+                  name: l.name,
+                  qty: numText(l.quantity),
+                  price: numText(l.price),
+                  gstRate: l.gstRate == 0 ? null : l.gstRate,
+                ),
+            ],
+            roundOff: e.roundOff != 0 || e.total == e.total.roundToDouble(),
+            paymentMode: e.payments.firstOrNull?.mode ?? e.paymentMode,
+            extraParts: [
+              for (final p in e.payments.skip(1)) PartDraft(uid: _nextUid++, mode: p.mode, bankAccountId: p.bankAccountId, amount: numText(p.amount)),
+            ],
+            description: e.description ?? '',
+            formRev: state.formRev + 1,
+          ),
+        );
       } else {
         final preselected = categories.any((c) => c.id == state.categoryId) ? state.categoryId : null;
-        emit(state.copyWith(
-          loadStatus: LoadStatus.success,
-          categories: categories,
-          bankAccounts: bankAccounts,
-          itemDefs: itemDefs,
-          gstEnabled: gstEnabled,
-          categoryId: () => preselected,
-          lines: [_blank()],
-          formRev: state.formRev + 1,
-        ));
+        emit(
+          state.copyWith(
+            loadStatus: LoadStatus.success,
+            categories: categories,
+            bankAccounts: bankAccounts,
+            itemDefs: itemDefs,
+            gstEnabled: gstEnabled,
+            categoryId: () => preselected,
+            lines: [_blank()],
+            formRev: state.formRev + 1,
+          ),
+        );
       }
     } catch (e) {
       emit(state.copyWith(loadStatus: LoadStatus.failure, error: ApiException.from(e).message));
@@ -247,6 +288,28 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
   void paymentModeChanged(String v) =>
       emit(state.copyWith(paymentMode: v, bankAccountId: () => bankAccountForMode(v, state.bankAccountId, state.bankAccounts)));
   void bankAccountChanged(String? id) => emit(state.copyWith(bankAccountId: () => id));
+
+  // Split payment: further payment types after the first.
+  void addPart() {
+    final used = {state.paymentMode, for (final p in state.extraParts) p.mode};
+    final mode = paymentModes.keys.firstWhere((m) => !used.contains(m), orElse: () => 'cash');
+    emit(
+      state.copyWith(
+        extraParts: [
+          ...state.extraParts,
+          PartDraft(uid: _nextUid++, mode: mode, bankAccountId: bankAccountForMode(mode, null, state.bankAccounts)),
+        ],
+      ),
+    );
+  }
+
+  void removePart(int uid) => emit(state.copyWith(extraParts: state.extraParts.where((p) => p.uid != uid).toList()));
+  void _updatePart(int uid, PartDraft Function(PartDraft) f) =>
+      emit(state.copyWith(extraParts: [for (final p in state.extraParts) p.uid == uid ? f(p) : p]));
+  void partModeChanged(int uid, String mode) =>
+      _updatePart(uid, (p) => p.copyWith(mode: mode, bankAccountId: () => bankAccountForMode(mode, p.bankAccountId, state.bankAccounts)));
+  void partBankAccountChanged(int uid, String? id) => _updatePart(uid, (p) => p.copyWith(bankAccountId: () => id));
+  void partAmountChanged(int uid, String v) => _updatePart(uid, (p) => p.copyWith(amount: v));
   void descriptionChanged(String v) => emit(state.copyWith(description: v));
 
   void addLine() => emit(state.copyWith(lines: [...state.lines, _blank()]));
@@ -298,6 +361,14 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
       final price = parseNum(l.price);
       if (price == null || price < 0) return 'Row $row: enter a valid price.';
     }
+    for (final p in s.extraParts) {
+      if (p.value <= 0) return 'Enter the amount of each payment type, or remove the empty one.';
+      final problem = bankAccountProblem(p.mode, p.bankAccountId, s.bankAccounts);
+      if (problem != null) return problem;
+    }
+    if (s.extraParts.isNotEmpty && s.extraPartsTotal >= s.total) {
+      return 'The other payment types add up to the whole amount; remove one or lower them.';
+    }
     return bankAccountProblem(s.paymentMode, s.bankAccountId, s.bankAccounts);
   }
 
@@ -319,6 +390,11 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
         'pricesIncludeTax': s.pricesIncludeTax,
         'paymentMode': s.paymentMode,
         'bankAccountId': s.bankAccountId,
+        if (s.extraParts.isNotEmpty)
+          'payments': [
+            {'mode': s.paymentMode, 'bankAccountId': s.bankAccountId, 'amount': _r2(s.total - s.extraPartsTotal)},
+            for (final p in s.extraParts) {'mode': p.mode, 'bankAccountId': p.bankAccountId, 'amount': p.value},
+          ],
         'description': s.description.trim(),
         'lines': [
           for (final l in s.lines.where((l) => !l.isBlank))
@@ -330,23 +406,25 @@ class ExpenseFormCubit extends Cubit<ExpenseFormState> {
         return;
       }
       // Fresh form in the same category for the next expense.
-      emit(ExpenseFormState(
-        loadStatus: LoadStatus.success,
-        categories: state.categories,
-        bankAccounts: s.bankAccounts,
-        itemDefs: state.itemDefs,
-        gstEnabled: s.gstEnabled,
-        pricesIncludeTax: s.pricesIncludeTax,
-        bankAccountId: s.bankAccountId,
-        categoryId: s.categoryId,
-        date: s.date,
-        lines: [_blank()],
-        paymentMode: s.paymentMode,
-        formRev: s.formRev + 1,
-        submitStatus: SubmitStatus.success,
-        result: ExpenseFormResult.savedAndNew,
-        savedId: saved.id,
-      ));
+      emit(
+        ExpenseFormState(
+          loadStatus: LoadStatus.success,
+          categories: state.categories,
+          bankAccounts: s.bankAccounts,
+          itemDefs: state.itemDefs,
+          gstEnabled: s.gstEnabled,
+          pricesIncludeTax: s.pricesIncludeTax,
+          bankAccountId: s.bankAccountId,
+          categoryId: s.categoryId,
+          date: s.date,
+          lines: [_blank()],
+          paymentMode: s.paymentMode,
+          formRev: s.formRev + 1,
+          submitStatus: SubmitStatus.success,
+          result: ExpenseFormResult.savedAndNew,
+          savedId: saved.id,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(submitStatus: SubmitStatus.failure, error: ApiException.from(e).message));
     }

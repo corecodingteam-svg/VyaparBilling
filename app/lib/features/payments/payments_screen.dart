@@ -19,9 +19,9 @@ class PaymentsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => PaymentsBloc(ctx.read(), ctx.read(), kind.type)..add(const PaymentsRequested()),
-        child: _PaymentsView(kind: kind),
-      );
+    create: (ctx) => PaymentsBloc(ctx.read(), ctx.read(), kind.type)..add(const PaymentsRequested()),
+    child: _PaymentsView(kind: kind),
+  );
 }
 
 class _PaymentsView extends StatelessWidget {
@@ -45,54 +45,71 @@ class _PaymentsView extends StatelessWidget {
       listener: (context, state) => showError(context, state.error!),
       builder: (context, state) {
         final bloc = context.read<PaymentsBloc>();
-        return ListView(padding: const EdgeInsets.all(12), children: [
-          Row(children: [
-            Expanded(child: Text(kind.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
-            FilledButton.icon(
-              onPressed: () => showPaymentForm(context, kind),
-              style: FilledButton.styleFrom(backgroundColor: payRed),
-              icon: const Icon(Icons.add),
-              label: Text('Add ${kind.title}'),
+        return ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(kind.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                ),
+                FilledButton.icon(
+                  onPressed: () => showPaymentForm(context, kind),
+                  style: FilledButton.styleFrom(backgroundColor: payRed),
+                  icon: const Icon(Icons.add),
+                  label: Text('Add ${kind.title}'),
+                ),
+              ],
             ),
-          ]),
-          const SizedBox(height: 12),
-          PeriodFilterBar(range: state.range, onChanged: (r) => bloc.add(PaymentsPeriodChanged(r))),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: AmountSummaryCard(title: 'Total Amount', amount: money(state.total), details: {kind.amountLabel: money(state.total)}),
+            const SizedBox(height: 12),
+            PeriodFilterBar(range: state.range, onChanged: (r) => bloc.add(PaymentsPeriodChanged(r))),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: AmountSummaryCard(title: 'Total Amount', amount: money(state.total), details: {kind.amountLabel: money(state.total)}),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                child: Row(children: [
-                  const Expanded(child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600))),
-                  SizedBox(
-                    width: 240,
-                    child: TextField(
-                      onChanged: (v) => bloc.add(PaymentsSearchChanged(v)),
-                      decoration: const InputDecoration(hintText: 'Search party or number', prefixIcon: Icon(Icons.search)),
+            const SizedBox(height: 12),
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text('Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        ),
+                        SizedBox(
+                          width: 240,
+                          child: TextField(
+                            onChanged: (v) => bloc.add(PaymentsSearchChanged(v)),
+                            decoration: const InputDecoration(hintText: 'Search party or number', prefixIcon: Icon(Icons.search)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ]),
+                  _body(context, state),
+                ],
               ),
-              _body(context, state),
-            ]),
-          ),
-        ]);
+            ),
+          ],
+        );
       },
     );
   }
 
   Widget _body(BuildContext context, PaymentsState state) {
     if (state.status == LoadStatus.initial || state.status == LoadStatus.loading) {
-      return const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
     if (state.status == LoadStatus.failure && state.payments.isEmpty) {
       return SizedBox(
@@ -115,20 +132,25 @@ class _PaymentsView extends StatelessWidget {
       );
     }
     if (!isWide(context)) {
-      return Column(children: [
-        for (final p in rows) ...[
-          const Divider(),
-          ListTile(
-            title: Text(p.partyName, overflow: TextOverflow.ellipsis),
-            subtitle: Text('#${p.number} · ${displayDate(p.paymentDate)} · ${paymentModes[p.paymentMode]}'),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              Text(money(p.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
-              _menu(context, p),
-            ]),
-            onTap: () => showPaymentForm(context, kind, payment: p),
-          ),
+      return Column(
+        children: [
+          for (final p in rows) ...[
+            const Divider(),
+            ListTile(
+              title: Text(p.partyName, overflow: TextOverflow.ellipsis),
+              subtitle: Text('#${p.number} · ${displayDate(p.paymentDate)} · ${paymentModes[p.paymentMode]}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(money(p.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  _menu(context, p),
+                ],
+              ),
+              onTap: () => showPaymentForm(context, kind, payment: p),
+            ),
+          ],
         ],
-      ]);
+      );
     }
     return LayoutBuilder(
       builder: (context, c) => SingleChildScrollView(
@@ -158,14 +180,19 @@ class _PaymentsView extends StatelessWidget {
                     DataCell(Text(money(p.amount))),
                     DataCell(Text(p.linkedAmount == 0 ? '-' : (p.unlinkedAmount == 0 ? 'Fully' : money(p.linkedAmount)))),
                     DataCell(Text(paymentModes[p.paymentMode] ?? p.paymentMode)),
-                    DataCell(Row(mainAxisSize: MainAxisSize.min, children: [
-                      IconButton(
-                        tooltip: 'Receipt / Print',
-                        icon: const Icon(Icons.print_outlined, size: 20),
-                        onPressed: () => context.push('${kind.basePath}/${p.id}/receipt'),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Receipt / Print',
+                            icon: const Icon(Icons.print_outlined, size: 20),
+                            onPressed: () => context.push('${kind.basePath}/${p.id}/receipt'),
+                          ),
+                          _menu(context, p),
+                        ],
                       ),
-                      _menu(context, p),
-                    ])),
+                    ),
                   ],
                 ),
             ],
@@ -176,17 +203,17 @@ class _PaymentsView extends StatelessWidget {
   }
 
   Widget _menu(BuildContext context, Payment p) => PopupMenuButton<String>(
-        tooltip: 'More',
-        icon: const Icon(Icons.more_vert, size: 20),
-        onSelected: (v) => switch (v) {
-          'edit' => showPaymentForm(context, kind, payment: p),
-          'receipt' => context.push('${kind.basePath}/${p.id}/receipt'),
-          _ => _delete(context, p),
-        },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'edit', child: Text('View/Edit')),
-          PopupMenuItem(value: 'receipt', child: Text('Receipt / Print')),
-          PopupMenuItem(value: 'delete', child: Text('Delete')),
-        ],
-      );
+    tooltip: 'More',
+    icon: const Icon(Icons.more_vert, size: 20),
+    onSelected: (v) => switch (v) {
+      'edit' => showPaymentForm(context, kind, payment: p),
+      'receipt' => context.push('${kind.basePath}/${p.id}/receipt'),
+      _ => _delete(context, p),
+    },
+    itemBuilder: (_) => const [
+      PopupMenuItem(value: 'edit', child: Text('View/Edit')),
+      PopupMenuItem(value: 'receipt', child: Text('Receipt / Print')),
+      PopupMenuItem(value: 'delete', child: Text('Delete')),
+    ],
+  );
 }

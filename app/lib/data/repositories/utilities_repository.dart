@@ -71,6 +71,30 @@ class UtilitiesRepository {
   /// Everything in the current company, as one JSON document.
   Future<Map<String, dynamic>> backup() => _api.get<Map<String, dynamic>>('/backup');
 
+  // ---- backups kept on the server, and Google Drive
+
+  Future<List<ServerBackup>> serverBackups() async =>
+      [for (final j in await _api.get<List<dynamic>>('/backups')) ServerBackup.fromJson(j as Map<String, dynamic>)];
+
+  /// Makes a backup now; returns the updated list.
+  Future<List<ServerBackup>> createServerBackup() async =>
+      [for (final j in await _api.post<List<dynamic>>('/backups')) ServerBackup.fromJson(j as Map<String, dynamic>)];
+
+  /// (file name, contents) of a stored backup.
+  Future<(String, Map<String, dynamic>)> readServerBackup(String id) async {
+    final j = await _api.get<Map<String, dynamic>>('/backups/$id');
+    return (j['fileName'] as String, j['backup'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteServerBackup(String id) => _api.delete('/backups/$id');
+
+  Future<DriveStatus> driveStatus() async => DriveStatus.fromJson(await _api.get<Map<String, dynamic>>('/backups/drive/status'));
+
+  /// The Google page where the user allows copies of backups to be put in their Drive.
+  Future<String> driveAuthUrl() async => (await _api.get<Map<String, dynamic>>('/backups/drive/auth-url'))['url'] as String;
+
+  Future<void> driveDisconnect() => _api.delete('/backups/drive');
+
   /// Restores a backup as a new company.
   Future<Company> restore(Map<String, dynamic> backup, {String? name}) async =>
       Company.fromJson(await _api.post<Map<String, dynamic>>('/firms/restore', {'backup': backup, 'name': ?name}));

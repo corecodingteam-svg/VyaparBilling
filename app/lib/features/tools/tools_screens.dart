@@ -1,5 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
+import '../company/firm_cubit.dart';
+import '../../data/models/app_user.dart';
+
+import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/change_bus.dart';
@@ -24,39 +33,54 @@ class SetupScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => ListCubit<SetupStep>(
-          ctx.read<UtilitiesRepository>().setup,
-          bus: ctx.read<ChangeBus>(),
-          topics: const {DataTopic.firm, DataTopic.parties, DataTopic.items, DataTopic.accounts, DataTopic.invoices},
-        )..load(),
-        child: ListCubitView<SetupStep>(builder: (context, state) {
-          final done = state.items.where((s) => s.done).length;
-          final total = state.items.length;
-          return TitledPage(
-            title: 'Set Up My Business',
-            subtitle: done == total ? 'All done. Your business is set up.' : '$done of $total steps done.',
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(value: total == 0 ? 0 : done / total, minHeight: 8, backgroundColor: const Color(0xFFE3E8EF), color: receiveGreen),
+    create: (ctx) => ListCubit<SetupStep>(
+      ctx.read<UtilitiesRepository>().setup,
+      bus: ctx.read<ChangeBus>(),
+      topics: const {DataTopic.firm, DataTopic.parties, DataTopic.items, DataTopic.accounts, DataTopic.invoices},
+    )..load(),
+    child: ListCubitView<SetupStep>(
+      builder: (context, state) {
+        final done = state.items.where((s) => s.done).length;
+        final total = state.items.length;
+        return TitledPage(
+          title: 'Set Up My Business',
+          subtitle: done == total ? 'All done. Your business is set up.' : '$done of $total steps done.',
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: total == 0 ? 0 : done / total,
+                minHeight: 8,
+                backgroundColor: const Color(0xFFE3E8EF),
+                color: receiveGreen,
               ),
-              const SizedBox(height: 12),
-              RowsCard(
-                empty: const EmptyState(icon: Icons.checklist, title: 'Nothing to set up'),
-                rows: [
-                  for (final s in state.items)
-                    ListTile(
-                      leading: Icon(s.done ? Icons.check_circle : Icons.radio_button_unchecked, color: s.done ? receiveGreen : Colors.black38),
-                      title: Text(s.title, style: TextStyle(decoration: s.done ? TextDecoration.lineThrough : null, color: s.done ? Colors.black54 : null)),
-                      subtitle: Text(s.hint),
-                      trailing: s.done ? null : FilledButton.tonal(onPressed: () => s.route.endsWith('/new') ? context.push(s.route) : context.go(s.route), child: const Text('Do it')),
+            ),
+            const SizedBox(height: 12),
+            RowsCard(
+              empty: const EmptyState(icon: Icons.checklist, title: 'Nothing to set up'),
+              rows: [
+                for (final s in state.items)
+                  ListTile(
+                    leading: Icon(s.done ? Icons.check_circle : Icons.radio_button_unchecked, color: s.done ? receiveGreen : Colors.black38),
+                    title: Text(
+                      s.title,
+                      style: TextStyle(decoration: s.done ? TextDecoration.lineThrough : null, color: s.done ? Colors.black54 : null),
                     ),
-                ],
-              ),
-            ],
-          );
-        }),
-      );
+                    subtitle: Text(s.hint),
+                    trailing: s.done
+                        ? null
+                        : FilledButton.tonal(
+                            onPressed: () => s.route.endsWith('/new') ? context.push(s.route) : context.go(s.route),
+                            child: const Text('Do it'),
+                          ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
 
 // ---------------------------------------------------------------- verify my data
@@ -66,57 +90,68 @@ class VerifyDataScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => VerifyCubit(ctx.read())..check(),
-        child: BlocConsumer<VerifyCubit, VerifyState>(
-          listenWhen: (a, b) => a.fixed != b.fixed,
-          listener: (context, s) => showSuccess(context, s.allOk ? 'Fixed. Everything adds up now.' : 'Fixed what could be fixed automatically.'),
-          builder: (context, s) {
-            final cubit = context.read<VerifyCubit>();
-            if (s.status == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
-            if (s.status == LoadStatus.failure) return ErrorRetry(error: s.error ?? 'Could not check', onRetry: cubit.check);
-            return TitledPage(
-              title: 'Verify My Data',
-              subtitle: s.allOk
-                  ? 'Everything adds up: stock, invoice totals and payments are consistent.'
-                  : 'Some figures do not add up. "Fix" recalculates stock and received amounts from the entries behind them.',
-              actions: [
-                OutlinedButton.icon(onPressed: s.fixing ? null : cubit.check, icon: const Icon(Icons.refresh, size: 18), label: const Text('Check Again')),
-                if (s.canFix)
-                  FilledButton.icon(
-                    onPressed: s.fixing ? null : cubit.fix,
-                    icon: const Icon(Icons.build_outlined, size: 18),
-                    label: Text(s.fixing ? 'Fixing…' : 'Fix'),
-                  ),
-              ],
-              children: [
-                for (final c in s.checks) ...[
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Row(children: [
+    create: (ctx) => VerifyCubit(ctx.read())..check(),
+    child: BlocConsumer<VerifyCubit, VerifyState>(
+      listenWhen: (a, b) => a.fixed != b.fixed,
+      listener: (context, s) => showSuccess(context, s.allOk ? 'Fixed. Everything adds up now.' : 'Fixed what could be fixed automatically.'),
+      builder: (context, s) {
+        final cubit = context.read<VerifyCubit>();
+        if (s.status == LoadStatus.loading) return const Center(child: CircularProgressIndicator());
+        if (s.status == LoadStatus.failure) return ErrorRetry(error: s.error ?? 'Could not check', onRetry: cubit.check);
+        return TitledPage(
+          title: 'Verify My Data',
+          subtitle: s.allOk
+              ? 'Everything adds up: stock, invoice totals and payments are consistent.'
+              : 'Some figures do not add up. "Fix" recalculates stock and received amounts from the entries behind them.',
+          actions: [
+            OutlinedButton.icon(
+              onPressed: s.fixing ? null : cubit.check,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Check Again'),
+            ),
+            if (s.canFix)
+              FilledButton.icon(
+                onPressed: s.fixing ? null : cubit.fix,
+                icon: const Icon(Icons.build_outlined, size: 18),
+                label: Text(s.fixing ? 'Fixing…' : 'Fix'),
+              ),
+          ],
+          children: [
+            for (final c in s.checks) ...[
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
                           Icon(c.ok ? Icons.check_circle : Icons.error_outline, color: c.ok ? receiveGreen : payRed),
                           const SizedBox(width: 10),
-                          Expanded(child: Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600))),
-                          if (!c.ok) Text(c.fixable ? 'Can be fixed' : 'Needs a look', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                        ]),
-                        for (final i in c.issues.take(20))
-                          Padding(
-                            padding: const EdgeInsets.only(left: 34, top: 6),
-                            child: Text('${i.label} — ${i.detail}'),
+                          Expanded(
+                            child: Text(c.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                           ),
-                        if (c.issues.length > 20)
-                          Padding(padding: const EdgeInsets.only(left: 34, top: 6), child: Text('…and ${c.issues.length - 20} more', style: const TextStyle(color: Colors.black54))),
-                      ]),
-                    ),
+                          if (!c.ok) Text(c.fixable ? 'Can be fixed' : 'Needs a look', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                        ],
+                      ),
+                      for (final i in c.issues.take(20))
+                        Padding(padding: const EdgeInsets.only(left: 34, top: 6), child: Text('${i.label} — ${i.detail}')),
+                      if (c.issues.length > 20)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 34, top: 6),
+                          child: Text('…and ${c.issues.length - 20} more', style: const TextStyle(color: Colors.black54)),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                ],
-              ],
-            );
-          },
-        ),
-      );
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ],
+        );
+      },
+    ),
+  );
 }
 
 // ---------------------------------------------------------------- close financial year
@@ -183,76 +218,117 @@ class _CloseYearViewState extends State<_CloseYearView> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('1. Close the books', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  const Text('Nothing dated on or before the closing date can be added, changed or deleted afterwards — by anyone. '
-                      'You can re-open the books whenever you need to correct something.'),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Icon(s.lockDate == null ? Icons.lock_open_outlined : Icons.lock_outline, color: s.lockDate == null ? Colors.black54 : payRed),
-                    const SizedBox(width: 8),
-                    Text(
-                      s.lockDate == null ? 'The books are open.' : 'Books are closed up to ${displayDate(s.lockDate)}.',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('1. Close the books', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Nothing dated on or before the closing date can be added, changed or deleted afterwards — by anyone. '
+                      'You can re-open the books whenever you need to correct something.',
                     ),
-                  ]),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    SizedBox(width: 220, child: DateField(label: 'Close up to', value: s.lockUpTo, onChanged: cubit.lockUpToChanged)),
-                    FilledButton(
-                      onPressed: busy || !isAdmin
-                          ? null
-                          : () async {
-                              if (await _confirm('Close the books?', 'Transactions up to ${displayDate(s.lockUpTo)} will be locked.', 'Close Books')) cubit.closeBooks();
-                            },
-                      child: Text(s.lockDate == null ? 'Close Books' : 'Change Closing Date'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(s.lockDate == null ? Icons.lock_open_outlined : Icons.lock_outline, color: s.lockDate == null ? Colors.black54 : payRed),
+                        const SizedBox(width: 8),
+                        Text(
+                          s.lockDate == null ? 'The books are open.' : 'Books are closed up to ${displayDate(s.lockDate)}.',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
-                    if (s.lockDate != null) OutlinedButton(onPressed: busy || !isAdmin ? null : cubit.reopenBooks, child: const Text('Re-open Books')),
-                  ]),
-                ]),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: DateField(label: 'Close up to', value: s.lockUpTo, onChanged: cubit.lockUpToChanged),
+                        ),
+                        FilledButton(
+                          onPressed: busy || !isAdmin
+                              ? null
+                              : () async {
+                                  final ok = await _confirm('Close the books?', 'Transactions up to ${displayDate(s.lockUpTo)} will be locked.', 'Close Books');
+                                  if (ok) cubit.closeBooks();
+                                },
+                          child: Text(s.lockDate == null ? 'Close Books' : 'Change Closing Date'),
+                        ),
+                        if (s.lockDate != null)
+                          OutlinedButton(onPressed: busy || !isAdmin ? null : cubit.reopenBooks, child: const Text('Re-open Books')),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 12),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('2. Start the new year with fresh books (optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  const Text('Creates a new company that opens with today\'s position of this one: what each party owes, stock in hand, '
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('2. Start the new year with fresh books (optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Creates a new company that opens with today\'s position of this one: what each party owes, stock in hand, '
                       'bank and cash balances, outstanding loans and your own accounts. Parties, items, units, settings and users are copied. '
-                      'This company and all its transactions stay exactly as they are, and you can switch back to it at any time.'),
-                  const SizedBox(height: 4),
-                  const Text('Not carried over: open estimates and orders, and undeposited cheques.', style: TextStyle(color: Colors.black54)),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    SizedBox(width: 320, child: TextField(controller: _name, decoration: const InputDecoration(labelText: 'Name of the new company'))),
-                    SizedBox(width: 220, child: DateField(label: 'New books start on', value: s.newYearStart, onChanged: cubit.newYearStartChanged)),
-                    FilledButton(
-                      onPressed: busy || !isAdmin
-                          ? null
-                          : () async {
-                              if (_name.text.trim().length < 2) return showError(context, 'Enter a name for the new company.');
-                              if (await _confirm('Start a new year?', 'A new company "${_name.text.trim()}" will be created with opening balances from this one.',
-                                  'Create')) {
-                                cubit.startNewYear(_name.text);
-                              }
-                            },
-                      child: Text(busy ? 'Working…' : 'Create New Company'),
+                      'This company and all its transactions stay exactly as they are, and you can switch back to it at any time.',
                     ),
-                  ]),
-                  if (s.created != null) ...[
+                    const SizedBox(height: 4),
+                    const Text('Not carried over: open estimates and orders, and undeposited cheques.', style: TextStyle(color: Colors.black54)),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      const Icon(Icons.check_circle, color: receiveGreen),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text('"${s.created!.name}" has been created.')),
-                      const SizedBox(width: 12),
-                      OutlinedButton(onPressed: () => switchToCompany(context, s.created!.id), child: const Text('Open It')),
-                    ]),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 320,
+                          child: TextField(
+                            controller: _name,
+                            decoration: const InputDecoration(labelText: 'Name of the new company'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 220,
+                          child: DateField(label: 'New books start on', value: s.newYearStart, onChanged: cubit.newYearStartChanged),
+                        ),
+                        FilledButton(
+                          onPressed: busy || !isAdmin
+                              ? null
+                              : () async {
+                                  if (_name.text.trim().length < 2) return showError(context, 'Enter a name for the new company.');
+                                  if (await _confirm(
+                                    'Start a new year?',
+                                    'A new company "${_name.text.trim()}" will be created with opening balances from this one.',
+                                    'Create',
+                                  )) {
+                                    cubit.startNewYear(_name.text);
+                                  }
+                                },
+                          child: Text(busy ? 'Working…' : 'Create New Company'),
+                        ),
+                      ],
+                    ),
+                    if (s.created != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: receiveGreen),
+                          const SizedBox(width: 8),
+                          Flexible(child: Text('"${s.created!.name}" has been created.')),
+                          const SizedBox(width: 12),
+                          OutlinedButton(onPressed: () => switchToCompany(context, s.created!.id), child: const Text('Open It')),
+                        ],
+                      ),
+                    ],
                   ],
-                ]),
+                ),
               ),
             ),
           ],
@@ -264,13 +340,81 @@ class _CloseYearViewState extends State<_CloseYearView> {
 
 // ---------------------------------------------------------------- backup
 
+String _size(int bytes) => bytes < 1024 * 1024 ? '${(bytes / 1024).ceil()} KB' : '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+
 class BackupScreen extends StatelessWidget {
-  const BackupScreen({super.key});
+  const BackupScreen({super.key, this.driveResult});
+
+  /// 'connected' or 'failed', when Google has just sent the user back here.
+  final String? driveResult;
 
   @override
-  Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) => BackupCubit(ctx.read()),
-        child: BlocConsumer<BackupCubit, BackupState>(
+  Widget build(BuildContext context) => MultiBlocProvider(
+    providers: [
+      BlocProvider(create: (ctx) => BackupCubit(ctx.read())),
+      BlocProvider(create: (ctx) => ListCubit<ServerBackup>(ctx.read<UtilitiesRepository>().serverBackups)..load()),
+      BlocProvider(create: (ctx) => DriveCubit(ctx.read())..load()),
+    ],
+    child: _BackupView(driveResult: driveResult),
+  );
+}
+
+class _BackupView extends StatelessWidget {
+  const _BackupView({this.driveResult});
+  final String? driveResult;
+
+  Future<void> _connect(BuildContext context) async {
+    try {
+      final url = await context.read<DriveCubit>().authUrl();
+      // Google asks for consent in this same tab and then sends the user back here.
+      if (!await launchUrl(Uri.parse(url), webOnlyWindowName: '_self') && context.mounted) showError(context, 'Could not open Google.');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _download(BuildContext context, ServerBackup b) async {
+    try {
+      final (name, backup) = await context.read<UtilitiesRepository>().readServerBackup(b.id);
+      await saveBytesFile(name, Uint8List.fromList(utf8.encode(jsonEncode(backup))), mimeType: 'application/json');
+    } catch (e) {
+      if (context.mounted) showError(context, e);
+    }
+  }
+
+  Future<void> _restore(BuildContext context, ServerBackup b) async {
+    final cubit = context.read<ListCubit<ServerBackup>>();
+    final repo = context.read<UtilitiesRepository>();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore this backup?'),
+        content: Text('${b.fileName} will be restored as a new company next to your existing ones. Nothing you have now is changed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restore')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    Company? restored;
+    final done = await cubit.run(() async => restored = await repo.restore((await repo.readServerBackup(b.id)).$2));
+    if (done && context.mounted) showSuccess(context, 'Restored as "${restored?.name}". Open it from Companies.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final firmName = context.select((AuthBloc b) => b.state.user?.firmName ?? '');
+    final settings = settingsOf(context, listen: true);
+    return MultiBlocListener(
+      listeners: [
+        BlocListener<DriveCubit, DriveStatus?>(
+          listenWhen: (a, b) => a == null && b != null && driveResult != null,
+          listener: (context, _) => driveResult == 'connected'
+              ? showSuccess(context, 'Google Drive connected')
+              : showError(context, 'Could not connect Google Drive. Please try again.'),
+        ),
+        BlocListener<BackupCubit, BackupState>(
           listenWhen: (a, b) => a.status != b.status,
           listener: (context, s) async {
             if (s.status == SubmitStatus.failure) showError(context, s.error!);
@@ -283,47 +427,180 @@ class BackupScreen extends StatelessWidget {
               }
             }
           },
-          builder: (context, s) {
-            final firmName = context.select((AuthBloc b) => b.state.user?.firmName ?? '');
-            final busy = s.status == SubmitStatus.submitting;
-            return TitledPage(title: 'Backup & Restore', children: [
+        ),
+      ],
+      child: ListCubitView<ServerBackup>(
+        builder: (context, backups) {
+          final list = context.read<ListCubit<ServerBackup>>();
+          final repo = context.read<UtilitiesRepository>();
+          final busy = backups.busy;
+          final download = context.watch<BackupCubit>().state;
+          return TitledPage(
+            title: 'Backup & Restore',
+            children: [
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Download a backup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text('Saves everything in "$firmName" — parties, items, every transaction, settings, logo and attachments — as one file. '
-                        'Keep it somewhere safe. Logins are not part of the backup.'),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: busy ? null : () => context.read<BackupCubit>().create(firmName),
-                      icon: busy ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.download_outlined, size: 18),
-                      label: Text(busy ? 'Preparing…' : 'Download Backup'),
-                    ),
-                    if (s.summary != null) ...[
-                      const SizedBox(height: 10),
-                      Text('Last backup: ${s.fileName}\nContains ${s.summary}.', style: const TextStyle(color: Colors.black54)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Backups on the server', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(
+                        settings.autoBackup == 'off'
+                            ? 'Automatic backup is off. Turn it on under Settings → Backup, or back up now.'
+                            : 'A backup is made ${settings.autoBackup == 'daily' ? 'every day' : 'every week'} and the latest ${settings.autoBackupKeep} are kept. '
+                                  'Backups made by hand are kept until you delete them.',
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: busy ? null : () => list.run(repo.createServerBackup),
+                        icon: busy
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.backup_outlined, size: 18),
+                        label: Text(busy ? 'Working…' : 'Back Up Now'),
+                      ),
+                      const SizedBox(height: 8),
+                      if (backups.items.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Text('No backups yet.', style: TextStyle(color: Colors.black54)),
+                        )
+                      else
+                        for (final b in backups.items)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(b.kind == 'auto' ? Icons.schedule : Icons.touch_app_outlined, color: Colors.black54),
+                            title: Text(
+                              '${displayDate(isoDate(b.createdAt))} ${DateFormat('h:mm a').format(b.createdAt)} · ${b.kind == 'auto' ? 'Automatic' : 'Manual'}',
+                            ),
+                            subtitle: Text(
+                              [
+                                _size(b.size),
+                                if (b.onDrive) 'Copied to Google Drive',
+                                if (b.driveError != null) 'Drive copy failed: ${b.driveError}',
+                              ].join(' · '),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Download',
+                                  icon: const Icon(Icons.download_outlined, size: 20),
+                                  onPressed: () => _download(context, b),
+                                ),
+                                IconButton(
+                                  tooltip: 'Restore as a new company',
+                                  icon: const Icon(Icons.restore, size: 20),
+                                  onPressed: busy ? null : () => _restore(context, b),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete',
+                                  icon: const Icon(Icons.delete_outline, size: 20),
+                                  onPressed: busy
+                                      ? null
+                                      : () async {
+                                          if (await confirmDelete(
+                                            context,
+                                            title: 'Delete backup',
+                                            message: 'Delete this backup from the server? A copy in Google Drive is not deleted.',
+                                          )) {
+                                            list.run(() => repo.deleteServerBackup(b.id));
+                                          }
+                                        },
+                                ),
+                              ],
+                            ),
+                          ),
                     ],
-                  ]),
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Restore a backup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    const Text('A backup is restored as a new company next to your existing ones, so nothing you have now is overwritten. '
-                        'After checking it you can keep working in whichever company you want.'),
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(onPressed: () => context.go('/companies'), icon: const Icon(Icons.restore, size: 18), label: const Text('Go to Companies to Restore')),
-                  ]),
+                  child: BlocBuilder<DriveCubit, DriveStatus?>(
+                    builder: (context, drive) {
+                      final cubit = context.read<DriveCubit>();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Google Drive', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          if (drive == null)
+                            const LinearProgressIndicator()
+                          else if (!drive.configured)
+                            const Text(
+                              'Not set up on this server. Whoever runs the server adds a Google client ID and secret (see the deployment notes), '
+                              'and then you can connect your Google account here. Until then backups stay on the server.',
+                            )
+                          else if (drive.connected) ...[
+                            Text(
+                              'Every backup is copied to the "Billing Backups" folder in ${drive.email ?? 'your Google Drive'}. The app can only see the files it puts there.',
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton(onPressed: cubit.disconnect, child: const Text('Disconnect Google Drive')),
+                          ] else ...[
+                            const Text(
+                              'Copy every backup to your Google Drive too. You allow access on a Google page; the app can only see the files it puts there.',
+                            ),
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: () => _connect(context),
+                              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                              label: const Text('Connect Google Drive'),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
-            ]);
-          },
-        ),
-      );
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Download a backup', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Saves everything in "$firmName" — parties, items, every transaction, settings, logo and attachments — as one file you keep yourself. '
+                        'Logins are not part of the backup.',
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: download.status == SubmitStatus.submitting ? null : () => context.read<BackupCubit>().create(firmName),
+                        icon: download.status == SubmitStatus.submitting
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.download_outlined, size: 18),
+                        label: Text(download.status == SubmitStatus.submitting ? 'Preparing…' : 'Download Backup'),
+                      ),
+                      if (download.summary != null) ...[
+                        const SizedBox(height: 10),
+                        Text('Last download: ${download.fileName}\nContains ${download.summary}.', style: const TextStyle(color: Colors.black54)),
+                      ],
+                      const SizedBox(height: 16),
+                      const Text('Restore from a file', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      const Text('A backup is restored as a new company next to your existing ones, so nothing you have now is overwritten.'),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/companies'),
+                        icon: const Icon(Icons.restore, size: 18),
+                        label: const Text('Go to Companies to Restore'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

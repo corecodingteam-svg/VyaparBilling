@@ -51,12 +51,12 @@ class PaymentsState extends Equatable {
   num get total => payments.fold<num>(0, (s, p) => s + p.amount);
 
   PaymentsState copyWith({PeriodRange? range, LoadStatus? status, List<Payment>? payments, String? search, String? error}) => PaymentsState(
-        range: range ?? this.range,
-        status: status ?? this.status,
-        payments: payments ?? this.payments,
-        search: search ?? this.search,
-        error: error,
-      );
+    range: range ?? this.range,
+    status: status ?? this.status,
+    payments: payments ?? this.payments,
+    search: search ?? this.search,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [range, status, payments, search, error];

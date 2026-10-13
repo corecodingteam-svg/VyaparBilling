@@ -116,37 +116,44 @@ class _AdjustStockDialogState extends State<_AdjustStockDialog> {
           child: SizedBox(
             width: 420,
             child: SingleChildScrollView(
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text('${widget.item.name} · current stock ${qty(widget.item.stockQty)} $unit'),
-                const SizedBox(height: 16),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'add', label: Text('Add Stock'), icon: Icon(Icons.add)),
-                    ButtonSegment(value: 'reduce', label: Text('Reduce Stock'), icon: Icon(Icons.remove)),
-                  ],
-                  selected: {s.type},
-                  onSelectionChanged: (v) => cubit.typeChanged(v.first),
-                ),
-                const SizedBox(height: 16),
-                DateField(label: 'Adjustment Date', value: s.date, onChanged: cubit.dateChanged),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _qty,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: 'Total Qty *', suffixText: unit),
-                  validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter a quantity greater than 0' : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(
-                  controller: _price,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
-                  validator: (v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid price' : null,
-                ),
-                const SizedBox(height: 14),
-                TextFormField(controller: _notes, decoration: const InputDecoration(labelText: 'Details')),
-              ]),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('${widget.item.name} · current stock ${qty(widget.item.stockQty)} $unit'),
+                  const SizedBox(height: 16),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'add', label: Text('Add Stock'), icon: Icon(Icons.add)),
+                      ButtonSegment(value: 'reduce', label: Text('Reduce Stock'), icon: Icon(Icons.remove)),
+                    ],
+                    selected: {s.type},
+                    onSelectionChanged: (v) => cubit.typeChanged(v.first),
+                  ),
+                  const SizedBox(height: 16),
+                  DateField(label: 'Adjustment Date', value: s.date, onChanged: cubit.dateChanged),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _qty,
+                    autofocus: true,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(labelText: 'Total Qty *', suffixText: unit),
+                    validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter a quantity greater than 0' : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _price,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
+                    validator: (v) => (v ?? '').trim().isNotEmpty && parseNum(v!) == null ? 'Enter a valid price' : null,
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: _notes,
+                    decoration: const InputDecoration(labelText: 'Details'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

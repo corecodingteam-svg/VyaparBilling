@@ -54,6 +54,8 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
   final _minStock = TextEditingController();
   final _location = TextEditingController();
   final _reminderDays = TextEditingController();
+  final _cess = TextEditingController();
+  final _mrp = TextEditingController();
 
   ItemFormCubit get _cubit => context.read<ItemFormCubit>();
 
@@ -77,12 +79,30 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
     _minStock.text = numText(i?.minStock);
     _location.text = i?.location ?? '';
     _reminderDays.text = i?.serviceReminderDays?.toString() ?? '';
+    _cess.text = numText(i?.cessRate);
+    _mrp.text = numText(i?.mrp);
   }
 
   @override
   void dispose() {
     _tabs.dispose();
-    for (final c in [_name, _hsn, _code, _salePrice, _discount, _wholesalePrice, _wholesaleQty, _purchasePrice, _openingQty, _openingPrice, _minStock, _location, _reminderDays]) {
+    for (final c in [
+      _name,
+      _hsn,
+      _code,
+      _salePrice,
+      _discount,
+      _wholesalePrice,
+      _wholesaleQty,
+      _purchasePrice,
+      _openingQty,
+      _openingPrice,
+      _minStock,
+      _location,
+      _reminderDays,
+      _cess,
+      _mrp,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -109,6 +129,8 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
       'minStock': parseNum(_minStock.text),
       'location': _location.text.trim(),
       'serviceReminderDays': int.tryParse(_reminderDays.text.trim()),
+      'cessRate': parseNum(_cess.text),
+      'mrp': parseNum(_mrp.text),
     }, andNew: andNew);
   }
 
@@ -149,73 +171,94 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
         final catalog = context.watch<CatalogCubit>().state;
         return Form(
           key: _formKey,
-          child: Column(children: [
-            _header(state),
-            const Divider(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                  _row(narrow, [
-                    TextFormField(
-                      controller: _name,
-                      autofocus: !_cubit.editing,
-                      decoration: InputDecoration(labelText: state.isProduct ? 'Item Name *' : 'Service Name *'),
-                      validator: (v) => (v ?? '').trim().isEmpty ? 'Name is required' : null,
-                    ),
-                    TextFormField(
-                      controller: _hsn,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(labelText: state.isProduct ? 'Item HSN' : 'Service SAC'),
-                      validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[0-9]{4,8}$').hasMatch(v!.trim()) ? null : '4 to 8 digits',
-                    ),
-                    _unitField(state, catalog.units),
-                  ]),
-                  const SizedBox(height: 14),
-                  _row(narrow, [
-                    _categoryField(state, catalog.categories),
-                    _codeField(),
-                    if (!state.isProduct && _cubit.settings.serviceRemindersEnabled)
-                      TextFormField(
-                        controller: _reminderDays,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Service reminder after', suffixText: 'days', helperText: 'Reminds you this long after each sale'),
-                        validator: (v) {
-                          final t = (v ?? '').trim();
-                          final n = int.tryParse(t);
-                          return t.isEmpty || (n != null && n >= 1 && n <= 3650) ? null : 'Enter 1 to 3650 days';
-                        },
-                      )
-                    else
-                      const SizedBox.shrink(),
-                  ]),
-                  const SizedBox(height: 14),
-                  ImageSlot(label: state.isProduct ? 'Item image' : 'Service image', fileId: state.imageFileId, onChanged: _cubit.imageChanged, width: 120, height: 90),
-                  const SizedBox(height: 16),
-                  if (state.isProduct)
-                    TabBar(
-                      controller: _tabs,
-                      isScrollable: true,
-                      tabAlignment: TabAlignment.start,
-                      tabs: const [Tab(text: 'Pricing'), Tab(text: 'Stock')],
-                    )
-                  else
-                    const Text('Pricing', style: TextStyle(fontWeight: FontWeight.w600, color: brandBlue)),
-                  const SizedBox(height: 20),
-                  AnimatedBuilder(
-                    animation: _tabs,
-                    builder: (_, _) => IndexedStack(
-                      index: state.isProduct ? _tabs.index : 0,
-                      sizing: StackFit.loose,
-                      children: [_pricingTab(state, narrow), _stockTab(state, narrow)],
-                    ),
+          child: Column(
+            children: [
+              _header(state),
+              const Divider(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _row(narrow, [
+                        TextFormField(
+                          controller: _name,
+                          autofocus: !_cubit.editing,
+                          decoration: InputDecoration(labelText: state.isProduct ? 'Item Name *' : 'Service Name *'),
+                          validator: (v) => (v ?? '').trim().isEmpty ? 'Name is required' : null,
+                        ),
+                        TextFormField(
+                          controller: _hsn,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(labelText: state.isProduct ? 'Item HSN' : 'Service SAC'),
+                          validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[0-9]{4,8}$').hasMatch(v!.trim()) ? null : '4 to 8 digits',
+                        ),
+                        _unitField(state, catalog.units),
+                      ]),
+                      const SizedBox(height: 14),
+                      _row(narrow, [
+                        _categoryField(state, catalog.categories),
+                        _codeField(),
+                        if (!state.isProduct && _cubit.settings.serviceRemindersEnabled)
+                          TextFormField(
+                            controller: _reminderDays,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              labelText: 'Service reminder after',
+                              suffixText: 'days',
+                              helperText: 'Reminds you this long after each sale',
+                            ),
+                            validator: (v) {
+                              final t = (v ?? '').trim();
+                              final n = int.tryParse(t);
+                              return t.isEmpty || (n != null && n >= 1 && n <= 3650) ? null : 'Enter 1 to 3650 days';
+                            },
+                          )
+                        else
+                          const SizedBox.shrink(),
+                      ]),
+                      const SizedBox(height: 14),
+                      ImageSlot(
+                        label: state.isProduct ? 'Item image' : 'Service image',
+                        fileId: state.imageFileId,
+                        onChanged: _cubit.imageChanged,
+                        width: 120,
+                        height: 90,
+                      ),
+                      const SizedBox(height: 16),
+                      if (state.isProduct)
+                        TabBar(
+                          controller: _tabs,
+                          isScrollable: true,
+                          tabAlignment: TabAlignment.start,
+                          tabs: const [
+                            Tab(text: 'Pricing'),
+                            Tab(text: 'Stock'),
+                          ],
+                        )
+                      else
+                        const Text(
+                          'Pricing',
+                          style: TextStyle(fontWeight: FontWeight.w600, color: brandBlue),
+                        ),
+                      const SizedBox(height: 20),
+                      AnimatedBuilder(
+                        animation: _tabs,
+                        builder: (_, _) => IndexedStack(
+                          index: state.isProduct ? _tabs.index : 0,
+                          sizing: StackFit.loose,
+                          children: [_pricingTab(state, narrow), _stockTab(state, narrow)],
+                        ),
+                      ),
+                    ],
                   ),
-                ]),
+                ),
               ),
-            ),
-            const Divider(),
-            _footer(state),
-          ]),
+              const Divider(),
+              _footer(state),
+            ],
+          ),
         );
       },
     );
@@ -227,240 +270,322 @@ class _ItemFormDialogState extends State<ItemFormDialog> with SingleTickerProvid
   }
 
   Widget _header(ItemFormState state) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
-        child: Row(children: [
-          Text(_cubit.editing ? 'Edit Item' : 'Add Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 20),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: const [ButtonSegment(value: 'product', label: Text('Product')), ButtonSegment(value: 'service', label: Text('Service'))],
-            selected: {state.type},
-            onSelectionChanged: (s) {
-              if (s.first == 'service') _tabs.index = 0;
-              _cubit.typeChanged(s.first);
-            },
-          ),
-          const Spacer(),
-          IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
-        ]),
-      );
+    padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
+    child: Row(
+      children: [
+        Text(_cubit.editing ? 'Edit Item' : 'Add Item', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 20),
+        SegmentedButton<String>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'product', label: Text('Product')),
+            ButtonSegment(value: 'service', label: Text('Service')),
+          ],
+          selected: {state.type},
+          onSelectionChanged: (s) {
+            if (s.first == 'service') _tabs.index = 0;
+            _cubit.typeChanged(s.first);
+          },
+        ),
+        const Spacer(),
+        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
+      ],
+    ),
+  );
 
   Widget _row(bool narrow, List<Widget> children) => narrow
-      ? Column(children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c)])
-      : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: 16), Expanded(child: children[i])],
-        ]);
+      ? Column(
+          children: [for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c)],
+        )
+      : Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: 16), Expanded(child: children[i])],
+          ],
+        );
 
   static const _addNew = '__new__';
 
   Widget _unitField(ItemFormState state, List<Unit> units) => DropdownButtonFormField<String?>(
-        key: ValueKey('unit-${state.unit}-${units.length}'),
-        initialValue: units.any((u) => u.shortName == state.unit) ? state.unit : null,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Unit'),
-        items: [
-          const DropdownMenuItem(value: null, child: Text('None')),
-          for (final u in units) DropdownMenuItem(value: u.shortName, child: Text('${u.name} (${u.shortName})')),
-          const DropdownMenuItem(value: _addNew, child: Text('+ Add new unit', style: TextStyle(color: brandBlue))),
-        ],
-        onChanged: (v) async {
-          if (v != _addNew) return _cubit.unitChanged(v);
-          final created = await showUnitDialog(context);
-          _cubit.unitChanged(created?.shortName ?? state.unit);
-        },
-      );
+    key: ValueKey('unit-${state.unit}-${units.length}'),
+    initialValue: units.any((u) => u.shortName == state.unit) ? state.unit : null,
+    isExpanded: true,
+    decoration: const InputDecoration(labelText: 'Unit'),
+    items: [
+      const DropdownMenuItem(value: null, child: Text('None')),
+      for (final u in units) DropdownMenuItem(value: u.shortName, child: Text('${u.name} (${u.shortName})')),
+      const DropdownMenuItem(
+        value: _addNew,
+        child: Text('+ Add new unit', style: TextStyle(color: brandBlue)),
+      ),
+    ],
+    onChanged: (v) async {
+      if (v != _addNew) return _cubit.unitChanged(v);
+      final created = await showUnitDialog(context);
+      _cubit.unitChanged(created?.shortName ?? state.unit);
+    },
+  );
 
   Widget _categoryField(ItemFormState state, List<Category> cats) => DropdownButtonFormField<String?>(
-        key: ValueKey('cat-${state.categoryId}-${cats.length}'),
-        initialValue: cats.any((c) => c.id == state.categoryId) ? state.categoryId : null,
-        isExpanded: true,
-        decoration: const InputDecoration(labelText: 'Category'),
-        items: [
-          const DropdownMenuItem(value: null, child: Text('None')),
-          for (final c in cats) DropdownMenuItem(value: c.id, child: Text(c.name)),
-          const DropdownMenuItem(value: _addNew, child: Text('+ Add new category', style: TextStyle(color: brandBlue))),
-        ],
-        onChanged: (v) async {
-          if (v != _addNew) return _cubit.categoryChanged(v);
-          final created = await showCategoryDialog(context);
-          _cubit.categoryChanged(created?.id ?? state.categoryId);
-        },
-      );
+    key: ValueKey('cat-${state.categoryId}-${cats.length}'),
+    initialValue: cats.any((c) => c.id == state.categoryId) ? state.categoryId : null,
+    isExpanded: true,
+    decoration: const InputDecoration(labelText: 'Category'),
+    items: [
+      const DropdownMenuItem(value: null, child: Text('None')),
+      for (final c in cats) DropdownMenuItem(value: c.id, child: Text(c.name)),
+      const DropdownMenuItem(
+        value: _addNew,
+        child: Text('+ Add new category', style: TextStyle(color: brandBlue)),
+      ),
+    ],
+    onChanged: (v) async {
+      if (v != _addNew) return _cubit.categoryChanged(v);
+      final created = await showCategoryDialog(context);
+      _cubit.categoryChanged(created?.id ?? state.categoryId);
+    },
+  );
 
   Widget _codeField() => TextFormField(
-        controller: _code,
-        decoration: InputDecoration(
-          labelText: 'Item Code',
-          suffixIcon: Padding(
-            padding: const EdgeInsets.all(6),
-            child: TextButton(
-              // Random 11-digit numeric code, suitable for barcodes.
-              onPressed: () {
-                final r = Random();
-                _code.text = '${r.nextInt(9) + 1}${List.generate(10, (_) => r.nextInt(10)).join()}';
-              },
-              child: const Text('Assign Code'),
-            ),
-          ),
+    controller: _code,
+    decoration: InputDecoration(
+      labelText: 'Item Code',
+      suffixIcon: Padding(
+        padding: const EdgeInsets.all(6),
+        child: TextButton(
+          // Random 11-digit numeric code, suitable for barcodes.
+          onPressed: () {
+            final r = Random();
+            _code.text = '${r.nextInt(9) + 1}${List.generate(10, (_) => r.nextInt(10)).join()}';
+          },
+          child: const Text('Assign Code'),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _taxToggle(bool value, ValueChanged<bool> onChanged) => DropdownButtonFormField<bool>(
-        key: ValueKey('tax-$value'),
-        initialValue: value,
-        isExpanded: true,
-        decoration: const InputDecoration(filled: true, fillColor: Colors.white),
-        items: const [DropdownMenuItem(value: false, child: Text('Without Tax')), DropdownMenuItem(value: true, child: Text('With Tax'))],
-        onChanged: (v) => onChanged(v!),
-      );
+    key: ValueKey('tax-$value'),
+    initialValue: value,
+    isExpanded: true,
+    decoration: const InputDecoration(filled: true, fillColor: Colors.white),
+    items: const [
+      DropdownMenuItem(value: false, child: Text('Without Tax')),
+      DropdownMenuItem(value: true, child: Text('With Tax')),
+    ],
+    onChanged: (v) => onChanged(v!),
+  );
 
   Widget _section(String title, Widget child) => Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: pageBg, borderRadius: BorderRadius.circular(10)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 14),
-          child,
-        ]),
-      );
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(color: pageBg, borderRadius: BorderRadius.circular(10)),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 14),
+        child,
+      ],
+    ),
+  );
 
-  Widget _priceRow(TextEditingController c, String label, bool incl, ValueChanged<bool> setIncl) => Row(children: [
-        Expanded(
-          child: TextFormField(
-            controller: c,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: label, prefixText: '₹ ', filled: true, fillColor: Colors.white),
-            validator: _amount,
-          ),
+  Widget _priceRow(TextEditingController c, String label, bool incl, ValueChanged<bool> setIncl) => Row(
+    children: [
+      Expanded(
+        child: TextFormField(
+          controller: c,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: label, prefixText: '₹ ', filled: true, fillColor: Colors.white),
+          validator: _amount,
         ),
-        const SizedBox(width: 8),
-        Expanded(child: _taxToggle(incl, setIncl)),
-      ]);
+      ),
+      const SizedBox(width: 8),
+      Expanded(child: _taxToggle(incl, setIncl)),
+    ],
+  );
 
   Widget _pricingTab(ItemFormState state, bool narrow) {
     final sale = _section(
       'Sale Price',
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _row(narrow, [
-          _priceRow(_salePrice, 'Sale Price', state.saleIncludesTax, _cubit.saleTaxChanged),
-          Row(children: [
-            Expanded(
-              child: TextFormField(
-                controller: _discount,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Disc. On Sale Price', filled: true, fillColor: Colors.white),
-                validator: (v) {
-                  final err = _amount(v);
-                  if (err != null) return err;
-                  final d = parseNum(v ?? '');
-                  return state.discountType == 'percent' && d != null && d > 100 ? 'Max 100%' : null;
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                key: ValueKey('disc-${state.discountType}'),
-                initialValue: state.discountType,
-                isExpanded: true,
-                decoration: const InputDecoration(filled: true, fillColor: Colors.white),
-                items: const [DropdownMenuItem(value: 'percent', child: Text('Percentage')), DropdownMenuItem(value: 'amount', child: Text('Amount'))],
-                onChanged: (v) => _cubit.discountTypeChanged(v!),
-              ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row(narrow, [
+            _priceRow(_salePrice, 'Sale Price', state.saleIncludesTax, _cubit.saleTaxChanged),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _discount,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Disc. On Sale Price', filled: true, fillColor: Colors.white),
+                    validator: (v) {
+                      final err = _amount(v);
+                      if (err != null) return err;
+                      final d = parseNum(v ?? '');
+                      return state.discountType == 'percent' && d != null && d > 100 ? 'Max 100%' : null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('disc-${state.discountType}'),
+                    initialValue: state.discountType,
+                    isExpanded: true,
+                    decoration: const InputDecoration(filled: true, fillColor: Colors.white),
+                    items: const [
+                      DropdownMenuItem(value: 'percent', child: Text('Percentage')),
+                      DropdownMenuItem(value: 'amount', child: Text('Amount')),
+                    ],
+                    onChanged: (v) => _cubit.discountTypeChanged(v!),
+                  ),
+                ),
+              ],
             ),
           ]),
-        ]),
-        const SizedBox(height: 8),
-        if (state.wholesale)
-          _row(narrow, [
-            TextFormField(
-              controller: _wholesalePrice,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Wholesale Price', prefixText: '₹ ', filled: true, fillColor: Colors.white),
-              validator: (v) => parseNum(v ?? '') == null ? 'Enter wholesale price' : null,
-            ),
-            TextFormField(
-              controller: _wholesaleQty,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Minimum Wholesale Qty',
-                filled: true,
-                fillColor: Colors.white,
-                suffixIcon: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _cubit.wholesaleToggled(false)),
+          const SizedBox(height: 8),
+          if (state.wholesale)
+            _row(narrow, [
+              TextFormField(
+                controller: _wholesalePrice,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Wholesale Price', prefixText: '₹ ', filled: true, fillColor: Colors.white),
+                validator: (v) => parseNum(v ?? '') == null ? 'Enter wholesale price' : null,
               ),
-              validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter minimum quantity' : null,
-            ),
-          ])
-        else if (_cubit.settings.wholesalePriceEnabled)
-          TextButton.icon(onPressed: () => _cubit.wholesaleToggled(true), icon: const Icon(Icons.add), label: const Text('Add Wholesale Price')),
-      ]),
-    );
-    final purchase = _section('Purchase Price', _priceRow(_purchasePrice, 'Purchase Price', state.purchaseIncludesTax, _cubit.purchaseTaxChanged));
-    final taxes = _section(
-      'Taxes',
-      DropdownButtonFormField<num?>(
-        key: ValueKey('gst-${state.gstRate}'),
-        initialValue: state.gstRate,
-        decoration: const InputDecoration(labelText: 'Tax Rate', filled: true, fillColor: Colors.white),
-        items: [
-          const DropdownMenuItem(value: null, child: Text('None')),
-          for (final r in gstRateOptions) DropdownMenuItem(value: r, child: Text('GST@${numText(r)}%')),
+              TextFormField(
+                controller: _wholesaleQty,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Minimum Wholesale Qty',
+                  filled: true,
+                  fillColor: Colors.white,
+                  suffixIcon: IconButton(icon: const Icon(Icons.close, size: 18), onPressed: () => _cubit.wholesaleToggled(false)),
+                ),
+                validator: (v) => (parseNum(v ?? '') ?? 0) <= 0 ? 'Enter minimum quantity' : null,
+              ),
+            ])
+          else if (_cubit.settings.wholesalePriceEnabled)
+            TextButton.icon(onPressed: () => _cubit.wholesaleToggled(true), icon: const Icon(Icons.add), label: const Text('Add Wholesale Price')),
         ],
-        onChanged: _cubit.gstRateChanged,
       ),
     );
-    return Column(children: [sale, const SizedBox(height: 14), _row(narrow, [purchase, taxes])]);
+    final purchase = _section('Purchase Price', _priceRow(_purchasePrice, 'Purchase Price', state.purchaseIncludesTax, _cubit.purchaseTaxChanged));
+    final showCess = _cubit.settings.cessEnabled || _cubit.item?.cessRate != null;
+    final taxes = _section(
+      'Taxes',
+      Column(
+        children: [
+          DropdownButtonFormField<num?>(
+            key: ValueKey('gst-${state.gstRate}'),
+            initialValue: state.gstRate,
+            decoration: const InputDecoration(labelText: 'Tax Rate', filled: true, fillColor: Colors.white),
+            items: [
+              const DropdownMenuItem(value: null, child: Text('None')),
+              for (final r in gstRateOptions) DropdownMenuItem(value: r, child: Text('GST@${numText(r)}%')),
+            ],
+            onChanged: _cubit.gstRateChanged,
+          ),
+          if (showCess) ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _cess,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Compensation Cess %', filled: true, fillColor: Colors.white),
+              validator: (v) => (v ?? '').trim().isEmpty || ((parseNum(v!) ?? -1) >= 0 && parseNum(v)! <= 300) ? null : '0 to 300',
+            ),
+          ],
+        ],
+      ),
+    );
+    final mrp = _cubit.settings.mrpEnabled || _cubit.item?.mrp != null
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox(
+                width: 260,
+                child: TextFormField(
+                  controller: _mrp,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'MRP', prefixText: '₹ '),
+                  validator: _amount,
+                ),
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+    return Column(
+      children: [
+        sale,
+        const SizedBox(height: 14),
+        mrp,
+        _row(narrow, [purchase, taxes]),
+      ],
+    );
   }
 
   Widget _stockTab(ItemFormState state, bool narrow) {
     final unit = state.unit ?? '';
-    return Column(children: [
-      _row(narrow, [
-        TextFormField(
-          controller: _openingQty,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: 'Opening Quantity', suffixText: unit),
-          validator: _amount,
-        ),
-        TextFormField(
-          controller: _openingPrice,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
-          validator: _amount,
-        ),
-        DateField(label: 'As Of Date', value: state.openingDate, onChanged: _cubit.openingDateChanged),
-      ]),
-      const SizedBox(height: 14),
-      _row(narrow, [
-        TextFormField(
-          controller: _minStock,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: 'Min Stock To Maintain', suffixText: unit, helperText: 'Shows a low-stock alert at or below this'),
-          validator: _amount,
-        ),
-        TextFormField(controller: _location, decoration: const InputDecoration(labelText: 'Location')),
-        const SizedBox.shrink(),
-      ]),
-    ]);
+    return Column(
+      children: [
+        _row(narrow, [
+          TextFormField(
+            controller: _openingQty,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'Opening Quantity', suffixText: unit),
+            validator: _amount,
+          ),
+          TextFormField(
+            controller: _openingPrice,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'At Price', prefixText: '₹ ', suffixText: unit.isEmpty ? null : '/ $unit'),
+            validator: _amount,
+          ),
+          DateField(label: 'As Of Date', value: state.openingDate, onChanged: _cubit.openingDateChanged),
+        ]),
+        const SizedBox(height: 14),
+        _row(narrow, [
+          TextFormField(
+            controller: _minStock,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'Min Stock To Maintain', suffixText: unit, helperText: 'Shows a low-stock alert at or below this'),
+            validator: _amount,
+          ),
+          TextFormField(
+            controller: _location,
+            decoration: const InputDecoration(labelText: 'Location'),
+          ),
+          const SizedBox.shrink(),
+        ]),
+      ],
+    );
   }
 
   Widget _footer(ItemFormState state) {
     final busy = state.status == SubmitStatus.submitting;
     return Padding(
       padding: const EdgeInsets.all(14),
-      child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-        if (_cubit.editing)
-          OutlinedButton(onPressed: busy ? null : _delete, style: OutlinedButton.styleFrom(foregroundColor: payRed), child: const Text('Delete'))
-        else
-          OutlinedButton(onPressed: busy ? null : () => _save(andNew: true), child: const Text('Save & New')),
-        const SizedBox(width: 12),
-        FilledButton(
-          onPressed: busy ? null : () => _save(andNew: false),
-          child: busy
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : Text(_cubit.editing ? 'Update' : 'Save'),
-        ),
-      ]),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (_cubit.editing)
+            OutlinedButton(
+              onPressed: busy ? null : _delete,
+              style: OutlinedButton.styleFrom(foregroundColor: payRed),
+              child: const Text('Delete'),
+            )
+          else
+            OutlinedButton(onPressed: busy ? null : () => _save(andNew: true), child: const Text('Save & New')),
+          const SizedBox(width: 12),
+          FilledButton(
+            onPressed: busy ? null : () => _save(andNew: false),
+            child: busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : Text(_cubit.editing ? 'Update' : 'Save'),
+          ),
+        ],
+      ),
     );
   }
 }

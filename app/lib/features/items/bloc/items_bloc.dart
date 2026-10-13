@@ -66,16 +66,15 @@ class ItemsState extends Equatable {
     LoadStatus? movementStatus,
     List<StockMovement>? movements,
     String? error,
-  }) =>
-      ItemsState(
-        status: status ?? this.status,
-        items: items ?? this.items,
-        search: search ?? this.search,
-        selectedId: selectedId != null ? selectedId() : this.selectedId,
-        movementStatus: movementStatus ?? this.movementStatus,
-        movements: movements ?? this.movements,
-        error: error,
-      );
+  }) => ItemsState(
+    status: status ?? this.status,
+    items: items ?? this.items,
+    search: search ?? this.search,
+    selectedId: selectedId != null ? selectedId() : this.selectedId,
+    movementStatus: movementStatus ?? this.movementStatus,
+    movements: movements ?? this.movements,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [status, items, search, selectedId, movementStatus, movements, error];

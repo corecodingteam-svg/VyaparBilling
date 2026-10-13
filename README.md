@@ -22,19 +22,22 @@ Everything in the sidebar is built:
 | Conversions | Estimate → sale order / sale; sale order, challan, proforma → sale; purchase order → purchase bill |
 | GST | Per-line rate, with/without-tax prices, CGST+SGST or IGST by place of supply, tax invoice PDF with HSN and tax summary |
 | Cash & Bank | Bank accounts, cash in hand, transfers and adjustments, cheques (open → deposited), loan accounts with EMI principal/interest |
-| Reports (38) | Transaction, party, GST, item/stock and business reports incl. trial balance, GSTR-1/2/3B, party- and item-wise profit, stock detail — each with CSV export and PDF print |
+| Reports (46) | Transaction, party, GST, item/stock and business reports incl. trial balance, GSTR-1/2/3B, party- and item-wise profit, stock detail — each with CSV export and PDF print |
 | Utilities | Import items / parties from CSV, export items, bulk update items, barcode label sheets, set-up checklist, verify data, close financial year, backup & restore |
 | Payments | Payments linked to invoices, split payments (cash + bank), attachments |
 | Print | Three invoice themes with logo and signature, 58/80 mm thermal receipts |
 | Accounting | Own ledger accounts and journal entries, currencies for printing |
 | Companies & users | Several companies per login; owner / admin / accountant / salesman roles |
+| Stock & tax options | Godowns with transfers, batch / expiry, serial numbers, MRP, cess, bill discount, extra charges, TCS / TDS, loyalty points, party groups (all optional, in Settings) |
+| Salesmen | Parties assigned to a salesman, own-data-only access, location check-ins (while the app is open) |
+| Printing | Receipt printers directly: network (IP) and, from Chrome/Edge, USB or serial |
 | Reminders | Overdue payments, service follow-ups |
 | Settings | GST, number prefixes, due dates, print theme, party / item options, modules, change password |
 
 `FEATURES.md` lists, feature by feature, exactly what is built and what is not.
 
 Not built: WhatsApp sending / marketing, SMS, online store and payments, e-way bill / e-invoice
-filing, Tally export, live salesman location, automatic backup.
+filing, Tally export, background location tracking (see FEATURES.md).
 
 ## Run locally
 

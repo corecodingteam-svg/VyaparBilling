@@ -10,9 +10,16 @@ import '../../data/repositories/firm_repository.dart';
 import '../../data/repositories/invoices_repository.dart';
 import '../../data/repositories/parties_repository.dart';
 import 'pdf_documents.dart';
+import 'thermal/escpos.dart';
 
 /// Layout id of the thermal receipt (the others are the invoice theme names).
 const thermalLayout = 'thermal';
+
+/// The invoice as raw ESC/POS bytes for a receipt printer.
+Future<Uint8List> renderReceiptBytes(BuildContext context, String invoiceId) async {
+  final (invoice, firm) = await (context.read<InvoicesRepository>().get(invoiceId), context.read<FirmRepository>().get()).wait;
+  return buildReceiptBytes(invoice, firm);
+}
 
 /// Loads everything an invoice prints with — the document, the business, its logo and signature,
 /// the party's printable fields and the currency symbol — and renders it in [layout]:

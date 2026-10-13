@@ -2,6 +2,7 @@
 //   flutter test live_api_test            # backend must be listening on API_BASE_URL (default localhost:3100)
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:billing_app/features/cash_bank/bloc/cash_bank_form_cubits.dart';
 import 'package:billing_app/features/accounting/journal_form_cubit.dart';
 import 'package:billing_app/features/files/attachments.dart';
@@ -34,6 +35,9 @@ import 'package:billing_app/features/invoices/bloc/invoice_form_cubit.dart';
 import 'package:billing_app/data/models/invoice.dart';
 import 'package:billing_app/data/models/report.dart';
 import 'package:billing_app/features/printing/pdf_documents.dart';
+import 'package:billing_app/data/models/team_location.dart';
+import 'package:billing_app/data/repositories/location_repository.dart';
+import 'package:billing_app/features/parties/bloc/party_form_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _MemoryTokens extends TokenStore {
@@ -61,8 +65,8 @@ void main() {
     final firmRepo = FirmRepository(api, bus);
 
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final user = await AuthRepository(api).register(
-      firmName: 'Live Test $stamp', stateCode: '07', fullName: 'Tester', email: 'live$stamp@example.com', password: 'Password123');
+    final user = await AuthRepository(api)
+        .register(firmName: 'Live Test $stamp', stateCode: '07', fullName: 'Tester', email: 'live$stamp@example.com', password: 'Password123');
     expect(user.firmName, 'Live Test $stamp');
 
     final party = await parties.save(null, {'name': 'Live Customer', 'phone': '9000000001', 'openingBalance': 100});
@@ -70,7 +74,15 @@ void main() {
     expect((await items.units()).length, greaterThan(10));
 
     // Drive the real form cubit, as the screen does.
-    final form = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale);
+    final form = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+    );
     await form.load();
     expect(form.state.number, '1');
     final uid = form.state.lines.first.uid;
@@ -91,7 +103,16 @@ void main() {
     expect((await items.movements(item.id)).first.label, 'Sale');
 
     // Edit through the cubit: quantity 3 → 5.
-    final edit = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale, invoiceId: invoiceId);
+    final edit = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+      invoiceId: invoiceId,
+    );
     await edit.load();
     edit.lineQtyChanged(edit.state.lines.first.uid, '5');
     await edit.save(andNew: false);
@@ -100,8 +121,13 @@ void main() {
     expect((await items.list('product')).single.stockQty, 15);
 
     final pay = await payments.save(null, {
-      'type': 'in', 'number': await payments.nextNumber('in'), 'partyId': party.id, 'paymentDate': saved.invoiceDate,
-      'amount': 200, 'paymentMode': 'upi', 'description': '',
+      'type': 'in',
+      'number': await payments.nextNumber('in'),
+      'partyId': party.id,
+      'paymentDate': saved.invoiceDate,
+      'amount': 200,
+      'paymentMode': 'upi',
+      'description': '',
     });
     expect(pay.partyName, 'Live Customer');
 
@@ -125,7 +151,15 @@ void main() {
 
     // ---- purchase side: stock comes in, we owe the supplier, Payment-Out settles it.
     final supplier = await parties.save(null, {'name': 'Live Supplier'});
-    final buy = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.purchase);
+    final buy = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.purchase,
+    );
     await buy.load();
     final buyUid = buy.state.lines.first.uid;
     buy
@@ -143,7 +177,15 @@ void main() {
     expect((await parties.list()).firstWhere((p) => p.id == supplier.id).balance, -500);
 
     // A second bill with the same (blank) number is allowed for purchases.
-    final again = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.purchase);
+    final again = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.purchase,
+    );
     await again.load();
     again
       ..partySelected(again.state.parties.firstWhere((p) => p.id == supplier.id))
@@ -153,8 +195,13 @@ void main() {
     await invoices.delete(again.state.savedId!);
 
     final payOut = await payments.save(null, {
-      'type': 'out', 'number': await payments.nextNumber('out'), 'partyId': supplier.id, 'paymentDate': bill.invoiceDate,
-      'amount': 500, 'paymentMode': 'bank', 'description': '',
+      'type': 'out',
+      'number': await payments.nextNumber('out'),
+      'partyId': supplier.id,
+      'paymentDate': bill.invoiceDate,
+      'amount': 500,
+      'paymentMode': 'bank',
+      'description': '',
     });
     expect((await parties.list()).firstWhere((p) => p.id == supplier.id).balance, 0);
     expect((await parties.transactions(supplier.id)).map((t) => t.kind), ['payment_out', 'purchase']);
@@ -168,7 +215,15 @@ void main() {
     // ---- estimate: no stock/balance effect; converting creates a sale and marks it converted.
     final stockBefore = (await items.list('product')).single.stockQty;
     final balanceBefore = (await parties.list()).firstWhere((p) => p.id == party.id).balance;
-    final quote = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.estimate);
+    final quote = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.estimate,
+    );
     await quote.load();
     expect(quote.state.number, '1'); // estimates have their own number series
     quote
@@ -185,7 +240,16 @@ void main() {
     expect((await parties.transactions(party.id)).any((t) => t.type == 'Estimate'), isFalse);
     expect((await buildInvoicePdf(await invoices.get(estimateId), firm)).length, greaterThan(1000));
 
-    final convert = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale, fromDocumentId: estimateId);
+    final convert = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+      fromDocumentId: estimateId,
+    );
     await convert.load();
     expect([convert.state.number, convert.state.partyId, convert.state.total], ['2', party.id, 240]);
     await convert.save(andNew: false);
@@ -196,7 +260,16 @@ void main() {
     expect((await items.list('product')).single.stockQty, stockBefore - 2);
 
     // Converting the same estimate twice is refused.
-    final twice = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale, fromDocumentId: estimateId);
+    final twice = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+      fromDocumentId: estimateId,
+    );
     await twice.load();
     await twice.save(andNew: false);
     expect(twice.state.error, contains('already converted'));
@@ -210,7 +283,16 @@ void main() {
 
     // ---- order chain: estimate → sale order → sale; each step closes the previous document.
     Future<String> make(InvoiceKind kind, {String? from, String qty = '2', String? received}) async {
-      final c = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: kind, fromDocumentId: from);
+      final c = InvoiceFormCubit(
+        invoices: invoices,
+        parties: parties,
+        items: items,
+        accounts: cashBank,
+        firm: firmRepo,
+        bus: bus,
+        kind: kind,
+        fromDocumentId: from,
+      );
       await c.load();
       if (from == null) {
         c
@@ -243,7 +325,16 @@ void main() {
     // A purchase order cannot become a sale; challans and proformas convert to sales.
     final supBal0 = await balanceOf(supplier.id);
     final po = await make(InvoiceKind.purchaseOrder, qty: '4');
-    final wrong = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale, fromDocumentId: po);
+    final wrong = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+      fromDocumentId: po,
+    );
     await wrong.load();
     await wrong.save(andNew: false);
     expect(wrong.state.error, contains('already converted or no longer exists'));
@@ -276,13 +367,27 @@ void main() {
 
     // ---- GST: firm is in Delhi (07). Intra-state → CGST + SGST; another state → IGST.
     final gstItem = await items.save(null, {
-      'name': 'GST Widget', 'hsnCode': '8471', 'unit': 'PCS', 'salePrice': 500, 'purchasePrice': 300, 'gstRate': 18, 'openingQty': 10,
+      'name': 'GST Widget',
+      'hsnCode': '8471',
+      'unit': 'PCS',
+      'salePrice': 500,
+      'purchasePrice': 300,
+      'gstRate': 18,
+      'openingQty': 10,
     });
     final gstParty = await parties.save(null, {'name': 'GST Buyer', 'gstin': '27AAACR5055K1Z5', 'gstType': 'regular'});
     expect(gstParty.stateCode, '27'); // derived from the GSTIN
 
     Future<Invoice> gstSale({required String? state, bool inclusive = false}) async {
-      final c = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale);
+      final c = InvoiceFormCubit(
+        invoices: invoices,
+        parties: parties,
+        items: items,
+        accounts: cashBank,
+        firm: firmRepo,
+        bus: bus,
+        kind: InvoiceKind.sale,
+      );
       await c.load();
       if (inclusive) c.pricesIncludeTaxChanged(true);
       c
@@ -347,21 +452,38 @@ void main() {
     expect(cashBalance, 100); // +100 sale; the purchase bill was deleted above
     expect(cashTxns.single.type, 'Sale');
 
-    final hdfc = await cashBank.saveAccount(null, {'name': 'HDFC Current', 'openingBalance': 1000, 'openingDate': saved.invoiceDate, 'ifsc': 'hdfc0001234'});
+    final hdfc = await cashBank.saveAccount(null, {
+      'name': 'HDFC Current',
+      'openingBalance': 1000,
+      'openingDate': saved.invoiceDate,
+      'ifsc': 'hdfc0001234',
+    });
     final sbi = await cashBank.saveAccount(null, {'name': 'SBI Savings', 'openingDate': saved.invoiceDate});
     expect([hdfc.balance, hdfc.ifsc, sbi.balance], [1000, 'HDFC0001234', 0]);
     await expectLater(cashBank.saveAccount(null, {'name': 'hdfc current'}), throwsA(isA<ApiException>()));
 
     // A UPI payment-in into HDFC.
     final upi = await payments.save(null, {
-      'type': 'in', 'number': await payments.nextNumber('in'), 'partyId': party.id, 'paymentDate': saved.invoiceDate,
-      'amount': 250, 'paymentMode': 'upi', 'bankAccountId': hdfc.id, 'description': '',
+      'type': 'in',
+      'number': await payments.nextNumber('in'),
+      'partyId': party.id,
+      'paymentDate': saved.invoiceDate,
+      'amount': 250,
+      'paymentMode': 'upi',
+      'bankAccountId': hdfc.id,
+      'description': '',
     });
     expect(upi.bankAccountId, hdfc.id);
     // Cash never keeps a bank account, whatever the client sends.
     final cashPay = await payments.save(null, {
-      'type': 'in', 'number': await payments.nextNumber('in'), 'partyId': party.id, 'paymentDate': saved.invoiceDate,
-      'amount': 40, 'paymentMode': 'cash', 'bankAccountId': hdfc.id, 'description': '',
+      'type': 'in',
+      'number': await payments.nextNumber('in'),
+      'partyId': party.id,
+      'paymentDate': saved.invoiceDate,
+      'amount': 40,
+      'paymentMode': 'cash',
+      'bankAccountId': hdfc.id,
+      'description': '',
     });
     expect(cashPay.bankAccountId, isNull);
 
@@ -395,8 +517,13 @@ void main() {
 
     // Cheque: open until deposited, then it lands in the bank.
     final chequePay = await payments.save(null, {
-      'type': 'in', 'number': await payments.nextNumber('in'), 'partyId': party.id, 'paymentDate': saved.invoiceDate,
-      'amount': 600, 'paymentMode': 'cheque', 'description': '',
+      'type': 'in',
+      'number': await payments.nextNumber('in'),
+      'partyId': party.id,
+      'paymentDate': saved.invoiceDate,
+      'amount': 600,
+      'paymentMode': 'cheque',
+      'description': '',
     });
     var cheques = await cashBank.cheques();
     expect([cheques.single.status, cheques.single.amount], ['open', 600]);
@@ -411,7 +538,15 @@ void main() {
     expect(await cashBank.cheques(), isEmpty);
 
     // A sale received by card into HDFC, through the real form.
-    final card = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale);
+    final card = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+    );
     await card.load();
     expect(card.state.bankAccounts, hasLength(2));
     card
@@ -435,8 +570,13 @@ void main() {
     final hdfcBefore = (await cashBank.accounts()).firstWhere((b) => b.id == hdfc.id).balance;
     final cashBeforeLoan = (await cashBank.cash()).$1;
     final loan = await loans.save(null, {
-      'name': 'Shop Loan', 'lender': 'HDFC', 'openingBalance': 50000, 'balanceDate': saved.invoiceDate, 'bankAccountId': hdfc.id,
-      'interestRate': 11.5, 'termMonths': 36,
+      'name': 'Shop Loan',
+      'lender': 'HDFC',
+      'openingBalance': 50000,
+      'balanceDate': saved.invoiceDate,
+      'bankAccountId': hdfc.id,
+      'interestRate': 11.5,
+      'termMonths': 36,
     });
     expect([loan.balance, loan.interestRate, loan.termMonths], [50000, 11.5, 36]);
     expect((await cashBank.accounts()).firstWhere((b) => b.id == hdfc.id).balance, hdfcBefore + 50000);
@@ -449,7 +589,10 @@ void main() {
     final loanTxns = await loans.transactions(loan.id);
     expect(loanTxns.map((t) => t.kind), ['charge', 'increase', 'payment', 'opening']);
     expect(loanTxns.map((t) => t.balance), [56250, 56000, 46000, 50000]);
-    await expectLater(loans.addTransaction(loan.id, {'kind': 'payment', 'principal': 99999, 'date': saved.invoiceDate}), throwsA(isA<ApiException>()));
+    await expectLater(
+      loans.addTransaction(loan.id, {'kind': 'payment', 'principal': 99999, 'date': saved.invoiceDate}),
+      throwsA(isA<ApiException>()),
+    );
     await expectLater(loans.delete(loan.id), throwsA(isA<ApiException>())); // has transactions
     for (final t in loanTxns.where((t) => t.id != null)) {
       await loans.deleteTransaction(t.id!);
@@ -496,13 +639,15 @@ void main() {
 
     // ---- utilities: CSV import (with a duplicate and a new category), bulk update.
     final importer = ImportCubit(api, bus, itemImportSpec)
-      ..fileChosen(toCsv([
-        itemImportSpec.headers,
-        ['Imported Rice', 'product', 'RICE5', '1006', 'BAG', 'Grains', '650', '520', '5', '40', '10'],
-        ['Live Widget', 'product', '', '', '', '', '1', '1', '', '', ''], // already exists
-        ['Imported Service', 'service', '', '9968', '', 'Grains', '50', '', '18', '', ''],
-        ['Bad Row', 'product', '', '', '', '', 'abc', '', '', '', ''],
-      ]));
+      ..fileChosen(
+        toCsv([
+          itemImportSpec.headers,
+          ['Imported Rice', 'product', 'RICE5', '1006', 'BAG', 'Grains', '650', '520', '5', '40', '10'],
+          ['Live Widget', 'product', '', '', '', '', '1', '1', '', '', ''], // already exists
+          ['Imported Service', 'service', '', '9968', '', 'Grains', '50', '', '18', '', ''],
+          ['Bad Row', 'product', '', '', '', '', 'abc', '', '', '', ''],
+        ]),
+      );
     expect([importer.state.valid.length, importer.state.invalid.single.line], [3, 5]);
     await importer.import();
     expect(importer.state.created, 2);
@@ -532,11 +677,21 @@ void main() {
     await parties.delete(importedParty.id);
 
     // ---- settings: invoice prefix, defaults, and refusing sales beyond stock.
-    var live = await firmRepo.update({'settings': {'invoicePrefix': 'INV-', 'defaultCashSale': true, 'blockNegativeStock': true, 'invoiceTerms': 'No returns.'}});
+    var live = await firmRepo.update({
+      'settings': {'invoicePrefix': 'INV-', 'defaultCashSale': true, 'blockNegativeStock': true, 'invoiceTerms': 'No returns.'},
+    });
     expect([live.settings.invoicePrefix, live.settings.gstEnabled, live.settings.signatureLabel], ['INV-', true, 'Authorized Signatory']);
     expect(await invoices.nextNumber('sale'), 'INV-1'); // a new series starts under the prefix
     expect(await invoices.nextNumber('estimate'), '1'); // other documents are unaffected
-    final prefixed = InvoiceFormCubit(invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, bus: bus, kind: InvoiceKind.sale);
+    final prefixed = InvoiceFormCubit(
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      bus: bus,
+      kind: InvoiceKind.sale,
+    );
     await prefixed.load();
     expect([prefixed.state.number, prefixed.state.isCash], ['INV-1', true]);
     prefixed
@@ -551,8 +706,15 @@ void main() {
     expect(await invoices.nextNumber('sale'), 'INV-2');
     expect((await buildInvoicePdf(await invoices.get(prefixed.state.savedId!), live)).length, greaterThan(1000));
     await invoices.delete(prefixed.state.savedId!);
-    await expectLater(firmRepo.update({'settings': {'invoicePrefix': 'bad prefix!'}}), throwsA(isA<ApiException>()));
-    live = await firmRepo.update({'settings': {'invoicePrefix': '', 'defaultCashSale': false, 'blockNegativeStock': false}});
+    await expectLater(
+      firmRepo.update({
+        'settings': {'invoicePrefix': 'bad prefix!'},
+      }),
+      throwsA(isA<ApiException>()),
+    );
+    live = await firmRepo.update({
+      'settings': {'invoicePrefix': '', 'defaultCashSale': false, 'blockNegativeStock': false},
+    });
     expect(live.settings.invoiceTerms, 'No returns.'); // untouched keys are kept
 
     // Change password: wrong current password is refused; the new one works for login.
@@ -584,16 +746,40 @@ void main() {
     final today = DateTime.now().toIso8601String().substring(0, 10);
 
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final owner = await auth.register(firmName: 'Batch Two $stamp', stateCode: '07', fullName: 'Owner', email: 'b2$stamp@example.com', password: 'Password123');
+    final owner = await auth.register(
+      firmName: 'Batch Two $stamp',
+      stateCode: '07',
+      fullName: 'Owner',
+      email: 'b2$stamp@example.com',
+      password: 'Password123',
+    );
     expect(owner.role, 'owner');
     final hdfc = await cashBank.saveAccount(null, {'name': 'HDFC', 'openingBalance': 1000});
     final party = await parties.save(null, {'name': 'Ravi', 'phone': '9876543210', 'creditLimit': 1000, 'shippingAddress': 'Godown 4'});
-    final pen = await items.save(null, {'name': 'Pen', 'unit': 'PCS', 'salePrice': 100, 'purchasePrice': 60, 'openingQty': 100, 'wholesalePrice': 80, 'wholesaleMinQty': 10});
-    await firmRepo.update({'settings': {'dueDatesEnabled': true, 'defaultCreditDays': 0, 'paymentReminderDays': 0, 'gstEnabled': false}});
+    final pen = await items.save(null, {
+      'name': 'Pen',
+      'unit': 'PCS',
+      'salePrice': 100,
+      'purchasePrice': 60,
+      'openingQty': 100,
+      'wholesalePrice': 80,
+      'wholesaleMinQty': 10,
+    });
+    await firmRepo.update({
+      'settings': {'dueDatesEnabled': true, 'defaultCreditDays': 0, 'paymentReminderDays': 0, 'gstEnabled': false},
+    });
 
     // ---- split payment, wholesale price, shipping address and the credit-limit confirmation, through the form.
     InvoiceFormCubit newForm() => InvoiceFormCubit(
-        invoices: invoices, parties: parties, items: items, accounts: cashBank, firm: firmRepo, accounting: accounting, bus: bus, kind: InvoiceKind.sale);
+      invoices: invoices,
+      parties: parties,
+      items: items,
+      accounts: cashBank,
+      firm: firmRepo,
+      accounting: accounting,
+      bus: bus,
+      kind: InvoiceKind.sale,
+    );
     final form = newForm();
     await form.load();
     final uid = form.state.lines.first.uid;
@@ -615,7 +801,10 @@ void main() {
     await form.save(andNew: false, overLimitConfirmed: true);
     expect(form.state.error, isNull);
     var sale = await invoices.get(form.state.savedId!);
-    expect([sale.received, sale.balance, sale.paymentLabel, sale.payments.length, sale.shippingAddress, sale.dueDate], [500, 1100, 'Cash + UPI', 2, 'Godown 4', '2026-01-10']);
+    expect(
+      [sale.received, sale.balance, sale.paymentLabel, sale.payments.length, sale.shippingAddress, sale.dueDate],
+      [500, 1100, 'Cash + UPI', 2, 'Godown 4', '2026-01-10'],
+    );
     expect((await cashBank.accounts()).single.balance, 1200);
 
     // ---- overdue → payment reminder → a payment linked to the invoice.
@@ -641,7 +830,11 @@ void main() {
     // ---- logo, signature, item image, attachment; every print layout.
     final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
     final logo = await files.upload(name: 'logo.png', mimeType: 'image/png', bytes: png);
-    var firm = await firmRepo.update({'logoFileId': logo.id, 'signatureFileId': logo.id, 'settings': {'invoiceTheme': 'modern', 'themeColor': '#0F766E'}});
+    var firm = await firmRepo.update({
+      'logoFileId': logo.id,
+      'signatureFileId': logo.id,
+      'settings': {'invoiceTheme': 'modern', 'themeColor': '#0F766E'},
+    });
     expect([firm.logoFileId, firm.settings.invoiceTheme], [logo.id, 'modern']);
     expect((await items.save(pen.id, {'imageFileId': logo.id})).imageFileId, logo.id);
     final attachments = AttachmentsCubit(files, ownerType: 'invoice', ownerId: sale.id);
@@ -650,7 +843,11 @@ void main() {
     expect(await attachments.bytes(attachments.state.items.single), png);
     final logoBytes = await files.bytesOrNull(firm.logoFileId);
     for (final theme in invoiceThemes.keys) {
-      final pdf = await buildInvoicePdf(sale, firm, options: PrintOptions.of(firm, logo: logoBytes, signature: logoBytes, theme: theme));
+      final pdf = await buildInvoicePdf(
+        sale,
+        firm,
+        options: PrintOptions.of(firm, logo: logoBytes, signature: logoBytes, theme: theme),
+      );
       expect(pdf.length, greaterThan(1000), reason: theme);
     }
     expect((await buildThermalReceiptPdf(sale, firm, logo: logoBytes)).length, greaterThan(1000));
@@ -662,16 +859,19 @@ void main() {
     usd
       ..cashToggled(true)
       ..itemSelected(usd.state.lines.first.uid, usd.state.items.single)
-      ..currencyChanged('USD');
-    expect(usd.state.foreignTotal, 1.25);
+      ..currencyChanged('USD')
+      ..linePriceChanged(usd.state.lines.first.uid, '100');
+    expect(usd.state.baseTotal, 8000); // the document is typed in dollars: $100 at ₹80
     await usd.save(andNew: false);
     final usdSale = await invoices.get(usd.state.savedId!);
-    expect([usdSale.currencyCode, usdSale.exchangeRate, usdSale.total], ['USD', 80, 100]);
+    expect([usdSale.currencyCode, usdSale.exchangeRate, usdSale.total, usdSale.fxTotal], ['USD', 80, 8000, 100]);
     expect((await buildInvoicePdf(usdSale, firm, options: const PrintOptions(currencySymbol: r'$'))).length, greaterThan(1000));
 
     // ---- expense with GST from a saved expense item.
     await expenses.saveItemDef(null, {'name': 'Courier', 'price': 100, 'gstRate': 18});
-    await firmRepo.update({'settings': {'gstEnabled': true}});
+    await firmRepo.update({
+      'settings': {'gstEnabled': true},
+    });
     final exp = ExpenseFormCubit(expenses, cashBank, bus, categoryId: (await expenses.categories()).first.id, firm: firmRepo);
     await exp.load();
     exp
@@ -734,8 +934,14 @@ void main() {
     await expectLater(ExpensesRepository(samApi, bus).categories(), throwsA(isA<ApiException>()));
     await expectLater(InvoicesRepository(samApi, bus).list('purchase', from: '2026-01-01', to: '2099-01-01'), throwsA(isA<ApiException>()));
     final samForm = InvoiceFormCubit(
-        invoices: InvoicesRepository(samApi, bus), parties: PartiesRepository(samApi, bus), items: ItemsRepository(samApi, bus),
-        accounts: CashBankRepository(samApi, bus), firm: FirmRepository(samApi, bus), bus: bus, kind: InvoiceKind.sale);
+      invoices: InvoicesRepository(samApi, bus),
+      parties: PartiesRepository(samApi, bus),
+      items: ItemsRepository(samApi, bus),
+      accounts: CashBankRepository(samApi, bus),
+      firm: FirmRepository(samApi, bus),
+      bus: bus,
+      kind: InvoiceKind.sale,
+    );
     await samForm.load();
     samForm
       ..cashToggled(true)
@@ -775,4 +981,305 @@ void main() {
     expect(await invoices.list('sale', from: '2026-01-01', to: '2099-01-01'), isEmpty);
     expect((await accounting.ledgerAccounts()).firstWhere((a) => a.name == 'Furniture').balance, 400);
   });
+
+  test(
+    'third batch through the real API: stores, batches, serials, charges, TCS/TDS, points, split and foreign payments, salesmen, locations, backups',
+    () async {
+      final api = ApiClient(_MemoryTokens());
+      final bus = ChangeBus();
+      final auth = AuthRepository(api);
+      final parties = PartiesRepository(api, bus);
+      final items = ItemsRepository(api, bus);
+      final invoices = InvoicesRepository(api, bus);
+      final payments = PaymentsRepository(api, bus);
+      final cashBank = CashBankRepository(api, bus);
+      final firmRepo = FirmRepository(api, bus);
+      final accounting = AccountingRepository(api, bus);
+      final utilities = UtilitiesRepository(api, bus);
+      final expenses = ExpensesRepository(api, bus);
+      final locations = LocationRepository(api);
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final owner = await auth.register(
+        firmName: 'Batch Three $stamp',
+        stateCode: '27',
+        fullName: 'Owner',
+        email: 'b3$stamp@example.com',
+        password: 'Password123',
+      );
+      final hdfc = await cashBank.saveAccount(null, {'name': 'HDFC', 'openingBalance': 0});
+      await firmRepo.update({
+        'settings': {
+          'godownsEnabled': true,
+          'batchTrackingEnabled': true,
+          'serialTrackingEnabled': true,
+          'mrpEnabled': true,
+          'cessEnabled': true,
+          'billDiscountEnabled': true,
+          'additionalChargesEnabled': true,
+          'tcsEnabled': true,
+          'tdsEnabled': true,
+          'loyaltyEnabled': true,
+          'partyGroupsEnabled': true,
+          'locationTrackingEnabled': true,
+          'defaultRoundOff': false,
+          'autoBackup': 'daily',
+          'autoBackupKeep': 2,
+        },
+      });
+      await accounting.saveCurrency(code: 'USD', symbol: r'$', rate: 80);
+
+      // ---- stores, batches and serial numbers: bought into the warehouse through the form
+      final godowns = await items.saveGodown(null, name: 'Warehouse');
+      final warehouse = godowns.firstWhere((g) => g.name == 'Warehouse');
+      final groups = await parties.saveGroup(null, 'Retailers');
+      await parties.save(null, {'name': 'Supplier'});
+      final customer = await parties.save(null, {'name': 'Ravi', 'groupId': groups.single.id, 'loyaltyOpening': 50});
+      expect([customer.groupName, customer.loyaltyPoints], ['Retailers', 50]);
+      final phone = await items.save(null, {'name': 'Phone', 'salePrice': 10000, 'purchasePrice': 8000, 'gstRate': 18, 'cessRate': 1, 'mrp': 12000});
+      final syrup = await items.save(null, {'name': 'Syrup', 'salePrice': 100, 'purchasePrice': 60});
+
+      InvoiceFormCubit newForm(InvoiceKind kind) => InvoiceFormCubit(
+        invoices: invoices,
+        parties: parties,
+        items: items,
+        accounts: cashBank,
+        firm: firmRepo,
+        accounting: accounting,
+        bus: bus,
+        kind: kind,
+      );
+
+      final buy = newForm(InvoiceKind.purchase);
+      await buy.load();
+      expect(buy.state.showGodown, isTrue);
+      buy
+        ..partySelected(buy.state.parties.firstWhere((p) => p.name == 'Supplier'))
+        ..godownChanged(warehouse.id);
+      final phoneRow = buy.state.lines.first.uid;
+      buy
+        ..itemSelected(phoneRow, buy.state.items.firstWhere((i) => i.name == 'Phone'))
+        ..lineQtyChanged(phoneRow, '2')
+        ..linePriceChanged(phoneRow, '8000')
+        ..lineSerialsChanged(phoneRow, 'IM1, IM2');
+      final syrupRow = buy.state.lines[1].uid;
+      buy
+        ..itemSelected(syrupRow, buy.state.items.firstWhere((i) => i.name == 'Syrup'))
+        ..lineQtyChanged(syrupRow, '100')
+        ..linePriceChanged(syrupRow, '60')
+        ..lineBatchChanged(syrupRow, 'B-77')
+        ..lineExpiryChanged(syrupRow, '2026-11-30')
+        ..tdsRateChanged('1');
+      expect(buy.state.doc.cess, 160); // 1% of the phones' ₹16,000
+      await buy.save(andNew: false);
+      expect(buy.state.error, isNull);
+      final purchase = await invoices.get(buy.state.savedId!);
+      expect([purchase.godownId, purchase.tdsAmount, purchase.cess], [warehouse.id, 220, 160]);
+      expect((await items.batches(syrup.id)).single.quantity, 100);
+      expect(await items.serials(phone.id), ['IM1', 'IM2']);
+      expect((await items.stockByGodown(syrup.id)).single.name, 'Warehouse');
+      await items.transferStock({
+        'itemId': syrup.id,
+        'fromGodownId': warehouse.id,
+        'toGodownId': null,
+        'quantity': 30,
+        'date': today,
+        'batchNo': 'B-77',
+      });
+      expect({for (final g in await items.stockByGodown(syrup.id)) g.name: g.quantity}, {'Main Store': 30, 'Warehouse': 70});
+      expect({for (final g in await items.godowns()) g.name: g.itemCount}['Warehouse'], 2);
+
+      // ---- a sale with discount, a charge, TCS, TDS, points redeemed, a serial and a split payment
+      final sale = newForm(InvoiceKind.sale);
+      await sale.load();
+      sale
+        ..partySelected(sale.state.parties.firstWhere((p) => p.name == 'Ravi'))
+        ..godownChanged(warehouse.id);
+      final r1 = sale.state.lines.first.uid;
+      sale
+        ..itemSelected(r1, sale.state.items.firstWhere((i) => i.name == 'Phone'))
+        ..lineSerialsPicked(r1, ['IM1']);
+      final r2 = sale.state.lines[1].uid;
+      sale
+        ..itemSelected(r2, sale.state.items.firstWhere((i) => i.name == 'Syrup'))
+        ..lineQtyChanged(r2, '10')
+        ..lineBatchChanged(r2, 'B-77')
+        ..billDiscountChanged('10')
+        ..addCharge()
+        ..chargeAmountChanged(sale.state.extras.charges.single.uid, '100')
+        ..tcsRateChanged('1')
+        ..tdsRateChanged('1')
+        ..loyaltyRedeemChanged('50')
+        ..receivedChanged('3000');
+      // 11,000 − 10% = 9,900 taxable; GST 1,620 and cess 90 → 11,610; + 100 charge = 11,710; TCS 117.10
+      expect([sale.state.doc.taxable, sale.state.total, sale.state.deductions, sale.state.loyaltyEarned], [9900, 11827.1, 149, 117]);
+      sale.addPart();
+      sale
+        ..partModeChanged(sale.state.extraParts.single.uid, 'upi')
+        ..partBankAccountChanged(sale.state.extraParts.single.uid, hdfc.id)
+        ..partAmountChanged(sale.state.extraParts.single.uid, '2000');
+      expect(sale.state.receivedValue, 5000); // 3,000 cash + 2,000 UPI
+      await sale.save(andNew: false);
+      expect(sale.state.error, isNull);
+      final sold = await invoices.get(sale.state.savedId!);
+      expect(
+        [sold.total, sold.tdsAmount, sold.loyaltyAmount, sold.received, sold.balance, sold.paymentLabel],
+        [11827.1, 99, 50, 5000, 6678.1, 'Cash + UPI'],
+      );
+      expect([sold.tcsAmount, sold.loyaltyEarned, sold.charges.single.$1], [117.1, 117, 'Shipping']);
+      expect((await parties.get(customer.id)).loyaltyPoints, 117); // 50 + 117 earned − 50 redeemed
+      expect((await parties.get(customer.id)).balance, 6678.1);
+      expect(await items.serials(phone.id), ['IM2']);
+      expect((await cashBank.accounts()).single.balance, 2000);
+
+      // The same serial cannot be sold twice.
+      final again = newForm(InvoiceKind.sale);
+      await again.load();
+      again
+        ..cashToggled(true)
+        ..itemSelected(again.state.lines.first.uid, again.state.items.firstWhere((i) => i.name == 'Phone'))
+        ..lineSerialsChanged(again.state.lines.first.uid, 'IM1');
+      await again.save(andNew: false);
+      expect(again.state.error, contains('already been sold'));
+
+      // ---- split Payment-In with a cheque, and a split expense
+      final pay = PaymentFormCubit(
+        payments,
+        parties,
+        cashBank,
+        PaymentKind.paymentIn,
+        partyId: customer.id,
+        invoices: invoices,
+        accounting: accounting,
+      );
+      await pay.load();
+      pay
+        ..addPart()
+        ..partModeChanged(pay.state.extraParts.single.uid, 'cheque')
+        ..partAmountChanged(pay.state.extraParts.single.uid, '300');
+      pay.autoLink(500);
+      await pay.save(number: pay.state.number, amount: 500, description: '');
+      expect(pay.state.error, isNull);
+      final receipt = await payments.get(pay.state.saved!.id);
+      expect([receipt.paymentLabel, receipt.parts.length, receipt.linkedAmount], ['Cash + Cheque', 2, 500]);
+      final cheque = (await cashBank.cheques()).firstWhere((c) => c.source == 'payment_in');
+      expect([cheque.amount, cheque.isOpenCheque], [300, true]);
+      await cashBank.depositCheque(cheque, hdfc.id);
+      expect((await cashBank.accounts()).single.balance, 2300);
+
+      final cat = (await expenses.categories()).first;
+      final exp = ExpenseFormCubit(expenses, cashBank, bus, categoryId: cat.id, firm: firmRepo);
+      await exp.load();
+      final erow = exp.state.lines.first.uid;
+      exp
+        ..lineNameChanged(erow, 'Fuel')
+        ..lineQtyChanged(erow, '1')
+        ..linePriceChanged(erow, '500')
+        ..roundOffToggled(false)
+        ..addPart();
+      exp
+        ..partModeChanged(exp.state.extraParts.single.uid, 'upi')
+        ..partBankAccountChanged(exp.state.extraParts.single.uid, hdfc.id)
+        ..partAmountChanged(exp.state.extraParts.single.uid, '400');
+      await exp.save(andNew: false);
+      expect(exp.state.error, isNull);
+      expect((await expenses.get(exp.state.savedId!)).payments.map((p) => p.mode), ['cash', 'upi']);
+      expect((await cashBank.accounts()).single.balance, 1900);
+
+      // ---- a foreign customer: billed in dollars, pays at a different rate, the difference is a gain
+      final acme = await parties.save(null, {'name': 'Acme Inc', 'currencyCode': 'USD'});
+      final fx = newForm(InvoiceKind.sale);
+      await fx.load();
+      fx.partySelected(fx.state.parties.firstWhere((p) => p.name == 'Acme Inc'));
+      final frow = fx.state.lines.first.uid;
+      fx
+        ..lineNameChanged(frow, 'Consulting')
+        ..lineQtyChanged(frow, '1')
+        ..linePriceChanged(frow, '100')
+        ..receivedChanged('25');
+      expect([fx.state.currencyCode, fx.state.baseTotal, fx.state.balance], ['USD', 8000, 75]);
+      await fx.save(andNew: false);
+      expect(fx.state.error, isNull);
+      final usd = await invoices.get(fx.state.savedId!);
+      expect([usd.total, usd.fxTotal, usd.received, usd.fxBalance, usd.balance], [8000, 100, 2000, 75, 6000]);
+      final fpay = PaymentFormCubit(payments, parties, cashBank, PaymentKind.paymentIn, partyId: acme.id, invoices: invoices, accounting: accounting);
+      await fpay.load();
+      fpay.partySelected(fpay.state.parties.firstWhere((p) => p.name == 'Acme Inc'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(fpay.state.links.single.due, 75);
+      fpay
+        ..autoLink(75)
+        ..exchangeRateChanged('82');
+      await fpay.save(number: fpay.state.number, amount: 75, description: '');
+      expect(fpay.state.error, isNull);
+      final fr = await payments.get(fpay.state.saved!.id);
+      expect([fr.currencyCode, fr.amount, fr.baseAmount, fr.fxGain], ['USD', 75, 6150, 150]);
+      final acme2 = await parties.get(acme.id);
+      expect([acme2.balance, acme2.fxBalance], [0, 0]);
+      expect((await invoices.get(usd.id)).balance, 0);
+      expect((await ReportsRepository(api).run('exchange', from: '2026-01-01', to: '2099-01-01')).summary.single.value, 150);
+
+      // ---- a salesman: only their parties and sales; their location; the owner sees where they are
+      await auth.addMember(fullName: 'Sam', email: 'sam$stamp@example.com', password: 'Password123', role: 'salesman');
+      final sam = (await auth.members()).firstWhere((m) => m.role == 'salesman');
+      final pf = PartyFormCubit(parties, null, auth: auth, accounting: accounting);
+      await pf.load();
+      expect([pf.state.salesmen.single.fullName, pf.state.groups.single.name, pf.state.currencies.single.code], ['Sam', 'Retailers', 'USD']);
+      await parties.save(customer.id, {'assignedUserId': sam.id});
+
+      final samApi = ApiClient(_MemoryTokens());
+      final samAuth = AuthRepository(samApi);
+      await samAuth.login(email: 'sam$stamp@example.com', password: 'Password123');
+      final samParties = PartiesRepository(samApi, bus);
+      expect((await samParties.list()).map((p) => p.name), ['Ravi']);
+      expect((await InvoicesRepository(samApi, bus).list('sale', from: '2026-01-01', to: '2099-01-01')).map((i) => i.number), [sold.number]);
+      final mine = await samParties.save(null, {'name': 'Walk-in Shop'});
+      expect(mine.assignedUserId, sam.id);
+      final samLocations = LocationRepository(samApi);
+      await samLocations.record(const GeoFix(19.07, 72.87, 12));
+      await samLocations.record(const GeoFix(19.08, 72.88, 9), context: 'sale', refId: sold.id);
+      final here = (await locations.latest()).firstWhere((l) => l.userId == sam.id);
+      expect([here.latitude, here.salesToday, here.pointsToday], [19.08, 1, 2]);
+      expect((await locations.trail(sam.id, today)).last.ref, contains('Ravi'));
+      await expectLater(samLocations.latest(), throwsA(isA<ApiException>()));
+
+      // ---- reports, backups, restore and a new year all agree
+      final reports = ReportsRepository(api);
+      for (final id in ['godown-stock', 'batch-stock', 'expiry', 'serial', 'tcs', 'tds', 'loyalty', 'trial-balance']) {
+        final r = await reports.run(id, from: '2026-01-01', to: '2099-01-01');
+        expect(r.rows, isNotEmpty, reason: id);
+      }
+      final trial = await reports.run('trial-balance');
+      expect(trial.summary[0].value, trial.summary[1].value);
+      expect((await utilities.verify()).every((c) => c.ok), isTrue);
+
+      var backups = await utilities.createServerBackup();
+      expect([backups.single.kind, backups.single.onDrive], ['manual', false]);
+      expect((await utilities.driveStatus()).configured, isFalse); // no Google client on this server
+      final (_, content) = await utilities.readServerBackup(backups.single.id);
+      final restored = await utilities.restore(content, name: 'Restored $stamp');
+      final before = await DashboardRepository(api).summary();
+      final nextYear = await utilities.startNewYear(name: 'Next $stamp', startDate: today);
+      await auth.switchCompany(restored.id);
+      final copy = await DashboardRepository(api).summary();
+      expect(
+        [copy.cashInHand, copy.bankBalance, copy.receivable, copy.payable],
+        [before.cashInHand, before.bankBalance, before.receivable, before.payable],
+      );
+      expect((await utilities.verify()).every((c) => c.ok), isTrue);
+      expect((await items.godowns()).map((g) => g.name), ['Main Store', 'Warehouse']);
+      await auth.switchCompany(nextYear.id);
+      final opening = await DashboardRepository(api).summary();
+      expect(
+        [opening.cashInHand, opening.bankBalance, opening.receivable, opening.payable],
+        [before.cashInHand, before.bankBalance, before.receivable, before.payable],
+      );
+      final newSyrup = (await items.list('product')).firstWhere((i) => i.name == 'Syrup');
+      expect({for (final g in await items.stockByGodown(newSyrup.id)) g.name: g.quantity}, {'Main Store': 30, 'Warehouse': 60}); // 30 moved to the main store; the 10 sold came out of the warehouse
+      expect((await items.batches(newSyrup.id)).single.batchNo, 'B-77');
+      expect((await parties.list()).firstWhere((p) => p.name == 'Ravi').loyaltyPoints, 117);
+      expect(owner.role, 'owner');
+    },
+  );
 }

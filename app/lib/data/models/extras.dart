@@ -167,3 +167,52 @@ class VerifyCheck extends Equatable {
   @override
   List<Object?> get props => [id, title, fixable, issues];
 }
+
+/// A backup the server made and keeps.
+class ServerBackup extends Equatable {
+  ServerBackup.fromJson(Map<String, dynamic> j)
+      : id = j['id'] as String,
+        fileName = j['fileName'] as String,
+        size = (j['size'] as num).toInt(),
+        kind = j['kind'] as String,
+        createdAt = DateTime.parse(j['createdAt'] as String).toLocal(),
+        onDrive = (j['onDrive'] as bool?) ?? false,
+        driveError = j['driveError'] as String?;
+
+  final String id;
+  final String fileName;
+
+  /// Bytes (compressed).
+  final int size;
+
+  /// auto | manual
+  final String kind;
+  final DateTime createdAt;
+
+  /// A copy is in Google Drive.
+  final bool onDrive;
+
+  /// Why the copy to Drive failed, when it did.
+  final String? driveError;
+
+  @override
+  List<Object?> get props => [id, fileName, size, kind, createdAt, onDrive, driveError];
+}
+
+class DriveStatus extends Equatable {
+  const DriveStatus({this.configured = false, this.connected = false, this.email});
+  DriveStatus.fromJson(Map<String, dynamic> j)
+      : configured = (j['configured'] as bool?) ?? false,
+        connected = (j['connected'] as bool?) ?? false,
+        email = j['email'] as String?;
+
+  /// The server has a Google client ID and secret.
+  final bool configured;
+
+  /// This company has linked a Google account.
+  final bool connected;
+  final String? email;
+
+  @override
+  List<Object?> get props => [configured, connected, email];
+}

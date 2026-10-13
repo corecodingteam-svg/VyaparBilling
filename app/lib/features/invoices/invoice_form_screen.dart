@@ -9,9 +9,11 @@ import '../../data/models/invoice.dart';
 import '../../data/models/item.dart';
 import '../../data/models/party.dart';
 import '../../shared/format.dart';
+import '../../shared/selection_cubit.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../files/attachments.dart';
+import '../team/tracking_cubit.dart';
 import '../parties/party_form_dialog.dart';
 import 'bloc/invoice_form_cubit.dart';
 
@@ -90,6 +92,7 @@ class _InvoiceFormView extends StatelessWidget {
         showSuccess(context, '${s.kind.singular} saved');
         // Files added before the document existed are attached to it now.
         await context.read<AttachmentsCubit>().commit(s.savedId!);
+        if (context.mounted && s.kind.isSale && !context.read<InvoiceFormCubit>().editing) context.read<TrackingCubit>().recordSaved('sale', s.savedId!);
         if (!context.mounted || s.result != InvoiceFormResult.saved) return;
         if (s.settings.showInvoicePreview) {
           // Show the printable invoice, replacing the form so Back returns to the list.
@@ -382,6 +385,23 @@ class _DetailsSection extends StatelessWidget {
           ],
           onChanged: cubit.stateOfSupplyChanged,
         ),
+        if (state.showGodown) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            key: ValueKey('godown-${state.extras.godownId}-${state.godowns.length}'),
+            initialValue: state.godowns.any((g) => g.id == state.extras.godownId) ? state.extras.godownId : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Store'),
+            items: [
+              for (final g in state.godowns)
+                DropdownMenuItem(
+                  value: g.id,
+                  child: Text(g.name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: cubit.godownChanged,
+          ),
+        ],
         if (state.showDueDate && state.dueDate != null) ...[
           const SizedBox(height: 12),
           DateField(label: 'Due Date', value: state.dueDate!, onChanged: cubit.dueDateChanged),
@@ -395,7 +415,7 @@ class _DetailsSection extends StatelessWidget {
                   key: ValueKey('cur-${state.currencyCode}'),
                   initialValue: state.currency?.code,
                   isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Print in currency'),
+                  decoration: const InputDecoration(labelText: 'Currency'),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('₹ INR')),
                     for (final c in state.currencies) DropdownMenuItem(value: c.code, child: Text('${c.symbol} ${c.code}')),
@@ -507,9 +527,9 @@ class _LinesCard extends StatelessWidget {
                         text: 'TOTAL   ',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      TextSpan(text: 'Qty ${qty(state.totalQty)}   ${state.showDiscounts ? 'Discount ${money(state.totalDiscount)}   ' : ''}'),
+                      TextSpan(text: 'Qty ${qty(state.totalQty)}   ${state.showDiscounts ? 'Discount ${state.fmt(state.totalDiscount)}   ' : ''}'),
                       TextSpan(
-                        text: money(state.subtotal),
+                        text: state.fmt(state.subtotal),
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ],
@@ -615,21 +635,21 @@ class _LineRow extends StatelessWidget {
       onChanged: (v) => cubit.lineGstRateChanged(uid, v),
     );
     final taxAmount = Text(
-      line.gstRate == null ? '-' : money(state.taxOf(line)),
+      line.gstRate == null ? '-' : state.fmt(state.taxOf(line)),
       textAlign: TextAlign.right,
       style: const TextStyle(color: Colors.black54, fontSize: 13),
     );
     final amount = Text(
-      money(state.amountOf(line)),
+      state.fmt(state.amountOf(line)),
       textAlign: TextAlign.right,
       style: const TextStyle(fontWeight: FontWeight.w600),
     );
     final delete = IconButton(tooltip: 'Remove row', icon: const Icon(Icons.delete_outline, size: 20), onPressed: () => cubit.removeLine(uid));
 
+    final extras = _LineExtras(line: line, state: state);
     if (wide) {
       Widget pad(Widget w) => Padding(padding: const EdgeInsets.only(right: 6), child: w);
-      return Container(
-        color: index.isOdd ? const Color(0xFFFAFBFD) : null,
+      final row = Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
@@ -647,6 +667,15 @@ class _LineRow extends StatelessWidget {
             if (state.gstEnabled) Expanded(flex: 2, child: taxAmount),
             Expanded(flex: 3, child: amount),
             SizedBox(width: 44, child: delete),
+          ],
+        ),
+      );
+      return Container(
+        color: index.isOdd ? const Color(0xFFFAFBFD) : null,
+        child: Column(
+          children: [
+            row,
+            if (state.showLineExtras) Padding(padding: const EdgeInsets.fromLTRB(44, 0, 12, 8), child: extras),
           ],
         ),
       );
@@ -687,12 +716,13 @@ class _LineRow extends StatelessWidget {
                     if (state.gstEnabled) Expanded(child: taxField),
                   ],
                 ),
+                if (state.showLineExtras) ...[const SizedBox(height: 10), extras],
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
                       child: state.gstEnabled
-                          ? Text('Tax ${line.gstRate == null ? '-' : money(state.taxOf(line))}', style: const TextStyle(color: Colors.black54))
+                          ? Text('Tax ${line.gstRate == null ? '-' : state.fmt(state.taxOf(line))}', style: const TextStyle(color: Colors.black54))
                           : const SizedBox.shrink(),
                     ),
                     amount,
@@ -705,6 +735,175 @@ class _LineRow extends StatelessWidget {
           const Divider(),
         ],
       ),
+    );
+  }
+}
+
+/// Batch, expiry, MRP, serial numbers and cess of one line — only what is switched on in settings.
+class _LineExtras extends StatelessWidget {
+  const _LineExtras({required this.line, required this.state});
+  final LineDraft line;
+  final InvoiceFormState state;
+
+  static const _cell = InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12));
+
+  Future<void> _pickBatch(BuildContext context) async {
+    final cubit = context.read<InvoiceFormCubit>();
+    final batches = await cubit.batchesOf(line.itemId!);
+    if (!context.mounted) return;
+    final picked = await showDialog<ItemBatch>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Choose a batch'),
+        children: [
+          if (batches.isEmpty) const Padding(padding: EdgeInsets.all(20), child: Text('No batch of this item has stock.')),
+          for (final b in batches)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, b),
+              child: ListTile(
+                dense: true,
+                title: Text('Batch ${b.batchNo}'),
+                subtitle: Text(
+                  [if (b.expiryDate != null) 'Expires ${displayDate(b.expiryDate)}', if (b.mrp != null) 'MRP ${money(b.mrp)}'].join(' · '),
+                ),
+                trailing: Text(qty(b.quantity), style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (picked != null) cubit.lineBatchPicked(line.uid, picked);
+  }
+
+  Future<void> _pickSerials(BuildContext context) async {
+    final cubit = context.read<InvoiceFormCubit>();
+    final serials = await cubit.serialsOf(line.itemId!);
+    if (!context.mounted) return;
+    final chosen = await showDialog<Set<String>>(
+      context: context,
+      builder: (ctx) => BlocProvider(
+        create: (_) => SelectionCubit<String>(line.serials.toSet()),
+        child: BlocBuilder<SelectionCubit<String>, Set<String>>(
+          builder: (ctx, picked) => AlertDialog(
+            title: Text('Serial numbers in stock (${picked.length} chosen)'),
+            content: SizedBox(
+              width: 360,
+              height: 360,
+              child: serials.isEmpty
+                  ? const Center(child: Text('No serial numbers of this item are in stock.'))
+                  : ListView(
+                      children: [
+                        for (final sn in serials)
+                          CheckboxListTile(
+                            dense: true,
+                            title: Text(sn),
+                            value: picked.contains(sn),
+                            onChanged: (_) => ctx.read<SelectionCubit<String>>().toggle(sn),
+                          ),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(ctx, picked), child: const Text('Use These')),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (chosen == null) return;
+    cubit.lineSerialsPicked(line.uid, [
+      for (final sn in serials)
+        if (chosen.contains(sn)) sn,
+    ]);
+  }
+
+  Future<void> _pickExpiry(BuildContext context) async {
+    final cubit = context.read<InvoiceFormCubit>();
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: line.expiryDate == null ? now : DateTime.parse(line.expiryDate!),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) cubit.lineExpiryChanged(line.uid, isoDate(picked));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<InvoiceFormCubit>();
+    final uid = line.uid;
+    // On the sale side a batch or serial number is chosen from what is in stock; on the buying side it is typed.
+    final fromStock = state.kind.type == 'sale' || state.kind.type == 'debit_note';
+    final canPick = line.itemId != null;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (state.showBatch) ...[
+          SizedBox(
+            width: 190,
+            child: TextFormField(
+              key: ValueKey('$uid-batch-${line.rowRev}'),
+              initialValue: line.batchNo,
+              onChanged: (v) => cubit.lineBatchChanged(uid, v),
+              decoration: _cell.copyWith(
+                labelText: 'Batch No.',
+                suffixIcon: fromStock && canPick
+                    ? IconButton(tooltip: 'Pick from stock', icon: const Icon(Icons.list_alt, size: 18), onPressed: () => _pickBatch(context))
+                    : null,
+              ),
+            ),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _pickExpiry(context),
+            icon: const Icon(Icons.event_outlined, size: 16),
+            label: Text(line.expiryDate == null ? 'Expiry' : 'Expiry ${displayDate(line.expiryDate)}'),
+          ),
+        ],
+        if (state.showMrp)
+          SizedBox(
+            width: 120,
+            child: TextFormField(
+              key: ValueKey('$uid-mrp-${line.rowRev}'),
+              initialValue: line.mrp,
+              onChanged: (v) => cubit.lineMrpChanged(uid, v),
+              keyboardType: _numeric,
+              textAlign: TextAlign.right,
+              decoration: _cell.copyWith(labelText: 'MRP', prefixText: '₹ '),
+            ),
+          ),
+        if (state.showCess)
+          SizedBox(
+            width: 100,
+            child: TextFormField(
+              key: ValueKey('$uid-cess-${line.rowRev}'),
+              initialValue: numText(line.cessRate),
+              onChanged: (v) => cubit.lineCessRateChanged(uid, v),
+              keyboardType: _numeric,
+              textAlign: TextAlign.right,
+              decoration: _cell.copyWith(labelText: 'Cess %'),
+            ),
+          ),
+        if (state.showSerial)
+          SizedBox(
+            width: 340,
+            child: TextFormField(
+              key: ValueKey('$uid-serial-${line.rowRev}'),
+              initialValue: line.serialNos,
+              onChanged: (v) => cubit.lineSerialsChanged(uid, v),
+              decoration: _cell.copyWith(
+                labelText: 'Serial no. / IMEI',
+                hintText: 'one per unit, comma-separated',
+                suffixIcon: fromStock && canPick
+                    ? IconButton(tooltip: 'Pick from stock', icon: const Icon(Icons.list_alt, size: 18), onPressed: () => _pickSerials(context))
+                    : null,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -780,7 +979,7 @@ class _PaymentSection extends StatelessWidget {
                       onChanged: (v) => cubit.partAmountChanged(p.uid, v),
                       keyboardType: _numeric,
                       textAlign: TextAlign.right,
-                      decoration: const InputDecoration(labelText: 'Amount', prefixText: '₹ '),
+                      decoration: InputDecoration(labelText: 'Amount', prefixText: '${state.currencySymbol} '),
                     ),
                   ),
                   IconButton(tooltip: 'Remove this payment', icon: const Icon(Icons.close, size: 20), onPressed: () => cubit.removePart(p.uid)),
@@ -837,11 +1036,87 @@ class _TotalsSection extends StatelessWidget {
     );
 
     Widget figure(String label, num value) =>
-        row(Padding(padding: const EdgeInsets.only(left: 12), child: Text(label)), Text(money(value), textAlign: TextAlign.right));
+        row(Padding(padding: const EdgeInsets.only(left: 12), child: Text(label)), Text(state.fmt(value), textAlign: TextAlign.right));
 
     return Column(
       children: [
         if (state.taxTotal > 0) ...[figure('Taxable Amount', state.taxableTotal), figure('Tax (GST)', state.taxTotal)],
+        if (state.settings.billDiscountEnabled && state.kind.hasPayment || (state.settings.billDiscountEnabled && state.kind.isQuote))
+          row(
+            const Padding(padding: EdgeInsets.only(left: 12), child: Text('Bill Discount')),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    key: ValueKey('bd-${state.extras.rev}'),
+                    initialValue: state.extras.billDiscount,
+                    onChanged: cubit.billDiscountChanged,
+                    keyboardType: _numeric,
+                    textAlign: TextAlign.right,
+                    decoration: const InputDecoration(isDense: true),
+                  ),
+                ),
+                DropdownButtonHideUnderline(
+                  child: DropdownButton<bool>(
+                    value: state.extras.billDiscountIsPct,
+                    items: [
+                      const DropdownMenuItem(value: true, child: Text(' %')),
+                      DropdownMenuItem(value: false, child: Text(' ${state.currencySymbol}')),
+                    ],
+                    onChanged: (v) => cubit.billDiscountModeChanged(v!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (state.doc.discountAmount > 0) figure('Discount allowed', state.doc.discountAmount),
+        if (state.settings.additionalChargesEnabled) ...[
+          for (final c in state.extras.charges)
+            Padding(
+              key: ValueKey('charge-${c.uid}'),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: c.name,
+                      onChanged: (v) => cubit.chargeNameChanged(c.uid, v),
+                      decoration: const InputDecoration(isDense: true, hintText: 'Charge name'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 110,
+                    child: TextFormField(
+                      initialValue: c.amount,
+                      onChanged: (v) => cubit.chargeAmountChanged(c.uid, v),
+                      keyboardType: _numeric,
+                      textAlign: TextAlign.right,
+                      decoration: const InputDecoration(isDense: true),
+                    ),
+                  ),
+                  IconButton(tooltip: 'Remove charge', icon: const Icon(Icons.close, size: 18), onPressed: () => cubit.removeCharge(c.uid)),
+                ],
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(onPressed: cubit.addCharge, icon: const Icon(Icons.add, size: 18), label: const Text('Add charge')),
+          ),
+        ],
+        if (state.showTcs)
+          row(
+            const Padding(padding: EdgeInsets.only(left: 12), child: Text('TCS %')),
+            TextFormField(
+              key: ValueKey('tcs-${state.extras.rev}'),
+              initialValue: state.extras.tcsRate,
+              onChanged: cubit.tcsRateChanged,
+              keyboardType: _numeric,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(isDense: true),
+            ),
+          ),
+        if (state.doc.tcs > 0) figure('TCS', state.doc.tcs),
         row(
           Row(
             children: [
@@ -859,13 +1134,49 @@ class _TotalsSection extends StatelessWidget {
           InputDecorator(
             decoration: const InputDecoration(filled: true, fillColor: pageBg),
             child: Text(
-              money(state.total),
+              state.fmt(state.total),
               textAlign: TextAlign.right,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
         ),
-        if (state.baseTotal != null) figure('Total in ₹ (booked)', state.baseTotal!),
+        if (state.showTds)
+          row(
+            const Padding(padding: EdgeInsets.only(left: 12), child: Text('TDS %')),
+            TextFormField(
+              key: ValueKey('tds-${state.extras.rev}'),
+              initialValue: state.extras.tdsRate,
+              onChanged: cubit.tdsRateChanged,
+              keyboardType: _numeric,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(isDense: true),
+            ),
+          ),
+        if (state.doc.tds > 0 && state.kind.hasPayment) figure('TDS held back by payer', state.doc.tds),
+        if (state.showLoyalty) ...[
+          row(
+            Padding(padding: const EdgeInsets.only(left: 12), child: Text('Redeem points (${state.loyaltyAvailable} available)')),
+            TextFormField(
+              key: ValueKey('lp-${state.extras.rev}'),
+              initialValue: state.extras.loyaltyRedeem,
+              onChanged: cubit.loyaltyRedeemChanged,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(isDense: true),
+            ),
+          ),
+          if (state.loyaltyAmount > 0) figure('Points value', state.loyaltyAmount),
+          if (state.loyaltyEarned > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, bottom: 10),
+              child: Text('This bill earns ${state.loyaltyEarned} points', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+            ),
+        ],
+        if (state.baseTotal != null)
+          row(
+            const Padding(padding: EdgeInsets.only(left: 12), child: Text('Booked in ₹')),
+            Text(money(state.baseTotal), textAlign: TextAlign.right),
+          ),
         if (state.kind.hasPayment)
           row(
             Row(
@@ -882,14 +1193,14 @@ class _TotalsSection extends StatelessWidget {
             locked
                 ? InputDecorator(
                     decoration: const InputDecoration(filled: true, fillColor: pageBg),
-                    child: Text(money(state.firstPartValue), textAlign: TextAlign.right),
+                    child: Text(state.fmt(state.firstPartValue), textAlign: TextAlign.right),
                   )
                 : TextFormField(
                     initialValue: state.received,
                     onChanged: cubit.receivedChanged,
                     keyboardType: _numeric,
                     textAlign: TextAlign.right,
-                    decoration: const InputDecoration(prefixText: '₹ '),
+                    decoration: InputDecoration(prefixText: '${state.currencySymbol} '),
                   ),
           ),
         if (state.kind.hasPayment && split) figure('Total $paidLabel', state.receivedValue),
@@ -901,7 +1212,7 @@ class _TotalsSection extends StatelessWidget {
               child: Text('Balance', style: TextStyle(fontWeight: FontWeight.w600)),
             ),
             Text(
-              money(state.balance),
+              state.fmt(state.balance),
               textAlign: TextAlign.right,
               style: TextStyle(fontWeight: FontWeight.w700, color: state.balance > 0 ? payRed : receiveGreen),
             ),

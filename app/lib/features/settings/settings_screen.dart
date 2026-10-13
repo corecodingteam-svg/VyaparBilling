@@ -7,6 +7,8 @@ import '../../data/models/firm.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../auth/bloc/auth_bloc.dart';
+import '../lock/lock_cubit.dart';
+import '../lock/lock_screen.dart';
 import 'settings_cubit.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -370,6 +372,142 @@ class _SettingsView extends StatelessWidget {
                         ],
                       ),
                     ]),
+                    _Section('Stock', [
+                      toggle(
+                        'Godowns (several stores)',
+                        'Every stock movement belongs to a store; transfer stock between them. Stock without a store is in the main store.',
+                        s.godownsEnabled,
+                        (v) => s.copyWith(godownsEnabled: v),
+                      ),
+                      toggle(
+                        'Batch number and expiry',
+                        'Enter a batch and expiry on purchase and sale lines; stock is kept per batch.',
+                        s.batchTrackingEnabled,
+                        (v) => s.copyWith(batchTrackingEnabled: v),
+                      ),
+                      toggle(
+                        'Serial numbers / IMEI',
+                        'Enter one serial number per unit; a unit cannot be sold twice.',
+                        s.serialTrackingEnabled,
+                        (v) => s.copyWith(serialTrackingEnabled: v),
+                      ),
+                      toggle('MRP', 'Keep the maximum retail price on items and lines.', s.mrpEnabled, (v) => s.copyWith(mrpEnabled: v)),
+                      link(Icons.warehouse_outlined, 'Godowns', 'Add stores and transfer stock between them.', '/godowns'),
+                    ]),
+                    _Section('Taxes and charges', [
+                      toggle(
+                        'Compensation cess',
+                        'A cess rate per item, charged on the taxable value next to GST.',
+                        s.cessEnabled,
+                        (v) => s.copyWith(cessEnabled: v),
+                      ),
+                      toggle(
+                        'Discount on the whole bill',
+                        'A percentage or amount off the bill, taken off before tax.',
+                        s.billDiscountEnabled,
+                        (v) => s.copyWith(billDiscountEnabled: v),
+                      ),
+                      toggle(
+                        'Additional charges',
+                        'Freight, packing and the like, added to the bill after tax.',
+                        s.additionalChargesEnabled,
+                        (v) => s.copyWith(additionalChargesEnabled: v),
+                      ),
+                      if (s.additionalChargesEnabled)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SizedBox(
+                            width: 420,
+                            child: TextFormField(
+                              key: ValueKey('charges-${state.rev}'),
+                              initialValue: s.chargeNames.join(', '),
+                              onChanged: (v) => cubit.change((d) => d.copyWith(chargeNames: [for (final n in v.split(',')) n.trim()])),
+                              decoration: const InputDecoration(
+                                labelText: 'Charge names',
+                                helperText: 'Comma-separated, e.g. Shipping, Packaging, Installation',
+                              ),
+                            ),
+                          ),
+                        ),
+                      toggle(
+                        'TCS',
+                        'Collect tax at source on top of sale bills (and record it on purchases).',
+                        s.tcsEnabled,
+                        (v) => s.copyWith(tcsEnabled: v),
+                      ),
+                      toggle(
+                        'TDS',
+                        'Record tax the payer holds back; it reduces what is still to be paid on the bill.',
+                        s.tdsEnabled,
+                        (v) => s.copyWith(tdsEnabled: v),
+                      ),
+                    ]),
+                    _Section('Loyalty points', [
+                      toggle(
+                        'Loyalty points',
+                        'Customers earn points on sales and redeem them against later bills.',
+                        s.loyaltyEnabled,
+                        (v) => s.copyWith(loyaltyEnabled: v),
+                      ),
+                      if (s.loyaltyEnabled) ...[
+                        number(
+                          'earn-per',
+                          'One point for every',
+                          s.loyaltyEarnPer.toInt(),
+                          (v) => s.copyWith(loyaltyEarnPer: v),
+                          suffix: '₹ of sale',
+                          min: 1,
+                          max: 1000000,
+                        ),
+                        number(
+                          'point-value',
+                          'One point is worth',
+                          s.loyaltyPointValue.toInt(),
+                          (v) => s.copyWith(loyaltyPointValue: v),
+                          suffix: '₹',
+                          min: 1,
+                          max: 10000,
+                        ),
+                      ],
+                    ]),
+                    _Section('Salesmen', [
+                      toggle(
+                        'Salesmen see only their own',
+                        'A salesman sees the parties assigned to them and the documents they entered. Off: they see everyone\'s.',
+                        s.salesmanOwnDataOnly,
+                        (v) => s.copyWith(salesmanOwnDataOnly: v),
+                      ),
+                      toggle(
+                        'Location tracking',
+                        'Record where users are while they use the app, and where each sale or payment is saved. Users are asked for permission by their browser or phone.',
+                        s.locationTrackingEnabled,
+                        (v) => s.copyWith(locationTrackingEnabled: v),
+                      ),
+                      if (s.locationTrackingEnabled)
+                        link(Icons.place_outlined, 'Where my team is', 'Latest position and today\'s trail of each user.', '/team-locations'),
+                      toggle(
+                        'Party groups',
+                        'Put parties in groups and filter by them.',
+                        s.partyGroupsEnabled,
+                        (v) => s.copyWith(partyGroupsEnabled: v),
+                      ),
+                      if (s.partyGroupsEnabled) link(Icons.folder_outlined, 'Party groups', 'Add and rename groups.', '/party-groups'),
+                    ]),
+                    _Section('Backup', [
+                      const Text('Automatic backup', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'off', label: Text('Off')),
+                          ButtonSegment(value: 'daily', label: Text('Daily')),
+                          ButtonSegment(value: 'weekly', label: Text('Weekly')),
+                        ],
+                        selected: {s.autoBackup},
+                        onSelectionChanged: (v) => cubit.change((d) => d.copyWith(autoBackup: v.first)),
+                      ),
+                      if (s.autoBackup != 'off')
+                        number('keep', 'Keep the latest', s.autoBackupKeep, (v) => s.copyWith(autoBackupKeep: v), suffix: 'backups', min: 1, max: 60),
+                    ]),
                     _Section('More features', [
                       toggle(
                         'Accounting (journal entries)',
@@ -395,9 +533,32 @@ class _SettingsView extends StatelessWidget {
                     _Section('Company', [
                       link(Icons.group_outlined, 'Users', 'Give your accountant or salesmen their own login.', '/users'),
                       link(Icons.business_outlined, 'Companies', 'Switch company, add another one or restore a backup.', '/companies'),
-                      link(Icons.backup_outlined, 'Backup', 'Download everything in this company as one file.', '/backup'),
+                      link(Icons.backup_outlined, 'Backup', 'Backups on the server, Google Drive, download and restore.', '/backup'),
                     ]),
                   _Section('Account', [
+                    BlocBuilder<LockCubit, AppLockState>(
+                      builder: (context, lock) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(lock.hasPin ? Icons.lock : Icons.lock_open_outlined),
+                        title: const Text('App lock (PIN)'),
+                        subtitle: Text(
+                          lock.hasPin
+                              ? 'This device asks for a PIN when you open the app and after it has been away for a minute.'
+                              : 'Ask for a PIN on this device before showing the books. Only for this device; it is not sent anywhere.',
+                        ),
+                        trailing: Wrap(
+                          spacing: 8,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () => showPinDialog(context, hasPin: lock.hasPin, remove: false),
+                              child: Text(lock.hasPin ? 'Change' : 'Set PIN'),
+                            ),
+                            if (lock.hasPin)
+                              OutlinedButton(onPressed: () => showPinDialog(context, hasPin: true, remove: true), child: const Text('Remove')),
+                          ],
+                        ),
+                      ),
+                    ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.lock_outline),

@@ -33,13 +33,7 @@ class AdjustStockCubit extends Cubit<AdjustStockState> {
     if (state.status == SubmitStatus.submitting) return;
     emit(state.copyWith(status: SubmitStatus.submitting));
     try {
-      await _repo.adjust(itemId, {
-        'type': state.type,
-        'quantity': quantity,
-        'pricePerUnit': pricePerUnit,
-        'date': state.date,
-        'notes': notes,
-      });
+      await _repo.adjust(itemId, {'type': state.type, 'quantity': quantity, 'pricePerUnit': pricePerUnit, 'date': state.date, 'notes': notes});
       emit(state.copyWith(status: SubmitStatus.success));
     } catch (e) {
       emit(state.copyWith(status: SubmitStatus.failure, error: ApiException.from(e).message));

@@ -439,6 +439,9 @@ class InvoiceFormState extends Equatable {
   bool get showTds => settings.tdsEnabled && _postsTax;
   Currency? get currency => currencies.where((c) => c.code == currencyCode).firstOrNull;
 
+  /// An amount in this document's own currency.
+  String fmt(num? v) => moneyIn(currencyCode == null ? null : currencySymbol, v);
+
   /// The symbol amounts on this document are in.
   String get currencySymbol => currencyCode == null ? '₹' : (currency?.symbol ?? currencyCode!);
 
@@ -869,6 +872,24 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   void linePriceChanged(int uid, String text) => _updateLine(uid, (l) => _withDiscountFromPct(l.copyWith(price: text)));
   void lineUnitChanged(int uid, String? unit) => _updateLine(uid, (l) => l.copyWith(unit: () => unit));
   void lineGstRateChanged(int uid, num? rate) => _updateLine(uid, (l) => l.copyWith(gstRate: () => rate));
+
+  /// Stock of an item per batch, for picking one on a sale; empty when it cannot be fetched.
+  Future<List<ItemBatch>> batchesOf(String itemId) async {
+    try {
+      return await _items.batches(itemId, godownId: state.showGodown ? (state.extras.godownId ?? 'main') : null);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Serial numbers of an item in stock, for picking on a sale.
+  Future<List<String>> serialsOf(String itemId) async {
+    try {
+      return await _items.serials(itemId);
+    } catch (_) {
+      return const [];
+    }
+  }
 
   void lineCessRateChanged(int uid, String text) => _updateLine(uid, (l) => l.copyWith(cessRate: () => parseNum(text)));
   void lineBatchChanged(int uid, String text) => _updateLine(uid, (l) => l.copyWith(batchNo: text));

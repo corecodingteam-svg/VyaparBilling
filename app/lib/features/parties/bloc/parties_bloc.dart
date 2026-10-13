@@ -22,6 +22,11 @@ class PartiesSearchChanged extends PartiesEvent {
   final String query;
 }
 
+class PartiesGroupChanged extends PartiesEvent {
+  const PartiesGroupChanged(this.groupId);
+  final String? groupId;
+}
+
 class PartySelected extends PartiesEvent {
   const PartySelected(this.id);
   final String id;
@@ -36,6 +41,7 @@ class PartiesState extends Equatable {
     this.status = LoadStatus.initial,
     this.parties = const [],
     this.search = '',
+    this.groupId,
     this.selectedId,
     this.txnStatus = LoadStatus.initial,
     this.txns = const [],
@@ -45,6 +51,9 @@ class PartiesState extends Equatable {
   final LoadStatus status;
   final List<Party> parties;
   final String search;
+
+  /// Only parties in this group are listed; null = all.
+  final String? groupId;
   final String? selectedId;
   final LoadStatus txnStatus;
   final List<PartyTxn> txns;
@@ -54,31 +63,34 @@ class PartiesState extends Equatable {
 
   List<Party> get visible {
     final term = search.trim().toLowerCase();
-    if (term.isEmpty) return parties;
-    return parties.where((p) => p.name.toLowerCase().contains(term) || (p.phone ?? '').contains(term)).toList();
+    return parties
+        .where((p) => groupId == null || p.groupId == groupId)
+        .where((p) => term.isEmpty || p.name.toLowerCase().contains(term) || (p.phone ?? '').contains(term))
+        .toList();
   }
 
   PartiesState copyWith({
     LoadStatus? status,
     List<Party>? parties,
     String? search,
+    String? Function()? groupId,
     String? Function()? selectedId,
     LoadStatus? txnStatus,
     List<PartyTxn>? txns,
     String? error,
-  }) =>
-      PartiesState(
-        status: status ?? this.status,
-        parties: parties ?? this.parties,
-        search: search ?? this.search,
-        selectedId: selectedId != null ? selectedId() : this.selectedId,
-        txnStatus: txnStatus ?? this.txnStatus,
-        txns: txns ?? this.txns,
-        error: error,
-      );
+  }) => PartiesState(
+    status: status ?? this.status,
+    parties: parties ?? this.parties,
+    search: search ?? this.search,
+    groupId: groupId != null ? groupId() : this.groupId,
+    selectedId: selectedId != null ? selectedId() : this.selectedId,
+    txnStatus: txnStatus ?? this.txnStatus,
+    txns: txns ?? this.txns,
+    error: error,
+  );
 
   @override
-  List<Object?> get props => [status, parties, search, selectedId, txnStatus, txns, error];
+  List<Object?> get props => [status, parties, search, groupId, selectedId, txnStatus, txns, error];
 }
 
 /// Party list, current selection and the selected party's ledger. Reloads when parties, invoices or payments change.
@@ -88,6 +100,7 @@ class PartiesBloc extends Bloc<PartiesEvent, PartiesState> {
     on<PartiesRequested>((_, emit) => _load(emit));
     on<_PartiesChanged>((_, emit) => _load(emit));
     on<PartiesSearchChanged>((e, emit) => emit(state.copyWith(search: e.query)));
+    on<PartiesGroupChanged>((e, emit) => emit(state.copyWith(groupId: () => e.groupId)));
     on<PartySelected>((e, emit) async {
       if (e.id == state.selectedId && state.txnStatus == LoadStatus.success) return;
       emit(state.copyWith(selectedId: () => e.id, txnStatus: LoadStatus.loading, txns: const []));

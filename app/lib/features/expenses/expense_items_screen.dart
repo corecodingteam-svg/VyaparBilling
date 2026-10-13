@@ -24,7 +24,8 @@ Future<void> showExpenseItemDialog(BuildContext context, {ExpenseItemDef? item})
   return showSubmitDialog<List<ExpenseItemDef>>(
     context,
     title: item == null ? 'Add Expense Item' : 'Edit Expense Item',
-    action: () => repo.saveItemDef(item?.id, {'name': name.text.trim(), 'price': parseNum(price.text) ?? 0, 'hsnCode': hsn.text.trim(), 'gstRate': gstRate}),
+    action: () =>
+        repo.saveItemDef(item?.id, {'name': name.text.trim(), 'price': parseNum(price.text) ?? 0, 'hsnCode': hsn.text.trim(), 'gstRate': gstRate}),
     fields: (submit) => [
       TextFormField(
         controller: name,
@@ -36,7 +37,11 @@ Future<void> showExpenseItemDialog(BuildContext context, {ExpenseItemDef? item})
       TextFormField(
         controller: price,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(labelText: 'Usual Price', prefixText: '₹ ', helperText: 'Filled in when you pick this item; can be changed each time'),
+        decoration: const InputDecoration(
+          labelText: 'Usual Price',
+          prefixText: '₹ ',
+          helperText: 'Filled in when you pick this item; can be changed each time',
+        ),
         validator: (v) => (v ?? '').trim().isNotEmpty && (parseNum(v!) == null || parseNum(v)! < 0) ? 'Enter a valid price' : null,
         onFieldSubmitted: (_) => submit(),
       ),
@@ -69,48 +74,73 @@ class ExpenseItemsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-        create: (ctx) =>
-            ListCubit<ExpenseItemDef>(ctx.read<ExpensesRepository>().itemDefs, bus: ctx.read<ChangeBus>(), topics: const {DataTopic.expenses})..load(),
-        child: ListCubitView<ExpenseItemDef>(builder: (context, state) {
-          final cubit = context.read<ListCubit<ExpenseItemDef>>();
-          final repo = context.read<ExpensesRepository>();
-          return TitledPage(
-            title: 'Expense Items',
-            subtitle: 'Things you spend on again and again. Pick them while entering an expense to fill in the price and GST.',
-            actions: [FilledButton.icon(onPressed: () => showExpenseItemDialog(context), icon: const Icon(Icons.add), label: const Text('Add Expense Item'))],
-            children: [
-              RowsCard(
-                empty: const EmptyState(icon: Icons.local_gas_station_outlined, title: 'No expense items yet', message: 'Add the things you pay for regularly.'),
-                rows: [
-                  for (final d in state.items)
-                    ListTile(
-                      title: Text(d.name),
-                      subtitle: Text([
+    create: (ctx) =>
+        ListCubit<ExpenseItemDef>(ctx.read<ExpensesRepository>().itemDefs, bus: ctx.read<ChangeBus>(), topics: const {DataTopic.expenses})..load(),
+    child: ListCubitView<ExpenseItemDef>(
+      builder: (context, state) {
+        final cubit = context.read<ListCubit<ExpenseItemDef>>();
+        final repo = context.read<ExpensesRepository>();
+        return TitledPage(
+          title: 'Expense Items',
+          subtitle: 'Things you spend on again and again. Pick them while entering an expense to fill in the price and GST.',
+          actions: [
+            FilledButton.icon(onPressed: () => showExpenseItemDialog(context), icon: const Icon(Icons.add), label: const Text('Add Expense Item')),
+          ],
+          children: [
+            RowsCard(
+              empty: const EmptyState(
+                icon: Icons.local_gas_station_outlined,
+                title: 'No expense items yet',
+                message: 'Add the things you pay for regularly.',
+              ),
+              rows: [
+                for (final d in state.items)
+                  ListTile(
+                    title: Text(d.name),
+                    subtitle: Text(
+                      [
                         if (d.price > 0) 'Usual price ${money(d.price)}',
                         if (d.gstRate != null) 'GST ${numText(d.gstRate)}%',
                         if ((d.hsnCode ?? '').isNotEmpty) 'HSN/SAC ${d.hsnCode}',
-                      ].join(' · ')),
-                      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-                          Text(money(d.total), style: const TextStyle(fontWeight: FontWeight.w600)),
-                          const Text('spent so far', style: TextStyle(fontSize: 11, color: Colors.black54)),
-                        ]),
-                        IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => showExpenseItemDialog(context, item: d)),
+                      ].join(' · '),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(money(d.total), style: const TextStyle(fontWeight: FontWeight.w600)),
+                            const Text('spent so far', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                          ],
+                        ),
+                        IconButton(
+                          tooltip: 'Edit',
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          onPressed: () => showExpenseItemDialog(context, item: d),
+                        ),
                         IconButton(
                           tooltip: 'Delete',
                           icon: const Icon(Icons.delete_outline, size: 20),
                           onPressed: () async {
-                            if (await confirmDelete(context, title: 'Delete expense item', message: 'Delete "${d.name}"? Expenses already entered keep it.')) {
+                            if (await confirmDelete(
+                              context,
+                              title: 'Delete expense item',
+                              message: 'Delete "${d.name}"? Expenses already entered keep it.',
+                            )) {
                               cubit.run(() => repo.deleteItemDef(d.id));
                             }
                           },
                         ),
-                      ]),
+                      ],
                     ),
-                ],
-              ),
-            ],
-          );
-        }),
-      );
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

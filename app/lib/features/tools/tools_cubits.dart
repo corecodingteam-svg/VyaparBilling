@@ -101,18 +101,17 @@ class CloseYearState extends Equatable {
     String? message,
     Company? created,
     String? error,
-  }) =>
-      CloseYearState(
-        loadStatus: loadStatus ?? this.loadStatus,
-        lockDate: lockDate != null ? lockDate() : this.lockDate,
-        lockUpTo: lockUpTo ?? this.lockUpTo,
-        newYearStart: newYearStart ?? this.newYearStart,
-        firmName: firmName ?? this.firmName,
-        status: status ?? this.status,
-        message: message,
-        created: created ?? this.created,
-        error: error,
-      );
+  }) => CloseYearState(
+    loadStatus: loadStatus ?? this.loadStatus,
+    lockDate: lockDate != null ? lockDate() : this.lockDate,
+    lockUpTo: lockUpTo ?? this.lockUpTo,
+    newYearStart: newYearStart ?? this.newYearStart,
+    firmName: firmName ?? this.firmName,
+    status: status ?? this.status,
+    message: message,
+    created: created ?? this.created,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [loadStatus, lockDate, lockUpTo, newYearStart, firmName, status, message, created, error];
@@ -129,10 +128,12 @@ String financialYearLabel(DateTime start) {
 
 class CloseYearCubit extends Cubit<CloseYearState> {
   CloseYearCubit(this._repo, this._firm, {DateTime? now})
-      : super(CloseYearState(
+    : super(
+        CloseYearState(
           lockUpTo: lastFinancialYearEnd(now ?? DateTime.now()),
           newYearStart: isoDate(DateTime.parse(lastFinancialYearEnd(now ?? DateTime.now())).add(const Duration(days: 1))),
-        ));
+        ),
+      );
 
   final UtilitiesRepository _repo;
   final FirmRepository _firm;
@@ -160,20 +161,20 @@ class CloseYearCubit extends Cubit<CloseYearState> {
   }
 
   Future<void> closeBooks() => _run(() async {
-        final date = state.lockUpTo;
-        await _repo.closeBooks(date);
-        return state.copyWith(status: SubmitStatus.success, lockDate: () => date, message: 'Books closed up to ${displayDate(date)}');
-      });
+    final date = state.lockUpTo;
+    await _repo.closeBooks(date);
+    return state.copyWith(status: SubmitStatus.success, lockDate: () => date, message: 'Books closed up to ${displayDate(date)}');
+  });
 
   Future<void> reopenBooks() => _run(() async {
-        await _repo.closeBooks(null);
-        return state.copyWith(status: SubmitStatus.success, lockDate: () => null, message: 'Books re-opened');
-      });
+    await _repo.closeBooks(null);
+    return state.copyWith(status: SubmitStatus.success, lockDate: () => null, message: 'Books re-opened');
+  });
 
   Future<void> startNewYear(String name) => _run(() async {
-        final company = await _repo.startNewYear(name: name.trim(), startDate: state.newYearStart);
-        return state.copyWith(status: SubmitStatus.success, created: company, message: '"${company.name}" is ready');
-      });
+    final company = await _repo.startNewYear(name: name.trim(), startDate: state.newYearStart);
+    return state.copyWith(status: SubmitStatus.success, created: company, message: '"${company.name}" is ready');
+  });
 }
 
 // ---------------------------------------------------------------- backup
@@ -207,15 +208,43 @@ class BackupCubit extends Cubit<BackupState> {
       final tables = (backup['tables'] as Map?) ?? const {};
       int count(String t) => (tables[t] as List?)?.length ?? 0;
       final safeName = firmName.trim().replaceAll(RegExp(r'[^A-Za-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
-      emit(BackupState(
-        status: SubmitStatus.success,
-        fileName: '${safeName.isEmpty ? 'company' : safeName}-backup-${isoDate(DateTime.now())}.json',
-        bytes: Uint8List.fromList(utf8.encode(jsonEncode(backup))),
-        summary: '${count('parties')} parties, ${count('items')} items, ${count('invoices')} documents, ${count('payments')} payments, '
-            '${count('expenses')} expenses, ${count('files')} files',
-      ));
+      emit(
+        BackupState(
+          status: SubmitStatus.success,
+          fileName: '${safeName.isEmpty ? 'company' : safeName}-backup-${isoDate(DateTime.now())}.json',
+          bytes: Uint8List.fromList(utf8.encode(jsonEncode(backup))),
+          summary:
+              '${count('parties')} parties, ${count('items')} items, ${count('invoices')} documents, ${count('payments')} payments, '
+              '${count('expenses')} expenses, ${count('files')} files',
+        ),
+      );
     } catch (e) {
       emit(BackupState(status: SubmitStatus.failure, error: ApiException.from(e).message));
     }
+  }
+}
+
+// ---------------------------------------------------------------- Google Drive link
+
+/// Whether backups are copied to Google Drive, and linking or unlinking an account.
+class DriveCubit extends Cubit<DriveStatus?> {
+  DriveCubit(this._repo) : super(null);
+  final UtilitiesRepository _repo;
+
+  Future<void> load() async {
+    try {
+      final status = await _repo.driveStatus();
+      if (!isClosed) emit(status);
+    } catch (_) {
+      if (!isClosed) emit(const DriveStatus());
+    }
+  }
+
+  /// The Google page to send the user to.
+  Future<String> authUrl() => _repo.driveAuthUrl();
+
+  Future<void> disconnect() async {
+    await _repo.driveDisconnect();
+    await load();
   }
 }

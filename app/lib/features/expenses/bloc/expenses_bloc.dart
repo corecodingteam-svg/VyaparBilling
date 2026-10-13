@@ -77,16 +77,15 @@ class ExpensesState extends Equatable {
     LoadStatus? expensesStatus,
     List<ExpenseSummary>? expenses,
     String? error,
-  }) =>
-      ExpensesState(
-        status: status ?? this.status,
-        categories: categories ?? this.categories,
-        search: search ?? this.search,
-        selectedId: selectedId != null ? selectedId() : this.selectedId,
-        expensesStatus: expensesStatus ?? this.expensesStatus,
-        expenses: expenses ?? this.expenses,
-        error: error,
-      );
+  }) => ExpensesState(
+    status: status ?? this.status,
+    categories: categories ?? this.categories,
+    search: search ?? this.search,
+    selectedId: selectedId != null ? selectedId() : this.selectedId,
+    expensesStatus: expensesStatus ?? this.expensesStatus,
+    expenses: expenses ?? this.expenses,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [status, categories, search, selectedId, expensesStatus, expenses, error];
@@ -123,11 +122,9 @@ class ExpensesBloc extends Bloc<ExpensesEvent, ExpensesState> {
     try {
       final categories = await _repo.categories();
       final keep = categories.any((c) => c.id == state.selectedId);
-      emit(state.copyWith(
-        status: LoadStatus.success,
-        categories: categories,
-        selectedId: () => keep ? state.selectedId : categories.firstOrNull?.id,
-      ));
+      emit(
+        state.copyWith(status: LoadStatus.success, categories: categories, selectedId: () => keep ? state.selectedId : categories.firstOrNull?.id),
+      );
       await _loadExpenses(emit);
     } catch (e) {
       emit(state.copyWith(status: LoadStatus.failure, error: ApiException.from(e).message));

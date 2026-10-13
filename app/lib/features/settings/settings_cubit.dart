@@ -32,7 +32,8 @@ class SettingsState extends Equatable {
 
   bool get dirty => saved != null && draft != saved;
 
-  SettingsState copyWith({LoadStatus? loadStatus, FirmSettings? saved, FirmSettings? draft, int? rev, SubmitStatus? status, String? error}) => SettingsState(
+  SettingsState copyWith({LoadStatus? loadStatus, FirmSettings? saved, FirmSettings? draft, int? rev, SubmitStatus? status, String? error}) =>
+      SettingsState(
         loadStatus: loadStatus ?? this.loadStatus,
         saved: saved ?? this.saved,
         draft: draft ?? this.draft,

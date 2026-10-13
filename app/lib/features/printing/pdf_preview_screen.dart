@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import '../../core/api_client.dart';
 import '../../core/status.dart';
 import '../../shared/widgets.dart';
+import 'thermal/direct_print.dart';
 
 class PdfPreviewState extends Equatable {
   const PdfPreviewState({this.status = LoadStatus.loading, this.bytes, this.fileName = 'document.pdf', this.layout, this.error});
@@ -61,6 +62,8 @@ class PdfPreviewScreen extends StatelessWidget {
     this.layouts = const [],
     this.initialLayout,
     this.buildLayout,
+    this.directPrint,
+    this.directPrintLayout,
   }) : assert(buildPdf != null || buildLayout != null);
 
   final String title;
@@ -68,6 +71,7 @@ class PdfPreviewScreen extends StatelessWidget {
   /// Where Close goes when there is no page to pop back to (e.g. opened by URL).
   final String fallbackPath;
   final String? editPath;
+
   /// Loads the document's data and returns (file name, pdf bytes).
   final Future<(String, Uint8List)> Function(BuildContext context)? buildPdf;
 
@@ -76,6 +80,10 @@ class PdfPreviewScreen extends StatelessWidget {
 
   /// The layout shown first; null lets [buildLayout] pick (e.g. the theme saved in settings).
   final String? initialLayout;
+
+  /// Makes the raw ESC/POS bytes for a receipt printer; offered next to the preview when [directPrintLayout] is shown.
+  final Future<Uint8List> Function(BuildContext context)? directPrint;
+  final String? directPrintLayout;
 
   /// Like [buildPdf], for documents with [layouts]: renders the chosen layout.
   final Future<(String, Uint8List)> Function(BuildContext context, String? layout)? buildLayout;
@@ -96,6 +104,7 @@ class PdfPreviewScreen extends StatelessWidget {
             ),
             title: Text(title),
             actions: [
+              if (directPrint != null && state.layout == directPrintLayout) DirectPrintButton(makeBytes: () => directPrint!(context)),
               if (layouts.isNotEmpty)
                 DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
@@ -119,12 +128,12 @@ class PdfPreviewScreen extends StatelessWidget {
           body: switch (state.status) {
             LoadStatus.failure => ErrorRetry(error: state.error ?? 'Could not load', onRetry: context.read<PdfPreviewCubit>().load),
             LoadStatus.success => PdfPreview(
-                build: (_) => state.bytes!,
-                pdfFileName: state.fileName,
-                canChangePageFormat: false,
-                canChangeOrientation: false,
-                canDebug: false,
-              ),
+              build: (_) => state.bytes!,
+              pdfFileName: state.fileName,
+              canChangePageFormat: false,
+              canChangeOrientation: false,
+              canDebug: false,
+            ),
             _ => const Center(child: CircularProgressIndicator()),
           },
         ),

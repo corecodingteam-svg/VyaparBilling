@@ -8,7 +8,10 @@ import 'package:billing_app/data/models/cash_bank.dart';
 import 'package:billing_app/data/models/extras.dart';
 import 'package:billing_app/data/repositories/accounting_repository.dart';
 import 'package:billing_app/data/repositories/auth_repository.dart';
+import 'package:billing_app/data/models/team_location.dart';
+import 'package:billing_app/features/lock/passcode_store.dart';
 import 'package:billing_app/data/repositories/files_repository.dart';
+import 'package:billing_app/data/repositories/location_repository.dart';
 import 'package:billing_app/data/repositories/utilities_repository.dart';
 import 'package:billing_app/data/models/expense.dart';
 import 'package:billing_app/data/models/firm.dart';
@@ -62,6 +65,12 @@ class FakePartiesRepository extends PartiesRepository {
   Future<Party> get(String id) async => parties.firstWhere((p) => p.id == id);
 
   @override
+  Future<List<PartyGroup>> groups() async => [
+        PartyGroup.fromJson({'id': 'pg1', 'name': 'Retailers', 'partyCount': 2}),
+        PartyGroup.fromJson({'id': 'pg2', 'name': 'Wholesalers', 'partyCount': 1}),
+      ];
+
+  @override
   Future<List<PartyTxn>> transactions(String id) async {
     final p = parties.firstWhere((x) => x.id == id);
     return p.openingBalance == 0
@@ -88,6 +97,40 @@ class FakePartiesRepository extends PartiesRepository {
 class FakeItemsRepository extends ItemsRepository {
   FakeItemsRepository(this.items, [ChangeBus? bus]) : super(_api, bus ?? ChangeBus());
   List<Item> items;
+
+  /// What the store, batch and serial lookups return.
+  var storeList = <Godown>[
+    Godown.fromJson({'id': null, 'name': 'Main Store', 'itemCount': 2, 'stockValue': 5000}),
+    Godown.fromJson({'id': 'g1', 'name': 'Warehouse', 'itemCount': 1, 'stockValue': 700}),
+  ];
+  var batchList = <ItemBatch>[
+    ItemBatch.fromJson({'batchNo': 'B-77', 'expiryDate': '2026-11-30', 'mrp': 120, 'quantity': 40}),
+    ItemBatch.fromJson({'batchNo': 'B-90', 'expiryDate': '2027-03-31', 'mrp': 125, 'quantity': 10}),
+  ];
+  var serialList = <String>['IM1', 'IM2', 'IM3'];
+  final transfers = <Map<String, dynamic>>[];
+  String? lastBatchGodown;
+
+  @override
+  Future<List<Godown>> godowns() async => storeList;
+
+  @override
+  Future<List<ItemBatch>> batches(String id, {String? godownId}) async {
+    lastBatchGodown = godownId;
+    return batchList;
+  }
+
+  @override
+  Future<List<String>> serials(String id) async => serialList;
+
+  @override
+  Future<List<GodownStock>> stockByGodown(String id) async => const [
+        GodownStock(godownId: null, name: 'Main Store', quantity: 30),
+        GodownStock(godownId: 'g1', name: 'Warehouse', quantity: 70),
+      ];
+
+  @override
+  Future<void> transferStock(Map<String, dynamic> body) async => transfers.add(body);
 
   @override
   Future<List<Item>> list(String type) async => items.where((i) => type == 'all' || i.type == type).toList();
@@ -483,7 +526,28 @@ class FakeAccountingRepository extends AccountingRepository {
 }
 
 class FakeUtilitiesRepository extends UtilitiesRepository {
-  FakeUtilitiesRepository({this.hits = const []}) : super(_api, ChangeBus());
+  FakeUtilitiesRepository({this.hits = const [], this.drive = const DriveStatus(configured: true)}) : super(_api, ChangeBus());
+  DriveStatus drive;
+  var backupList = <ServerBackup>[
+    ServerBackup.fromJson({'id': 'b1', 'fileName': 'shop-1.json.gz', 'size': 52000, 'kind': 'auto', 'createdAt': '2026-10-10T20:00:00Z', 'onDrive': true}),
+    ServerBackup.fromJson({'id': 'b2', 'fileName': 'shop-2.json.gz', 'size': 51000, 'kind': 'manual', 'createdAt': '2026-10-09T10:00:00Z', 'onDrive': false, 'driveError': 'token expired'}),
+  ];
+
+  @override
+  Future<List<ServerBackup>> serverBackups() async => backupList;
+
+  @override
+  Future<List<ServerBackup>> createServerBackup() async => backupList;
+
+  @override
+  Future<DriveStatus> driveStatus() async => drive;
+
+  @override
+  Future<String> driveAuthUrl() async => 'https://accounts.google.com/o/oauth2/v2/auth?x=1';
+
+  @override
+  Future<void> driveDisconnect() async => drive = const DriveStatus(configured: true);
+
   final List<SearchHit> hits;
   final searches = <String>[];
 
@@ -540,4 +604,43 @@ class FakeAuthRepository extends AuthRepository {
         Member.fromJson({'id': 'u2', 'fullName': 'Asha Accountant', 'email': 'asha@example.com', 'role': 'accountant'}),
         Member.fromJson({'id': 'u3', 'fullName': 'Sam Salesman', 'email': 'sam@example.com', 'role': 'salesman'}),
       ];
+}
+
+/// A fixed device position, and a record of what was sent.
+class FakeLocationRepository extends LocationRepository {
+  FakeLocationRepository({this.fix = const GeoFix(19.07, 72.87, 10)}) : super(_api);
+  GeoFix? fix;
+  final sent = <(GeoFix, String, String?)>[];
+  var members = <TeamMemberLocation>[];
+  var trailPoints = <TrailPoint>[];
+
+  @override
+  Future<GeoFix?> currentFix() async => fix;
+
+  @override
+  Future<void> record(GeoFix fix, {String context = 'ping', String? refId}) async => sent.add((fix, context, refId));
+
+  @override
+  Future<List<TeamMemberLocation>> latest() async => members;
+
+  @override
+  Future<List<TrailPoint>> trail(String userId, String date) async => trailPoints;
+}
+
+/// The PIN kept in memory instead of the device's secure storage.
+class FakePasscodeStore extends PasscodeStore {
+  FakePasscodeStore([this.pin]);
+  String? pin;
+
+  @override
+  Future<bool> hasPin() async => pin != null;
+
+  @override
+  Future<void> setPin(String pin) async => this.pin = pin;
+
+  @override
+  Future<bool> check(String pin) async => this.pin == null || this.pin == pin;
+
+  @override
+  Future<void> clear() async => pin = null;
 }

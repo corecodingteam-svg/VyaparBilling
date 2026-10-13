@@ -7,11 +7,13 @@ import '../../core/api_client.dart';
 import '../../core/change_bus.dart';
 import '../../core/status.dart';
 import '../../data/models/cash_bank.dart';
+import '../../data/models/invoice.dart' show paymentModes;
 import '../../data/models/item.dart';
 import '../../data/repositories/cash_bank_repository.dart';
 import '../../data/repositories/invoices_repository.dart';
 import '../../data/repositories/items_repository.dart';
 import '../../shared/format.dart';
+import '../invoices/bloc/invoice_form_cubit.dart' show PartDraft;
 
 num _r2(num v) => (v * 100).round() / 100;
 
@@ -42,6 +44,7 @@ class PosState extends Equatable {
     this.customerName = '',
     this.paymentMode = 'cash',
     this.bankAccountId,
+    this.extraParts = const [],
     this.billRev = 0,
     this.submitStatus = SubmitStatus.idle,
     this.savedId,
@@ -57,6 +60,10 @@ class PosState extends Equatable {
   final String customerName;
   final String paymentMode;
   final String? bankAccountId;
+
+  /// More payment types after the first (split payment).
+  final List<PartDraft> extraParts;
+  num get extraPartsTotal => (extraParts.fold<num>(0, (s, p) => s + p.value) * 100).round() / 100;
 
   /// Bumped after each saved bill so the customer input starts empty again.
   final int billRev;
@@ -85,33 +92,46 @@ class PosState extends Equatable {
     String? customerName,
     String? paymentMode,
     String? Function()? bankAccountId,
+    List<PartDraft>? extraParts,
     int? billRev,
     SubmitStatus? submitStatus,
     String? savedId,
     bool? printAfterSave,
     String? error,
-  }) =>
-      PosState(
-        loadStatus: loadStatus ?? this.loadStatus,
-        items: items ?? this.items,
-        bankAccounts: bankAccounts ?? this.bankAccounts,
-        search: search ?? this.search,
-        cart: cart ?? this.cart,
-        customerName: customerName ?? this.customerName,
-        paymentMode: paymentMode ?? this.paymentMode,
-        bankAccountId: bankAccountId != null ? bankAccountId() : this.bankAccountId,
-        billRev: billRev ?? this.billRev,
-        submitStatus: submitStatus ?? this.submitStatus,
-        savedId: savedId ?? this.savedId,
-        printAfterSave: printAfterSave ?? this.printAfterSave,
-        error: error,
-      );
+  }) => PosState(
+    loadStatus: loadStatus ?? this.loadStatus,
+    items: items ?? this.items,
+    bankAccounts: bankAccounts ?? this.bankAccounts,
+    search: search ?? this.search,
+    cart: cart ?? this.cart,
+    customerName: customerName ?? this.customerName,
+    paymentMode: paymentMode ?? this.paymentMode,
+    bankAccountId: bankAccountId != null ? bankAccountId() : this.bankAccountId,
+    extraParts: extraParts ?? this.extraParts,
+    billRev: billRev ?? this.billRev,
+    submitStatus: submitStatus ?? this.submitStatus,
+    savedId: savedId ?? this.savedId,
+    printAfterSave: printAfterSave ?? this.printAfterSave,
+    error: error,
+  );
 
   @override
   List<Object?> get props => [
-        loadStatus, items, bankAccounts, search, cart, customerName, paymentMode, bankAccountId, billRev,
-        submitStatus, savedId, printAfterSave, error,
-      ];
+    loadStatus,
+    items,
+    bankAccounts,
+    search,
+    cart,
+    customerName,
+    paymentMode,
+    bankAccountId,
+    extraParts,
+    billRev,
+    submitStatus,
+    savedId,
+    printAfterSave,
+    error,
+  ];
 }
 
 /// Counter billing: tap items into a cart and save each bill as a fully-paid cash sale.
@@ -142,11 +162,46 @@ class PosCubit extends Cubit<PosState> {
       emit(state.copyWith(paymentMode: v, bankAccountId: () => bankAccountForMode(v, state.bankAccountId, state.bankAccounts)));
   void bankAccountChanged(String? id) => emit(state.copyWith(bankAccountId: () => id));
 
+  int _nextPart = 0;
+
+  // Split payment: further payment types after the first; the first takes the rest of the bill.
+  void addPart() {
+    final used = {state.paymentMode, for (final p in state.extraParts) p.mode};
+    final mode = paymentModes.keys.firstWhere((m) => !used.contains(m), orElse: () => 'cash');
+    emit(
+      state.copyWith(
+        extraParts: [
+          ...state.extraParts,
+          PartDraft(uid: _nextPart++, mode: mode, bankAccountId: bankAccountForMode(mode, null, state.bankAccounts)),
+        ],
+      ),
+    );
+  }
+
+  void removePart(int uid) => emit(state.copyWith(extraParts: state.extraParts.where((p) => p.uid != uid).toList()));
+  void _updatePart(int uid, PartDraft Function(PartDraft) f) =>
+      emit(state.copyWith(extraParts: [for (final p in state.extraParts) p.uid == uid ? f(p) : p]));
+  void partModeChanged(int uid, String mode) =>
+      _updatePart(uid, (p) => p.copyWith(mode: mode, bankAccountId: () => bankAccountForMode(mode, p.bankAccountId, state.bankAccounts)));
+  void partBankAccountChanged(int uid, String? id) => _updatePart(uid, (p) => p.copyWith(bankAccountId: () => id));
+  void partAmountChanged(int uid, String v) => _updatePart(uid, (p) => p.copyWith(amount: v));
+
+  String? _splitProblem() {
+    for (final p in state.extraParts) {
+      if (p.value <= 0) return 'Enter the amount of each payment type, or remove the empty one.';
+      final problem = bankAccountProblem(p.mode, p.bankAccountId, state.bankAccounts);
+      if (problem != null) return problem;
+    }
+    if (state.extraParts.isNotEmpty && state.extraPartsTotal >= state.total) {
+      return 'The other payment types add up to the whole bill; remove one or lower them.';
+    }
+    return null;
+  }
+
   /// Adds one of [item], or bumps its quantity if it is already in the bill.
   void add(Item item) => _setQty(item, (state.cart.where((l) => l.item.id == item.id).firstOrNull?.qty ?? 0) + 1);
 
-  void changeQty(Item item, num delta) =>
-      _setQty(item, (state.cart.where((l) => l.item.id == item.id).firstOrNull?.qty ?? 0) + delta);
+  void changeQty(Item item, num delta) => _setQty(item, (state.cart.where((l) => l.item.id == item.id).firstOrNull?.qty ?? 0) + delta);
 
   void _setQty(Item item, num qty) {
     final cart = [...state.cart];
@@ -165,7 +220,9 @@ class PosCubit extends Cubit<PosState> {
 
   Future<void> save({required bool print}) async {
     if (state.submitStatus == SubmitStatus.submitting) return;
-    final problem = state.cart.isEmpty ? 'Add at least one item to the bill.' : bankAccountProblem(state.paymentMode, state.bankAccountId, state.bankAccounts);
+    final problem = state.cart.isEmpty
+        ? 'Add at least one item to the bill.'
+        : (bankAccountProblem(state.paymentMode, state.bankAccountId, state.bankAccounts) ?? _splitProblem());
     if (problem != null) {
       emit(state.copyWith(submitStatus: SubmitStatus.failure, error: problem));
       return;
@@ -184,6 +241,11 @@ class PosCubit extends Cubit<PosState> {
         'roundOff': true,
         'paymentMode': s.paymentMode,
         'bankAccountId': s.bankAccountId,
+        if (s.extraParts.isNotEmpty)
+          'payments': [
+            {'mode': s.paymentMode, 'bankAccountId': s.bankAccountId, 'amount': ((s.total - s.extraPartsTotal) * 100).round() / 100},
+            for (final p in s.extraParts) {'mode': p.mode, 'bankAccountId': p.bankAccountId, 'amount': p.value},
+          ],
         'lines': [
           for (final l in s.cart)
             {
@@ -199,14 +261,17 @@ class PosCubit extends Cubit<PosState> {
         ],
       });
       // Start the next bill, keeping the payment choice.
-      emit(state.copyWith(
-        cart: const [],
-        customerName: '',
-        billRev: s.billRev + 1,
-        submitStatus: SubmitStatus.success,
-        savedId: saved.id,
-        printAfterSave: print,
-      ));
+      emit(
+        state.copyWith(
+          cart: const [],
+          customerName: '',
+          billRev: s.billRev + 1,
+          extraParts: const [],
+          submitStatus: SubmitStatus.success,
+          savedId: saved.id,
+          printAfterSave: print,
+        ),
+      );
     } catch (e) {
       emit(state.copyWith(submitStatus: SubmitStatus.failure, error: ApiException.from(e).message));
     }
