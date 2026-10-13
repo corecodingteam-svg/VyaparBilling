@@ -462,6 +462,31 @@ void main() {
       await firms.close();
     });
 
+    test('on a phone it keeps recording from the background stream, at most one check-in per interval', () async {
+      final repo = FakeLocationRepository();
+      final c = TrackingCubit(repo, const Stream.empty(), initial: firm(true), background: true, interval: const Duration(milliseconds: 60));
+      await Future<void>.delayed(Duration.zero);
+      repo.background.add(const GeoFix(19.0, 72.0, 5));
+      repo.background.add(const GeoFix(19.1, 72.1, 5)); // too soon after the first
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect([c.state.status, repo.sent.map((s) => s.$1.latitude)], [TrackingStatus.active, [19.0]]);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      repo.background.add(const GeoFix(19.2, 72.2, 5));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(repo.sent.map((s) => s.$1.latitude), [19.0, 19.2]);
+      await c.close();
+    });
+
+    test('a background stream that ends without a position means location is not allowed', () async {
+      final repo = FakeLocationRepository();
+      final c = TrackingCubit(repo, const Stream.empty(), initial: firm(true), background: true);
+      await Future<void>.delayed(Duration.zero);
+      await repo.background.close();
+      await Future<void>.delayed(Duration.zero);
+      expect([c.state.status, repo.sent], [TrackingStatus.denied, isEmpty]);
+      await c.close();
+    });
+
     test('when the device will not share its location the user is told, and nothing is sent', () async {
       final repo = FakeLocationRepository(fix: null);
       final c = TrackingCubit(repo, const Stream.empty(), initial: firm(true));

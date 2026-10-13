@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
 import { INVOICE_TYPE_NAMES, InvoiceType } from '../common/invoice-types';
 import { FirmService } from '../firm/firm.service';
+import { MessagingService } from '../messaging/messaging.service';
 import { SaveInvoiceDto } from './invoice.dto';
 import { InvoicesService } from './invoices.service';
 
@@ -35,6 +36,7 @@ export class InvoicesController {
   constructor(
     private readonly invoices: InvoicesService,
     private readonly firm: FirmService,
+    private readonly messaging: MessagingService,
   ) {}
 
   @Get()
@@ -62,8 +64,10 @@ export class InvoicesController {
   }
 
   @Post()
-  create(@CurrentUser() u: JwtPayload, @Body() dto: SaveInvoiceDto) {
-    return this.invoices.create(u.firmId, { ...dto, type: assertAllowed(u, dto.type) }, u.sub);
+  async create(@CurrentUser() u: JwtPayload, @Body() dto: SaveInvoiceDto) {
+    const created = await this.invoices.create(u.firmId, { ...dto, type: assertAllowed(u, dto.type) }, u.sub);
+    void this.messaging.autoSend(u.firmId, u.sub, 'invoice', created.id);
+    return created;
   }
 
   @Put(':id')

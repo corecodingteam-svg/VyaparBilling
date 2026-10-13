@@ -4,6 +4,14 @@
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Billing records where you are when you save a sale or payment, if your employer turns on location tracking.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Billing connects to your Bluetooth receipt printer to print bills.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Billing keeps recording where you are while you work, even with the app in the background, if your employer turns on location tracking.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

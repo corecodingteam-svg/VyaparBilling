@@ -30,6 +30,8 @@ import 'package:billing_app/features/lock/lock_screen.dart';
 import 'package:billing_app/features/printing/thermal/escpos.dart';
 import 'package:billing_app/data/repositories/firm_repository.dart';
 import 'package:billing_app/data/repositories/loans_repository.dart';
+import 'package:billing_app/data/repositories/integrations_repository.dart';
+import 'package:billing_app/features/integrations/integrations_screens.dart';
 import 'package:billing_app/data/repositories/reports_repository.dart';
 import 'package:billing_app/data/repositories/invoices_repository.dart';
 import 'package:billing_app/features/expenses/expense_form_screen.dart';
@@ -99,6 +101,15 @@ Widget _app(String location, Widget child, {bool shell = true, Map<String, dynam
     Item.fromJson(itemJson('i2', 'Basmati Rice 5kg', stock: 4, minStock: 10)),
     Item.fromJson(itemJson('s1', 'Home Delivery', type: 'service')),
   ], bus);
+  final integrations = FakeIntegrationsRepository()
+    ..providers = [
+      integrationJson('whatsapp', connected: true, stored: '••••1234'),
+      integrationJson('sms'),
+      integrationJson('einvoice', connected: true, stored: '••••9876'),
+      integrationJson('razorpay'),
+      integrationJson('google_profile', connected: true, location: 'Acme Traders'),
+    ]
+    ..einvoiceState = einvoiceInfoJson(problems: ['The customer needs a 6-digit pincode.'], ewayProblems: ['Enter the distance in km.']);
   final AuthRepository authRepo = FakeAuthRepository();
   final firm = FakeFirmRepository(settings: settings);
   final locations = FakeLocationRepository()
@@ -131,6 +142,7 @@ Widget _app(String location, Widget child, {bool shell = true, Map<String, dynam
         ]),
       ),
       RepositoryProvider<LoansRepository>.value(value: FakeLoansRepository()),
+      RepositoryProvider<IntegrationsRepository>.value(value: integrations),
       RepositoryProvider<ReportsRepository>.value(value: FakeReportsRepository()),
       RepositoryProvider<PartiesRepository>.value(value: parties),
       RepositoryProvider<ItemsRepository>.value(value: items),
@@ -343,6 +355,18 @@ void main() {
   testWidgets('transfer stock', (t) => _shot(t, desktop, _app('/godowns', const GodownsScreen(), settings: everything), 'transfer_stock', then: () => t.tap(find.text('Transfer Stock'))));
   testWidgets('party groups', (t) => _shot(t, desktop, _app('/party-groups', const PartyGroupsScreen(), settings: everything), 'party_groups'));
   testWidgets('team locations', (t) => _shot(t, desktop, _app('/team-locations', const TeamLocationsScreen(), settings: everything), 'team_locations'));
+  testWidgets('integrations', (t) => _shot(t, const Size(1200, 1300), _app('/integrations', const IntegrationsScreen()), 'integrations'));
+  testWidgets('integration keys', (t) => _shot(t, desktop, _app('/integrations', const IntegrationsScreen()), 'integration_keys', then: () => t.tap(find.text('Edit keys').first)));
+  testWidgets('messages', (t) => _shot(t, const Size(1200, 1000), _app('/messages', const MessagesScreen()), 'messages'));
+  testWidgets('google profile', (t) => _shot(t, const Size(1200, 1500), _app('/google-profile', const GoogleProfileScreen()), 'google_profile'));
+  testWidgets('invoice menu', (t) => _shot(t, desktop, _app('/sale', const InvoicesScreen(kind: InvoiceKind.sale), settings: const {'einvoiceEnabled': true}), 'invoice_menu', then: () async {
+        await t.tap(find.byIcon(Icons.more_vert).first);
+      }));
+  testWidgets('einvoice dialog', (t) => _shot(t, const Size(1700, 1100), _app('/sale', const InvoicesScreen(kind: InvoiceKind.sale), settings: const {'einvoiceEnabled': true}), 'einvoice_dialog', then: () async {
+        await t.tap(find.byIcon(Icons.more_vert).first);
+        await t.pumpAndSettle();
+        await t.tap(find.text('E-invoice / e-way bill'));
+      }));
   testWidgets('backups', (t) => _shot(t, const Size(1440, 1100), _app('/backup', const BackupScreen(), settings: everything), 'backups'));
   testWidgets('item detail with stores', (t) => _shot(t, desktop, _app('/items', const ItemsScreen(), settings: everything), 'item_detail_stores'));
   testWidgets('party form more', (t) => _shot(t, desktop, _app('/parties', const PartiesScreen(), settings: everything), 'party_form_more', then: () async {
@@ -370,7 +394,7 @@ void main() {
     );
   });
   testWidgets('set PIN dialog', (t) => _shot(
-      t, const Size(1440, 4800), _app('/settings', const SettingsScreen(), settings: const {'invoicePrefix': 'INV-'}), 'set_pin_dialog',
+      t, const Size(1440, 6000), _app('/settings', const SettingsScreen(), settings: const {'invoicePrefix': 'INV-'}), 'set_pin_dialog',
       then: () => t.tap(find.text('Set PIN'))));
 
   testWidgets('invoice pdf themes', (t) async {

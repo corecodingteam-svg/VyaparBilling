@@ -562,12 +562,41 @@ Future<Uint8List> buildInvoicePdf(
           style.heading('Terms and Conditions'),
           pw.Text(firm.settings.invoiceTerms, style: const pw.TextStyle(fontSize: 10)),
         ],
+        ..._paymentAndIrn(inv, firm),
         pw.SizedBox(height: 28),
         _signature(firm, options.signature),
       ],
     ),
   );
   return doc.save();
+}
+
+/// A UPI QR for what is still due (when the company switched it on and has a UPI ID), and the IRN with its signed QR once registered.
+List<pw.Widget> _paymentAndIrn(Invoice inv, Firm firm) {
+  final upi = firm.settings.upiQrOnInvoice && firm.settings.upiId.isNotEmpty && inv.balance > 0 && !inv.isForeign && inv.type == 'sale';
+  final irn = inv.einvoiceStatus == 'generated' && inv.irn != null;
+  if (!upi && !irn) return const [];
+  pw.Widget qr(String data, String caption) => pw.Column(children: [
+        pw.BarcodeWidget(barcode: pw.Barcode.qrCode(), data: data, width: 78, height: 78),
+        pw.SizedBox(height: 3),
+        pw.Text(caption, style: const pw.TextStyle(fontSize: 8)),
+      ]);
+  return [
+    pw.SizedBox(height: 14),
+    pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+      if (upi)
+        qr(
+          'upi://pay?pa=${Uri.encodeComponent(firm.settings.upiId)}&pn=${Uri.encodeComponent(firm.name)}&am=${inv.balance.toStringAsFixed(2)}&cu=INR&tn=${Uri.encodeComponent('Invoice ${inv.number}')}',
+          'Scan to pay ${money(inv.balance)}',
+        ),
+      if (upi && irn) pw.SizedBox(width: 24),
+      if (irn) ...[
+        if (inv.signedQr != null) qr(inv.signedQr!, 'E-invoice QR'),
+        pw.SizedBox(width: 12),
+        pw.Expanded(child: pw.Text('IRN: ${inv.irn}${inv.ackNo == null ? '' : '\nAck no.: ${inv.ackNo}'}', style: const pw.TextStyle(fontSize: 8))),
+      ],
+    ]),
+  ];
 }
 
 /// The same document as a narrow receipt for 58 mm or 80 mm thermal roll printers. The page is as

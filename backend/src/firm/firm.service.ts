@@ -20,6 +20,7 @@ const toApi = (f: Selectable<FirmsTable>) => ({
   stateCode: f.state_code,
   pincode: f.pincode,
   address: f.address,
+  city: f.city,
   logoFileId: f.logo_file_id,
   signatureFileId: f.signature_file_id,
   booksLockDate: f.books_lock_date,
@@ -61,6 +62,7 @@ export class FirmService {
         state_code: dto.stateCode,
         pincode: dto.pincode,
         address: dto.address,
+        city: dto.city,
         logo_file_id: dto.logoFileId,
         signature_file_id: dto.signatureFileId,
         // Merge: only the keys sent change (undefined keys are dropped by JSON.stringify).

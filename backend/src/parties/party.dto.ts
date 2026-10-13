@@ -40,6 +40,12 @@ export class CreatePartyDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500)
   shippingAddress?: string | null;
 
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(100)
+  city?: string | null;
+
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @ValidateIf((_, v) => v !== null) @Matches(/^[1-9][0-9]{5}$/, { message: 'Pincode must be 6 digits' })
+  pincode?: string | null;
+
   @ApiPropertyOptional({ description: 'Positive = to receive, negative = to pay' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 })
   openingBalance?: number;
 

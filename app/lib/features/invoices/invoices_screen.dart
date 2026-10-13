@@ -8,6 +8,8 @@ import '../../shared/format.dart';
 import '../../shared/period.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
+import '../integrations/integrations_screens.dart';
+import '../company/firm_cubit.dart';
 import 'bloc/invoices_bloc.dart';
 
 /// List of sale invoices (or purchase bills) with period filter and totals.
@@ -213,6 +215,18 @@ class _InvoicesView extends StatelessWidget {
               context.push('${kind.basePath}/${inv.id}/edit');
             case 'preview':
               context.push('${kind.basePath}/${inv.id}/preview');
+            case 'send':
+              showSendDialog(
+                context,
+                title: 'Send ${kind.singular} ${inv.number}',
+                phone: null,
+                manualMessage: 'Dear ${inv.partyName}, your ${kind.singular.toLowerCase()} ${inv.number} for ${money(inv.total)} is ready. Balance due: ${money(inv.balance)}.',
+                send: (repo, channel, phone) => repo.sendInvoice(inv.id, channel, phone: phone),
+              );
+            case 'einvoice':
+              showEinvoiceDialog(context, invoiceId: inv.id, number: inv.number);
+            case 'paylink':
+              showPaymentLinkDialog(context, invoiceId: inv.id, number: inv.number, phone: null, customer: inv.partyName);
             default:
               _delete(context, inv);
           }
@@ -224,6 +238,10 @@ class _InvoicesView extends StatelessWidget {
             PopupMenuItem(value: 'converted', child: Text('Open ${InvoiceKind.of(inv.convertedType ?? 'sale').singular}')),
           const PopupMenuItem(value: 'edit', child: Text('View/Edit')),
           const PopupMenuItem(value: 'preview', child: Text('Preview / Print')),
+          if (kind.type == 'sale') const PopupMenuItem(value: 'send', child: Text('Send to customer')),
+          if (kind.type == 'sale' && inv.partyId != null && inv.balance > 0) const PopupMenuItem(value: 'paylink', child: Text('Payment link')),
+          if (settingsOf(context).einvoiceEnabled && (kind.type == 'sale' || kind.type == 'credit_note'))
+            PopupMenuItem(value: 'einvoice', child: Text(inv.einvoiceStatus == 'generated' ? 'E-invoice / e-way bill ✓' : 'E-invoice / e-way bill')),
           const PopupMenuItem(value: 'delete', child: Text('Delete')),
         ],
       );

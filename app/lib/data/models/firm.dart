@@ -1,5 +1,9 @@
 import 'package:equatable/equatable.dart';
 
+/// The wording of customer messages until the company writes its own; {customer} {number} {amount} {balance} {business} {link} are filled in.
+const defaultInvoiceMessage = 'Dear {customer}, your invoice {number} for ₹{amount} from {business} is ready. Balance due: ₹{balance}. {link}';
+const defaultPaymentMessage = 'Dear {customer}, we received ₹{amount} (receipt {number}). Thank you! — {business}';
+const defaultReminderMessage = 'Dear {customer}, a payment of ₹{amount} to {business} is overdue. Please pay at your earliest. {link}';
 /// A custom party field defined once for the business and filled in per party.
 class PartyFieldDef extends Equatable {
   const PartyFieldDef(this.name, {this.showInPrint = false});
@@ -73,6 +77,15 @@ class FirmSettings extends Equatable {
     this.loyaltyPointValue = 1,
     this.autoBackup = 'off',
     this.autoBackupKeep = 7,
+    this.autoSendInvoices = 'off',
+    this.autoSendPayments = 'off',
+    this.invoiceMessage = defaultInvoiceMessage,
+    this.paymentMessage = defaultPaymentMessage,
+    this.reminderMessage = defaultReminderMessage,
+    this.einvoiceEnabled = false,
+    this.ewayEnabled = false,
+    this.upiId = '',
+    this.upiQrOnInvoice = false,
   });
 
   FirmSettings.fromJson(Map<String, dynamic> j)
@@ -123,7 +136,16 @@ class FirmSettings extends Equatable {
         loyaltyEarnPer = (j['loyaltyEarnPer'] as num?) ?? 100,
         loyaltyPointValue = (j['loyaltyPointValue'] as num?) ?? 1,
         autoBackup = (j['autoBackup'] as String?) ?? 'off',
-        autoBackupKeep = ((j['autoBackupKeep'] as num?) ?? 7).toInt();
+        autoBackupKeep = ((j['autoBackupKeep'] as num?) ?? 7).toInt(),
+        autoSendInvoices = (j['autoSendInvoices'] as String?) ?? 'off',
+        autoSendPayments = (j['autoSendPayments'] as String?) ?? 'off',
+        invoiceMessage = (j['invoiceMessage'] as String?) ?? defaultInvoiceMessage,
+        paymentMessage = (j['paymentMessage'] as String?) ?? defaultPaymentMessage,
+        reminderMessage = (j['reminderMessage'] as String?) ?? defaultReminderMessage,
+        einvoiceEnabled = (j['einvoiceEnabled'] as bool?) ?? false,
+        ewayEnabled = (j['ewayEnabled'] as bool?) ?? false,
+        upiId = (j['upiId'] as String?) ?? '',
+        upiQrOnInvoice = (j['upiQrOnInvoice'] as bool?) ?? false;
 
   /// Show GST fields and tax columns.
   final bool gstEnabled;
@@ -231,6 +253,19 @@ class FirmSettings extends Equatable {
   final String autoBackup;
   final int autoBackupKeep;
 
+  /// Documents sent to the customer automatically: off, whatsapp or sms.
+  final String autoSendInvoices;
+  final String autoSendPayments;
+  final String invoiceMessage;
+  final String paymentMessage;
+  final String reminderMessage;
+  final bool einvoiceEnabled;
+  final bool ewayEnabled;
+
+  /// Shown as a scannable QR on printed invoices.
+  final String upiId;
+  final bool upiQrOnInvoice;
+
   /// The prefix for new documents of [type] ('sale', 'payment_in', ...).
   String prefixFor(String type) => prefixes[type] ?? (type == 'sale' ? invoicePrefix : '');
 
@@ -278,6 +313,15 @@ class FirmSettings extends Equatable {
         'loyaltyPointValue': loyaltyPointValue,
         'autoBackup': autoBackup,
         'autoBackupKeep': autoBackupKeep,
+        'autoSendInvoices': autoSendInvoices,
+        'autoSendPayments': autoSendPayments,
+        'invoiceMessage': invoiceMessage,
+        'paymentMessage': paymentMessage,
+        'reminderMessage': reminderMessage,
+        'einvoiceEnabled': einvoiceEnabled,
+        'ewayEnabled': ewayEnabled,
+        'upiId': upiId,
+        'upiQrOnInvoice': upiQrOnInvoice,
       };
 
   FirmSettings copyWith({
@@ -323,6 +367,15 @@ class FirmSettings extends Equatable {
     num? loyaltyPointValue,
     String? autoBackup,
     int? autoBackupKeep,
+    String? autoSendInvoices,
+    String? autoSendPayments,
+    String? invoiceMessage,
+    String? paymentMessage,
+    String? reminderMessage,
+    bool? einvoiceEnabled,
+    bool? ewayEnabled,
+    String? upiId,
+    bool? upiQrOnInvoice,
   }) =>
       FirmSettings(
         gstEnabled: gstEnabled ?? this.gstEnabled,
@@ -367,6 +420,15 @@ class FirmSettings extends Equatable {
         loyaltyPointValue: loyaltyPointValue ?? this.loyaltyPointValue,
         autoBackup: autoBackup ?? this.autoBackup,
         autoBackupKeep: autoBackupKeep ?? this.autoBackupKeep,
+        autoSendInvoices: autoSendInvoices ?? this.autoSendInvoices,
+        autoSendPayments: autoSendPayments ?? this.autoSendPayments,
+        invoiceMessage: invoiceMessage ?? this.invoiceMessage,
+        paymentMessage: paymentMessage ?? this.paymentMessage,
+        reminderMessage: reminderMessage ?? this.reminderMessage,
+        einvoiceEnabled: einvoiceEnabled ?? this.einvoiceEnabled,
+        ewayEnabled: ewayEnabled ?? this.ewayEnabled,
+        upiId: upiId ?? this.upiId,
+        upiQrOnInvoice: upiQrOnInvoice ?? this.upiQrOnInvoice,
       );
 
   @override
@@ -374,7 +436,7 @@ class FirmSettings extends Equatable {
         gstEnabled, invoicePrefix, prefixes, defaultRoundOff, defaultCashSale, blockNegativeStock, showInvoicePreview, dueDatesEnabled,
         defaultCreditDays, invoiceTerms, signatureLabel, invoiceTheme, themeColor, thermalWidth, shippingAddressEnabled, partyFields,
         paymentReminderDays, stockMaintenance, itemWiseDiscount, quantityDecimals, defaultUnit, wholesalePriceEnabled, accountingEnabled,
-        serviceRemindersEnabled, salesmanOwnDataOnly, locationTrackingEnabled, godownsEnabled, batchTrackingEnabled, serialTrackingEnabled, mrpEnabled, cessEnabled, billDiscountEnabled, additionalChargesEnabled, tcsEnabled, tdsEnabled, loyaltyEnabled, partyGroupsEnabled, chargeNames, loyaltyEarnPer, loyaltyPointValue, autoBackup, autoBackupKeep,
+        serviceRemindersEnabled, salesmanOwnDataOnly, locationTrackingEnabled, godownsEnabled, batchTrackingEnabled, serialTrackingEnabled, mrpEnabled, cessEnabled, billDiscountEnabled, additionalChargesEnabled, tcsEnabled, tdsEnabled, loyaltyEnabled, partyGroupsEnabled, chargeNames, loyaltyEarnPer, loyaltyPointValue, autoBackup, autoBackupKeep, autoSendInvoices, autoSendPayments, invoiceMessage, paymentMessage, reminderMessage, einvoiceEnabled, ewayEnabled, upiId, upiQrOnInvoice,
       ];
 }
 
@@ -391,6 +453,7 @@ class Firm extends Equatable {
         stateCode = j['stateCode'] as String?,
         pincode = j['pincode'] as String?,
         address = j['address'] as String?,
+        city = j['city'] as String?,
         logoFileId = j['logoFileId'] as String?,
         signatureFileId = j['signatureFileId'] as String?,
         booksLockDate = j['booksLockDate'] as String?,
@@ -407,6 +470,7 @@ class Firm extends Equatable {
   final String? stateCode;
   final String? pincode;
   final String? address;
+  final String? city;
 
   /// Uploaded images printed on documents.
   final String? logoFileId;
@@ -418,7 +482,7 @@ class Firm extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, name, phone, gstin, email, booksStartDate, businessType, businessCategory, stateCode, pincode, address, logoFileId, signatureFileId,
+        id, name, phone, gstin, email, booksStartDate, businessType, businessCategory, stateCode, pincode, address, city, logoFileId, signatureFileId,
         booksLockDate, settings,
       ];
 }

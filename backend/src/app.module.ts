@@ -12,6 +12,11 @@ import { FilesModule } from './files/files.module';
 import { FirmModule } from './firm/firm.module';
 import { GodownsModule } from './godowns/godowns.module';
 import { HealthController } from './health/health.controller';
+import { IntegrationsModule } from './integrations/integrations.module';
+import { MessagingModule } from './messaging/messaging.module';
+import { EinvoiceModule } from './einvoice/einvoice.module';
+import { OnlinePaymentsModule } from './payments-online/payments-online.module';
+import { GoogleProfileModule } from './google-profile/google-profile.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ItemsModule } from './items/items.module';
 import { LoansModule } from './loans/loans.module';
@@ -47,6 +52,11 @@ import { UtilitiesModule } from './utilities/utilities.module';
     GodownsModule,
     LocationsModule,
     BackupsModule,
+    IntegrationsModule,
+    MessagingModule,
+    EinvoiceModule,
+    OnlinePaymentsModule,
+    GoogleProfileModule,
   ],
   controllers: [HealthController],
 })

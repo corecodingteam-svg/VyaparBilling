@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -22,6 +23,7 @@ import 'data/repositories/location_repository.dart';
 import 'data/repositories/parties_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/reports_repository.dart';
+import 'data/repositories/integrations_repository.dart';
 import 'data/repositories/utilities_repository.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/login_screen.dart';
@@ -34,6 +36,7 @@ import 'features/expenses/expense_form_screen.dart';
 import 'features/accounting/accounting_screens.dart';
 import 'features/expenses/expense_items_screen.dart';
 import 'features/expenses/expenses_screen.dart';
+import 'features/integrations/integrations_screens.dart';
 import 'features/reminders/reminders_screens.dart';
 import 'features/team/team_locations_screen.dart';
 import 'features/team/team_screens.dart';
@@ -87,6 +90,7 @@ void main() {
         RepositoryProvider(create: (_) => LocationRepository(api)),
         RepositoryProvider(create: (_) => AccountingRepository(api, bus)),
         RepositoryProvider(create: (_) => UtilitiesRepository(api, bus)),
+        RepositoryProvider(create: (_) => IntegrationsRepository(api, bus)),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -94,7 +98,7 @@ void main() {
           // Not lazy: it must hear the sign-in that happens before any screen asks for it.
           BlocProvider(lazy: false, create: (_) => LockCubit(PasscodeStore())..load()),
           BlocProvider(lazy: false, create: (ctx) => FirmCubit(ctx.read(), ctx.read(), ctx.read<AuthBloc>())),
-          BlocProvider(lazy: false, create: (ctx) => TrackingCubit(ctx.read(), ctx.read<FirmCubit>().stream, initial: ctx.read<FirmCubit>().state)),
+          BlocProvider(lazy: false, create: (ctx) => TrackingCubit(ctx.read(), ctx.read<FirmCubit>().stream, initial: ctx.read<FirmCubit>().state, background: !kIsWeb)),
         ],
         child: const BillingApp(),
       ),
@@ -263,6 +267,12 @@ GoRouter buildRouter(AuthBloc auth) {
             path: '/backup',
             builder: (_, state) =>
                 BackupScreen(key: ValueKey('backup-${state.uri.queryParameters['drive']}'), driveResult: state.uri.queryParameters['drive']),
+          ),
+          GoRoute(path: '/integrations', builder: (_, _) => const IntegrationsScreen()),
+          GoRoute(path: '/messages', builder: (_, _) => const MessagesScreen()),
+          GoRoute(
+            path: '/google-profile',
+            builder: (_, state) => GoogleProfileScreen(key: ValueKey('google-${state.uri.queryParameters['connected']}')),
           ),
           GoRoute(path: '/companies', builder: (_, _) => const CompaniesScreen()),
           GoRoute(path: '/users', builder: (_, _) => const UsersScreen()),

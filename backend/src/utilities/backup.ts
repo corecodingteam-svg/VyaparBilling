@@ -44,7 +44,7 @@ const TABLES: Array<{ name: string; via?: { column: string; parent: string } }> 
 ];
 
 const FIRM_COLUMNS = [
-  'name', 'phone', 'gstin', 'email', 'books_start_date', 'business_type', 'business_category', 'state_code', 'pincode', 'address', 'settings',
+  'name', 'phone', 'gstin', 'email', 'books_start_date', 'business_type', 'business_category', 'state_code', 'pincode', 'address', 'city', 'settings',
   'logo_file_id', 'signature_file_id', 'books_lock_date',
 ] as const;
 

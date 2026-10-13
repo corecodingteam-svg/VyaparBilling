@@ -37,11 +37,12 @@ class _CompanyFormState extends State<_CompanyForm> {
   final _gstin = TextEditingController();
   final _email = TextEditingController();
   final _pincode = TextEditingController();
+  final _city = TextEditingController();
   final _address = TextEditingController();
 
   @override
   void dispose() {
-    for (final c in [_name, _phone, _gstin, _email, _pincode, _address]) {
+    for (final c in [_name, _phone, _gstin, _email, _pincode, _city, _address]) {
       c.dispose();
     }
     super.dispose();
@@ -53,6 +54,7 @@ class _CompanyFormState extends State<_CompanyForm> {
     _gstin.text = f.gstin ?? '';
     _email.text = f.email ?? '';
     _pincode.text = f.pincode ?? '';
+    _city.text = f.city ?? '';
     _address.text = f.address ?? '';
   }
 
@@ -64,6 +66,7 @@ class _CompanyFormState extends State<_CompanyForm> {
       'gstin': _gstin.text.trim().toUpperCase(),
       'email': _email.text.trim(),
       'pincode': _pincode.text.trim(),
+      'city': _city.text.trim(),
       'address': _address.text.trim(),
     });
   }
@@ -147,6 +150,7 @@ class _CompanyFormState extends State<_CompanyForm> {
                             ],
                             onChanged: cubit.stateChanged,
                           )),
+                          box(TextFormField(controller: _city, decoration: const InputDecoration(labelText: 'City'))),
                           box(TextFormField(
                             controller: _pincode,
                             keyboardType: TextInputType.number,

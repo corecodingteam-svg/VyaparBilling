@@ -16,6 +16,7 @@ import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../auth/bloc/auth_bloc.dart';
 import '../company/firm_cubit.dart';
+import '../integrations/integrations_screens.dart';
 import '../payments/payment_form_dialog.dart';
 
 /// Digits of an Indian mobile number in international form, or null when [phone] is not one.
@@ -98,6 +99,17 @@ class PaymentRemindersScreen extends StatelessWidget {
                           r.phone,
                           'Dear ${r.name}, this is a gentle reminder that ${money(r.overdueAmount)} is overdue for payment to $firmName. '
                           'Kindly pay at the earliest. Thank you.',
+                        ),
+                        IconButton(
+                          tooltip: 'Send reminder from the app',
+                          icon: const Icon(Icons.send_outlined, size: 20),
+                          onPressed: () => showSendDialog(
+                            context,
+                            title: 'Remind ${r.name}',
+                            phone: r.phone,
+                            manualMessage: 'Dear ${r.name}, this is a gentle reminder that ${money(r.overdueAmount)} is overdue for payment to $firmName. Kindly pay at the earliest. Thank you.',
+                            send: (repo, channel, phone) => repo.sendReminder(r.partyId, r.overdueAmount, channel, phone: phone),
+                          ),
                         ),
                         IconButton(
                           tooltip: 'Record payment',

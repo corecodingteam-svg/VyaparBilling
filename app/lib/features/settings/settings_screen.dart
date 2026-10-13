@@ -493,6 +493,75 @@ class _SettingsView extends StatelessWidget {
                       ),
                       if (s.partyGroupsEnabled) link(Icons.folder_outlined, 'Party groups', 'Add and rename groups.', '/party-groups'),
                     ]),
+                    _Section('Messages, e-invoice and online payments', [
+                      link(Icons.hub_outlined, 'Integrations', 'Connect WhatsApp, SMS, the e-invoice portal, Razorpay and Google.', '/integrations'),
+                      const Text('Send new sale invoices to the customer automatically', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'off', label: Text('Off')),
+                          ButtonSegment(value: 'whatsapp', label: Text('WhatsApp')),
+                          ButtonSegment(value: 'sms', label: Text('SMS')),
+                        ],
+                        selected: {s.autoSendInvoices},
+                        onSelectionChanged: (v) => cubit.change((d) => d.copyWith(autoSendInvoices: v.first)),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Send a receipt for each Payment-In', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(value: 'off', label: Text('Off')),
+                          ButtonSegment(value: 'whatsapp', label: Text('WhatsApp')),
+                          ButtonSegment(value: 'sms', label: Text('SMS')),
+                        ],
+                        selected: {s.autoSendPayments},
+                        onSelectionChanged: (v) => cubit.change((d) => d.copyWith(autoSendPayments: v.first)),
+                      ),
+                      const SizedBox(height: 12),
+                      for (final (key, label, value, set) in <(String, String, String, FirmSettings Function(String))>[
+                        ('invoiceMsg', 'Invoice message', s.invoiceMessage, (v) => s.copyWith(invoiceMessage: v)),
+                        ('paymentMsg', 'Receipt message', s.paymentMessage, (v) => s.copyWith(paymentMessage: v)),
+                        ('reminderMsg', 'Reminder message', s.reminderMessage, (v) => s.copyWith(reminderMessage: v)),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextFormField(
+                            key: ValueKey('$key-${state.rev}'),
+                            initialValue: value,
+                            minLines: 2,
+                            maxLines: 4,
+                            maxLength: 500,
+                            onChanged: (v) => cubit.change((_) => set(v)),
+                            decoration: InputDecoration(labelText: label, helperText: 'Fills in {customer} {number} {amount} {balance} {business} {link}', helperMaxLines: 2),
+                          ),
+                        ),
+                      toggle(
+                        'E-invoice',
+                        'Offer "E-invoice / e-way bill" on sale invoices and credit notes, and lock an invoice once it has an IRN.',
+                        s.einvoiceEnabled,
+                        (v) => s.copyWith(einvoiceEnabled: v),
+                      ),
+                      toggle('E-way bill', 'Ask for transport details and make e-way bills.', s.ewayEnabled, (v) => s.copyWith(ewayEnabled: v)),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                        child: SizedBox(
+                          width: 320,
+                          child: TextFormField(
+                            key: ValueKey('upi-${state.rev}'),
+                            initialValue: s.upiId,
+                            onChanged: (v) => cubit.change((_) => s.copyWith(upiId: v.trim())),
+                            decoration: const InputDecoration(labelText: 'Your UPI ID', helperText: 'For example shop@okbank'),
+                          ),
+                        ),
+                      ),
+                      toggle(
+                        'UPI QR on invoices',
+                        'Print a QR code with the amount due that customers can scan with any UPI app.',
+                        s.upiQrOnInvoice,
+                        (v) => s.copyWith(upiQrOnInvoice: v),
+                      ),
+                    ]),
                     _Section('Backup', [
                       const Text('Automatic backup', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 8),

@@ -70,7 +70,7 @@ export async function exchangeCode(config: DriveConfig, code: string, http: Fetc
   return { refreshToken: token.refresh_token, email: typeof info.email === 'string' ? info.email : null };
 }
 
-async function accessToken(config: DriveConfig, refreshToken: string, http: Fetch) {
+export async function accessToken(config: DriveConfig, refreshToken: string, http: Fetch) {
   const token = await json(
     await http('https://oauth2.googleapis.com/token', {
       method: 'POST',

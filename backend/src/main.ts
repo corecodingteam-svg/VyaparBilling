@@ -8,7 +8,7 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { cors: true, rawBody: true });
   // Uploads and backup files travel as JSON.
   app.useBodyParser('json', { limit: '50mb' });
   app.use(helmet());

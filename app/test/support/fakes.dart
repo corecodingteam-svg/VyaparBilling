@@ -1,5 +1,6 @@
 import 'package:billing_app/core/api_client.dart';
 import 'package:billing_app/core/change_bus.dart';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:billing_app/data/models/accounting.dart';
@@ -13,6 +14,8 @@ import 'package:billing_app/features/lock/passcode_store.dart';
 import 'package:billing_app/data/repositories/files_repository.dart';
 import 'package:billing_app/data/repositories/location_repository.dart';
 import 'package:billing_app/data/repositories/utilities_repository.dart';
+import 'package:billing_app/data/models/integrations.dart';
+import 'package:billing_app/data/repositories/integrations_repository.dart';
 import 'package:billing_app/data/models/expense.dart';
 import 'package:billing_app/data/models/firm.dart';
 import 'package:billing_app/data/models/loan.dart';
@@ -614,6 +617,12 @@ class FakeLocationRepository extends LocationRepository {
   var members = <TeamMemberLocation>[];
   var trailPoints = <TrailPoint>[];
 
+  /// What the phone reports while in the background; tests push positions into it.
+  final background = StreamController<GeoFix>.broadcast();
+
+  @override
+  Stream<GeoFix> backgroundFixes() => background.stream;
+
   @override
   Future<GeoFix?> currentFix() async => fix;
 
@@ -643,4 +652,160 @@ class FakePasscodeStore extends PasscodeStore {
 
   @override
   Future<void> clear() async => pin = null;
+}
+
+
+Map<String, dynamic> integrationJson(String provider, {bool connected = false, String? stored, String? location}) => {
+      'provider': provider,
+      'title': {'whatsapp': 'WhatsApp (Meta Cloud API)', 'sms': 'SMS', 'einvoice': 'e-Invoice / e-Way Bill (NIC IRP)', 'razorpay': 'Online payments (Razorpay)', 'google_profile': 'Google Business Profile'}[provider],
+      'help': 'Where to get these details.',
+      'connected': connected,
+      'fields': provider == 'google_profile'
+          ? <Map<String, dynamic>>[]
+          : [
+              {'key': 'phoneNumberId', 'label': 'Phone Number ID', 'secret': false, 'required': true, 'help': null, 'options': null, 'value': connected ? '555' : '', 'stored': null},
+              {'key': 'accessToken', 'label': 'Access token', 'secret': true, 'required': true, 'help': null, 'options': null, 'value': null, 'stored': stored},
+            ],
+      'info': provider == 'google_profile' ? {'email': connected ? 'owner@example.com' : null, 'location': location} : null,
+    };
+
+Map<String, dynamic> einvoiceInfoJson({String status = 'none', List<String> problems = const [], List<String> ewayProblems = const [], bool portal = true, String? irn, String? eway}) => {
+      'einvoiceStatus': status,
+      'irn': irn,
+      'ackNo': irn == null ? null : '1122',
+      'ackDate': null,
+      'signedQr': null,
+      'ewayBillNo': eway,
+      'ewayBillDate': null,
+      'ewayValidUpto': eway == null ? null : '2026-10-14T18:29:00.000Z',
+      'transport': {'mode': 'road', 'vehicleNo': 'MH12AB1234', 'distanceKm': 100},
+      'einvoiceProblems': problems,
+      'ewayProblems': ewayProblems,
+      'portalConnected': portal,
+    };
+
+/// Outside services answered from memory; each call is recorded.
+class FakeIntegrationsRepository extends IntegrationsRepository {
+  FakeIntegrationsRepository() : super(_api, ChangeBus());
+  final calls = <String>[];
+  var providers = <Map<String, dynamic>>[for (final p in ['whatsapp', 'sms', 'einvoice', 'razorpay', 'google_profile']) integrationJson(p)];
+  var einvoiceState = einvoiceInfoJson();
+  Object? failure;
+  var link = {'id': 'l1', 'invoiceId': 'i1', 'url': 'https://rzp.io/i/abc', 'amount': 236, 'status': 'created'};
+
+  Future<T> _do<T>(String call, T Function() result) async {
+    calls.add(call);
+    if (failure != null) throw failure!;
+    return result();
+  }
+
+  @override
+  Future<List<Integration>> integrations() => _do('integrations', () => [for (final j in providers) Integration.fromJson(j)]);
+
+  @override
+  Future<List<Integration>> save(String provider, Map<String, String> values) => _do('save $provider ${values.entries.where((e) => e.value.isNotEmpty).map((e) => '${e.key}=${e.value}').join(',')}', () {
+        providers = [for (final j in providers) j['provider'] == provider ? integrationJson(provider, connected: true, stored: '••••1234') : j];
+        return [for (final j in providers) Integration.fromJson(j)];
+      });
+
+  @override
+  Future<void> disconnect(String provider) => _do('disconnect $provider', () {
+        providers = [for (final j in providers) j['provider'] == provider ? integrationJson(provider) : j];
+      });
+
+  @override
+  Future<String> webhookUrl() async => 'https://billing.example.com/api/v1/webhooks/razorpay/firm-1';
+
+  @override
+  Future<void> testMessage(String channel, String to) => _do('test $channel $to', () {});
+
+  @override
+  Future<void> sendInvoice(String id, String channel, {String? phone}) => _do('sendInvoice $id $channel ${phone ?? ''}', () {});
+
+  @override
+  Future<void> sendPayment(String id, String channel, {String? phone}) => _do('sendPayment $id $channel ${phone ?? ''}', () {});
+
+  @override
+  Future<void> sendReminder(String partyId, num amount, String channel, {String? phone}) => _do('sendReminder $partyId $amount $channel', () {});
+
+  @override
+  Future<({int recipients, int sent, List<String> failed})> marketing(String channel, String text, {String? groupId}) =>
+      _do('marketing $channel $text', () => (recipients: 3, sent: 2, failed: ['Ravi: no phone']));
+
+  @override
+  Future<List<MessageEntry>> messages() => _do('messages', () => [
+        MessageEntry.fromJson({'channel': 'whatsapp', 'kind': 'invoice', 'to': '919876543210', 'body': 'Dear Ravi, invoice INV-1 for ₹1180', 'status': 'sent', 'error': null, 'createdAt': '2026-10-13T05:30:00.000Z', 'partyName': 'Ravi Traders'}),
+        MessageEntry.fromJson({'channel': 'sms', 'kind': 'reminder', 'to': '919000000001', 'body': 'Payment due', 'status': 'failed', 'error': 'Recipient not allowed', 'createdAt': '2026-10-13T04:00:00.000Z', 'partyName': null}),
+      ]);
+
+  @override
+  Future<EinvoiceInfo> einvoice(String invoiceId) => _do('einvoice $invoiceId', () => EinvoiceInfo.fromJson(einvoiceState));
+
+  @override
+  Future<EinvoiceInfo> saveTransport(String invoiceId, Transport t) => _do('transport ${t.vehicleNo} ${t.distanceKm}', () => EinvoiceInfo.fromJson(einvoiceState));
+
+  @override
+  Future<EinvoiceInfo> generateEinvoice(String invoiceId) => _do('generate', () => einvoiceState = einvoiceInfoJson(status: 'generated', irn: 'a' * 64)).then(EinvoiceInfo.fromJson);
+
+  @override
+  Future<EinvoiceInfo> recordIrn(String invoiceId, {required String irn, String? ackNo, String? ackDate}) =>
+      _do('recordIrn $irn', () => einvoiceState = einvoiceInfoJson(status: 'generated', irn: irn)).then(EinvoiceInfo.fromJson);
+
+  @override
+  Future<EinvoiceInfo> cancelEinvoice(String invoiceId, {required String reason, required String remark, required bool onPortal}) =>
+      _do('cancel $reason $remark $onPortal', () => einvoiceState = einvoiceInfoJson(status: 'cancelled')).then(EinvoiceInfo.fromJson);
+
+  @override
+  Future<EinvoiceInfo> generateEway(String invoiceId) =>
+      _do('eway', () => einvoiceState = einvoiceInfoJson(status: 'generated', irn: 'a' * 64, eway: '331234567890')).then(EinvoiceInfo.fromJson);
+
+  @override
+  Future<EinvoiceInfo> recordEway(String invoiceId, String no) => _do('recordEway $no', () => einvoiceState = einvoiceInfoJson(eway: no)).then(EinvoiceInfo.fromJson);
+
+  @override
+  Future<(String, Object)> einvoiceJson(String invoiceId) => _do('einvoiceJson', () => ('einvoice-INV-1.json', <Object>[{'Version': '1.1'}]));
+
+  @override
+  Future<(String, Object)> ewayJson(String invoiceId) => _do('ewayJson', () => ('ewaybill-INV-1.json', <String, Object>{'version': '1.0.0621'}));
+
+  @override
+  Future<PaymentLink> createPaymentLink(String invoiceId) => _do('link $invoiceId', () => PaymentLink.fromJson(link));
+
+  @override
+  Future<PaymentLink> refreshPaymentLink(String linkId) => _do('refreshLink', () => PaymentLink.fromJson({...link, 'status': 'paid'}));
+
+  var googleLocationList = [
+    {'account': 'accounts/1', 'location': 'locations/9', 'title': 'Acme Traders', 'address': '1 Main Rd, Pune, 411001'},
+  ];
+
+  @override
+  Future<List<GoogleLocation>> googleLocations() => _do('googleLocations', () => [for (final j in googleLocationList) GoogleLocation.fromJson(j)]);
+
+  @override
+  Future<void> chooseGoogleLocation(GoogleLocation l) => _do('chooseLocation ${l.location}', () {
+        providers = [for (final j in providers) j['provider'] == 'google_profile' ? integrationJson('google_profile', connected: true, location: l.title) : j];
+      });
+
+  @override
+  Future<GoogleProfileInfo> googleProfile() => _do('googleProfile', () => GoogleProfileInfo.fromJson({'title': 'Acme Traders', 'description': 'Hardware since 1990', 'website': 'https://acme.example', 'phone': '+91 20 5550 1000'}));
+
+  @override
+  Future<GoogleProfileInfo> saveGoogleProfile({String? description, String? website}) =>
+      _do('saveProfile $description $website', () => GoogleProfileInfo.fromJson({'title': 'Acme Traders', 'description': description, 'website': website, 'phone': ''}));
+
+  @override
+  Future<void> googlePost(String summary, {String? url}) => _do('post $summary ${url ?? ''}', () {});
+
+  @override
+  Future<GoogleReviews> googleReviews() => _do('reviews', () => GoogleReviews.fromJson({
+        'average': 4.5,
+        'total': 2,
+        'reviews': [
+          {'id': 'r1', 'name': 'Asha', 'stars': 5, 'comment': 'Great service', 'at': '2026-10-01T00:00:00Z', 'reply': null},
+          {'id': 'r2', 'name': 'Vikram', 'stars': 4, 'comment': 'Good prices', 'at': '2026-09-01T00:00:00Z', 'reply': 'Thank you!'},
+        ],
+      }));
+
+  @override
+  Future<void> replyToReview(String reviewId, String comment) => _do('reply $reviewId $comment', () {});
 }

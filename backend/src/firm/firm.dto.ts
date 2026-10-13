@@ -41,6 +41,9 @@ export class UpdateFirmDto {
   @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(500)
   address?: string | null;
 
+  @ApiPropertyOptional() @IsOptional() @Transform(emptyToNull) @IsString() @MaxLength(100)
+  city?: string | null;
+
   @ApiPropertyOptional({ description: 'Uploaded logo (see POST /files); null removes it' }) @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID()
   logoFileId?: string | null;
 

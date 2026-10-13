@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtPayload } from '../auth/jwt.strategy';
 import { SavePaymentDto } from './payment.dto';
 import { FirmService } from '../firm/firm.service';
+import { MessagingService } from '../messaging/messaging.service';
 import { PaymentsService } from './payments.service';
 
 const parseType = (t?: string) => {
@@ -28,6 +29,7 @@ export class PaymentsController {
   constructor(
     private readonly payments: PaymentsService,
     private readonly firm: FirmService,
+    private readonly messaging: MessagingService,
   ) {}
 
   @Get()
@@ -46,8 +48,10 @@ export class PaymentsController {
   }
 
   @Post()
-  create(@CurrentUser() u: JwtPayload, @Body() dto: SavePaymentDto) {
-    return this.payments.create(u.firmId, { ...dto, type: assertAllowed(u, dto.type) }, u.sub);
+  async create(@CurrentUser() u: JwtPayload, @Body() dto: SavePaymentDto) {
+    const created = await this.payments.create(u.firmId, { ...dto, type: assertAllowed(u, dto.type) }, u.sub);
+    void this.messaging.autoSend(u.firmId, u.sub, 'payment', created.id);
+    return created;
   }
 
   @Put(':id')

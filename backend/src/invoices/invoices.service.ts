@@ -48,6 +48,9 @@ const summary = (i: InvoiceRow) => {
     tcsAmount: num(i.tcs_amount),
     loyaltyAmount: num(i.loyalty_amount),
     godownId: i.godown_id,
+    einvoiceStatus: i.einvoice_status,
+    irn: i.irn,
+    ewayBillNo: i.eway_bill_no,
     // Foreign-currency documents: the same figures in that currency.
     currencyCode: i.currency_code,
     fxTotal: num(i.fx_total),
@@ -145,6 +148,9 @@ export class InvoicesService {
     return {
       ...summary(inv),
       phone: inv.phone,
+      ackNo: inv.ack_no,
+      signedQr: inv.signed_qr,
+      ewayValidUpto: inv.eway_valid_upto,
       billingAddress: inv.billing_address,
       shippingAddress: inv.shipping_address,
       stateOfSupply: inv.state_of_supply,
@@ -219,6 +225,7 @@ export class InvoicesService {
 
   async update(firmId: string, id: string, dto: SaveInvoiceDto, scope: Scope = {}) {
     const existing = await this.find(firmId, id, scope);
+    this.assertNoIrn(existing);
     if (existing.type !== dto.type) throw new BadRequestException({ code: 'TYPE_MISMATCH', message: 'Invoice type cannot be changed.' });
     await assertBooksOpen(this.db, firmId, existing.invoice_date, dto.invoiceDate);
     await this.db.transaction().execute(async (trx) => {
@@ -234,6 +241,7 @@ export class InvoicesService {
 
   async remove(firmId: string, id: string, scope: Scope = {}) {
     const existing = await this.find(firmId, id, scope);
+    this.assertNoIrn(existing);
     await assertBooksOpen(this.db, firmId, existing.invoice_date);
     await this.db.transaction().execute(async (trx) => {
       await this.reverseStock(trx, id);
@@ -630,6 +638,13 @@ export class InvoicesService {
     const moves = await trx.deleteFrom('stock_movements').where('invoice_id', '=', invoiceId).returning(['item_id', 'qty_change']).execute();
     for (const m of moves) {
       await trx.updateTable('items').set({ stock_qty: sql`stock_qty - ${m.qty_change}` }).where('id', '=', m.item_id).execute();
+    }
+  }
+
+  /** An invoice registered with the e-invoice portal can no longer be changed; cancel its IRN first. */
+  private assertNoIrn(inv: InvoiceRow) {
+    if (inv.einvoice_status === 'generated') {
+      throw new BadRequestException({ code: 'HAS_IRN', message: 'This invoice has an e-invoice (IRN) and can no longer be changed. Cancel the IRN first.' });
     }
   }
 

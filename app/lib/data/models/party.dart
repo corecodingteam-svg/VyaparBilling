@@ -20,6 +20,8 @@ class Party extends Equatable {
         email = j['email'] as String?,
         billingAddress = j['billingAddress'] as String?,
         shippingAddress = j['shippingAddress'] as String?,
+        city = j['city'] as String?,
+        pincode = j['pincode'] as String?,
         openingBalance = j['openingBalance'] as num,
         openingBalanceDate = j['openingBalanceDate'] as String,
         creditLimit = j['creditLimit'] as num?,
@@ -45,6 +47,8 @@ class Party extends Equatable {
   final String? email;
   final String? billingAddress;
   final String? shippingAddress;
+  final String? city;
+  final String? pincode;
   final num openingBalance;
   final String openingBalanceDate;
   final num? creditLimit;
@@ -69,7 +73,7 @@ class Party extends Equatable {
 
   @override
   List<Object?> get props => [
-        id, name, phone, gstin, gstType, stateCode, email, billingAddress, shippingAddress,
+        id, name, phone, gstin, gstType, stateCode, email, billingAddress, shippingAddress, city, pincode,
         openingBalance, openingBalanceDate, creditLimit, additionalFields, balance, groupId, groupName, assignedUserId, assignedUserName,
         currencyCode, loyaltyOpening, loyaltyPoints, fxBalance,
       ];

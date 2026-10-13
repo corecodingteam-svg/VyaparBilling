@@ -45,6 +45,8 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _billing = TextEditingController();
+  final _city = TextEditingController();
+  final _pincode = TextEditingController();
   final _shipping = TextEditingController();
   final _opening = TextEditingController();
   final _creditLimit = TextEditingController();
@@ -66,6 +68,8 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
     _phone.text = p?.phone ?? '';
     _email.text = p?.email ?? '';
     _billing.text = p?.billingAddress ?? '';
+    _city.text = p?.city ?? '';
+    _pincode.text = p?.pincode ?? '';
     _shipping.text = p?.shippingAddress ?? '';
     final ob = p?.openingBalance ?? 0;
     _opening.text = ob == 0 ? '' : numText(ob.abs());
@@ -88,7 +92,7 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
   @override
   void dispose() {
     _tabs.dispose();
-    for (final c in [_name, _gstin, _phone, _email, _billing, _shipping, _opening, _creditLimit, _loyalty, ..._fieldNames, ..._fieldValues]) {
+    for (final c in [_name, _gstin, _phone, _email, _billing, _city, _pincode, _shipping, _opening, _creditLimit, _loyalty, ..._fieldNames, ..._fieldValues]) {
       c.dispose();
     }
     super.dispose();
@@ -110,6 +114,8 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
       'phone': _phone.text.trim(),
       'email': _email.text.trim(),
       'billingAddress': _billing.text.trim(),
+      'city': _city.text.trim(),
+      'pincode': _pincode.text.trim(),
       'shippingAddress': _shipping.text.trim(),
       'openingAmount': parseNum(_opening.text),
       'creditLimitAmount': parseNum(_creditLimit.text),
@@ -296,11 +302,30 @@ class _PartyFormDialogState extends State<PartyFormDialog> with SingleTickerProv
         ),
       ],
     );
-    final billing = TextFormField(
-      controller: _billing,
-      minLines: 4,
-      maxLines: 4,
-      decoration: const InputDecoration(labelText: 'Billing Address', alignLabelWithHint: true),
+    final billing = Column(
+      children: [
+        TextFormField(
+          controller: _billing,
+          minLines: 3,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Billing Address', alignLabelWithHint: true),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: TextFormField(controller: _city, decoration: const InputDecoration(labelText: 'City'))),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _pincode,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Pincode'),
+                validator: (v) => (v ?? '').trim().isEmpty || RegExp(r'^[1-9][0-9]{5}$').hasMatch(v!.trim()) ? null : 'Pincode must be 6 digits',
+              ),
+            ),
+          ],
+        ),
+      ],
     );
     final shipping = state.shippingEnabled
         ? TextFormField(

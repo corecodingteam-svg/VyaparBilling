@@ -52,8 +52,8 @@ Limits: it is a warning, not a block. It applies to sale invoices only (not POS,
 How the direct printing was checked: the receipt bytes are unit-tested; the network printer is tested against a real
 local TCP socket; the browser USB and serial code is tested under Node against fake WebUSB / Web Serial objects
 (`app/web_printer_test`). **Not tested on a real printer or in a real browser** — receipt printers differ, so the first
-print on yours may need its paper width or code page adjusting. Not built: Bluetooth printers from the phone apps
-(use the printer's network or USB mode), cash-drawer kick, QR codes and logos on the receipt, a per-printer code page.
+print on yours may need its paper width or code page adjusting. Bluetooth printers from the phone apps are built (classic paired
+printers on Android, Bluetooth Low Energy on both) but **never tried with a real printer**. Not built: cash-drawer kick, QR codes and logos on the receipt, a per-printer code page.
 Themes apply to invoice-type documents; payment receipts and reports keep one plain layout.
 
 ## 6. Reports — 46 in total
@@ -128,9 +128,11 @@ Not built: deleting a company.
   much they did today and their day's trail, with links to open each point in Google Maps. The device asks the user for
   permission; a visible icon in the top bar shows when it is recording or blocked.
 
-**The limit: it only records while the app (or its browser tab) is open.** Nothing runs in the background, so a
-salesman who closes the app or locks the phone is not tracked. Continuous tracking needs a native Android/iOS app with a
-background location service and the platform's background-location approval, which I could not build or test here.
+**In a browser it only records while the tab is open.** In the phone apps it keeps recording with the app in the
+background (Android foreground service with its notification; iOS background location with the blue indicator), one
+check-in per 5 minutes. The logic is unit tested; the iOS app builds for the simulator. **Not run on a real phone**, and the
+Android build was not attempted (skipped by request). A salesman who force-quits the app, or an Android phone with
+aggressive battery saving, may still stop it. The platform's own background-location approval is needed to publish on the stores.
 There is also no live map inside the app (positions open in Google Maps), no geofencing and no route distance.
 
 ## 11. Backup and restore — built
@@ -169,18 +171,44 @@ Not built: searching payments and expenses.
 
 ## Still not built
 
-- **Needs an account with an outside provider, not started:** WhatsApp sending and marketing, transaction SMS,
-  e-invoice / e-way bill, Google Profile manager, online payments and online store.
-- **Background location tracking** (see item 10) and **Bluetooth printers from the phone apps** (see item 5).
+- **Online store** (a public shop page) is not built.
+- Everything in "Outside services" below is built and tested against simulated providers only: **none of it has been
+  run against the real WhatsApp, Twilio, MSG91, NIC, Razorpay or Google services**, because that needs your accounts.
+- The Android app build was skipped, so Bluetooth and background location are unverified on Android.
+
+## Outside services (Settings → Integrations)
+
+Each service is connected by an admin entering the provider's details in the app. They are stored encrypted on the server
+(AES-256-GCM, key from `SECRETS_KEY` or else `JWT_SECRET`) and are never sent back; the screen shows only the last 4 characters.
+
+- **WhatsApp** (Meta Cloud API): send an invoice, receipt or reminder, message all customers, automatic sending of new
+  invoices and receipts, a log of everything sent with the provider's error. Approved template names are set per message
+  kind; without one the text is plain, which WhatsApp delivers only inside 24 hours of the customer's last message.
+- **SMS**: Twilio, or MSG91 with a DLT-approved flow template (variables `var1…`). Same sending options as WhatsApp.
+- **E-invoice and e-way bill**: checks an invoice for what the portal needs (GSTIN, pincodes, HSN, number format), builds the
+  NIC e-invoice JSON (schema 1.1) and the e-way bill bulk JSON for download, records an IRN or e-way number you got on the
+  portal, and — with NIC API access — generates the IRN, cancels it, and makes the e-way bill from the IRN. An invoice with
+  an IRN cannot be edited or deleted until it is cancelled. The IRN and its signed QR print on the invoice. The NIC client
+  was written from NIC's published API description (RSA login, AES-256 session) and is tested against a simulator that
+  I wrote from the same description, so a mismatch with the real portal is possible. Test in NIC's sandbox first.
+- **Online payments (Razorpay)**: a pay-online link for what is due on an invoice; Razorpay's signed webhook (checked
+  with HMAC-SHA256 over the raw body) records a Payment-In linked to the invoice, once however many times it is delivered.
+  Register the webhook address shown on the card. Also a UPI QR on printed invoices from your UPI ID.
+- **Google Business Profile**: sign in with Google, choose the listing, edit description and website, post updates, read
+  and reply to reviews. Google must have approved your project for the Business Profile APIs, and the redirect address
+  `…/api/v1/google-profile/callback` must be added to the OAuth client. Uses the same `GOOGLE_CLIENT_ID/SECRET` as Drive.
+- Parties and the company now have a city and pincode (needed for e-invoice).
 
 ## How this was checked
 
-- `backend`: 22 unit tests (invoice and document maths, Google Drive backup against a simulated Google).
-- `app`: 113 unit tests, including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
+- `backend`: 34 unit tests (invoice and document maths, Google Drive backup against a simulated Google, WhatsApp/SMS request
+  shapes, e-invoice and e-way JSON, the NIC client against a simulated NIC, webhook signatures, secret encryption), plus
+  `backend/test/live-integrations.mjs` — 45 checks against the running server and fake WhatsApp/Twilio/NIC/Razorpay servers.
+- `app`: 128 unit tests, including `test/completion_test.dart`, `test/coverage_test.dart`, `test/escpos_test.dart` and `test/lock_test.dart`.
 - `app/web_printer_test`: the browser printer code under Node against fake WebUSB / Web Serial (run separately).
 - `app/live_api_test`: three end-to-end runs of the app's own repositories and form logic against the running backend,
   covering every item above, including restore and a new year with stores, batches and loyalty points carried over.
-- `app/screenshots_test`: 79 screen renders, checked by eye for the new screens.
+- `app/screenshots_test`: 85 screen renders, checked by eye for the new screens.
 
 Not checked by any of these: the browser's file chooser (uploads and restore start from it), real browsers' location and
-USB/serial permission prompts, the WhatsApp link, real receipt printers, and Google Drive itself.
+USB/serial permission prompts, the WhatsApp link, real receipt printers, Bluetooth, background location on a phone, and every real outside provider.

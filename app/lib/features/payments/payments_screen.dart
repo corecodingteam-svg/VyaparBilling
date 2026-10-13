@@ -9,6 +9,7 @@ import '../../shared/format.dart';
 import '../../shared/period.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
+import '../integrations/integrations_screens.dart';
 import 'bloc/payments_bloc.dart';
 import 'payment_form_dialog.dart';
 
@@ -208,12 +209,20 @@ class _PaymentsView extends StatelessWidget {
     onSelected: (v) => switch (v) {
       'edit' => showPaymentForm(context, kind, payment: p),
       'receipt' => context.push('${kind.basePath}/${p.id}/receipt'),
+      'send' => showSendDialog(
+        context,
+        title: 'Send receipt ${p.number}',
+        phone: null,
+        manualMessage: 'Dear ${p.partyName}, we received ${money(p.amount)} (receipt ${p.number}). Thank you!',
+        send: (repo, channel, phone) => repo.sendPayment(p.id, channel, phone: phone),
+      ),
       _ => _delete(context, p),
     },
-    itemBuilder: (_) => const [
-      PopupMenuItem(value: 'edit', child: Text('View/Edit')),
-      PopupMenuItem(value: 'receipt', child: Text('Receipt / Print')),
-      PopupMenuItem(value: 'delete', child: Text('Delete')),
+    itemBuilder: (_) => [
+      const PopupMenuItem(value: 'edit', child: Text('View/Edit')),
+      const PopupMenuItem(value: 'receipt', child: Text('Receipt / Print')),
+      if (kind == PaymentKind.paymentIn) const PopupMenuItem(value: 'send', child: Text('Send receipt')),
+      const PopupMenuItem(value: 'delete', child: Text('Delete')),
     ],
   );
 }

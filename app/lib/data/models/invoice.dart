@@ -149,6 +149,9 @@ class InvoiceSummary extends Equatable {
         tcsAmount = (j['tcsAmount'] as num?) ?? 0,
         loyaltyAmount = (j['loyaltyAmount'] as num?) ?? 0,
         godownId = j['godownId'] as String?,
+        einvoiceStatus = (j['einvoiceStatus'] as String?) ?? 'none',
+        irn = j['irn'] as String?,
+        ewayBillNo = j['ewayBillNo'] as String?,
         status = j['status'] as String?,
         convertedInvoiceId = j['convertedInvoiceId'] as String?,
         convertedType = j['convertedType'] as String?;
@@ -186,6 +189,11 @@ class InvoiceSummary extends Equatable {
   /// Store the stock moved through; null = main store.
   final String? godownId;
 
+  /// E-invoice state (none, generated, cancelled), its IRN, and the e-way bill number.
+  final String einvoiceStatus;
+  final String? irn;
+  final String? ewayBillNo;
+
   bool get isForeign => currencyCode != null;
 
   /// Everything paid so far: with the document plus linked payments.
@@ -202,7 +210,7 @@ class InvoiceSummary extends Equatable {
 
   @override
   List<Object?> get props =>
-      [id, type, number, invoiceDate, isCash, partyId, partyName, total, received, balance, paymentMode, bankAccountId, dueDate, linkedAmount, paymentLabel, status, convertedInvoiceId, convertedType, currencyCode, fxTotal, fxBalance, tdsAmount, tcsAmount, loyaltyAmount, godownId];
+      [id, type, number, invoiceDate, isCash, partyId, partyName, total, received, balance, paymentMode, bankAccountId, dueDate, linkedAmount, paymentLabel, status, convertedInvoiceId, convertedType, currencyCode, fxTotal, fxBalance, tdsAmount, tcsAmount, loyaltyAmount, godownId, einvoiceStatus, irn, ewayBillNo];
 }
 
 class InvoiceLine extends Equatable {
@@ -317,6 +325,8 @@ class Invoice extends InvoiceSummary {
       : phone = j['phone'] as String?,
         billingAddress = j['billingAddress'] as String?,
         shippingAddress = j['shippingAddress'] as String?,
+        ackNo = j['ackNo'] as String?,
+        signedQr = j['signedQr'] as String?,
         exchangeRate = j['exchangeRate'] as num?,
         fxReceived = j['fxReceived'] as num?,
         discountPct = (j['discountPct'] as num?) ?? 0,
@@ -347,6 +357,10 @@ class Invoice extends InvoiceSummary {
   final String? phone;
   final String? billingAddress;
   final String? shippingAddress;
+
+  /// The e-invoice portal's acknowledgement number and signed QR, once the invoice has an IRN.
+  final String? ackNo;
+  final String? signedQr;
 
   /// Value of one unit of [currencyCode] in rupees when the document was made.
   final num? exchangeRate;
@@ -389,7 +403,7 @@ class Invoice extends InvoiceSummary {
 
   @override
   List<Object?> get props => [
-        ...super.props, phone, billingAddress, shippingAddress, exchangeRate, fxReceived, discountPct, discountAmount, charges, chargesTotal, cess, tcsRate,
+        ...super.props, phone, billingAddress, shippingAddress, ackNo, signedQr, exchangeRate, fxReceived, discountPct, discountAmount, charges, chargesTotal, cess, tcsRate,
         tdsRate, loyaltyEarned, loyaltyRedeemed, payments, linkedPayments, stateOfSupply, pricesIncludeTax, interState, partyGstin,
         taxableAmount, cgst, sgst, igst, subtotal, roundOff, description, lines,
       ];

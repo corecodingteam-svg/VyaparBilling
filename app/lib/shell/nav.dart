@@ -95,6 +95,8 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
           const NavLeaf('Export Items', '/export-items'),
           const NavLeaf('Verify My Data', '/verify-data'),
           const NavLeaf('Close Financial Year', '/close-year'),
+          if (admin) const NavLeaf('Integrations', '/integrations'),
+          if (admin) const NavLeaf('Google Business Profile', '/google-profile'),
           if (admin) const NavLeaf('Backup & Restore', '/backup'),
         ],
       ),

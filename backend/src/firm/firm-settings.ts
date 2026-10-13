@@ -110,6 +110,27 @@ export const DEFAULT_SETTINGS = {
   autoBackup: 'off' as 'off' | 'daily' | 'weekly',
   /** How many automatic backups to keep. */
   autoBackupKeep: 7,
+
+  // ---- messaging (needs WhatsApp or SMS set up under Integrations)
+  /** Send each new sale invoice to the customer automatically. */
+  autoSendInvoices: 'off' as 'off' | 'whatsapp' | 'sms',
+  /** Send a receipt for each new Payment-In. */
+  autoSendPayments: 'off' as 'off' | 'whatsapp' | 'sms',
+  /** Wording of the messages; {customer} {number} {amount} {balance} {business} {link} are filled in. */
+  invoiceMessage: 'Dear {customer}, your invoice {number} for ₹{amount} from {business} is ready. Balance due: ₹{balance}. {link}',
+  paymentMessage: 'Dear {customer}, we received ₹{amount} (receipt {number}). Thank you! — {business}',
+  reminderMessage: 'Dear {customer}, a payment of ₹{amount} to {business} is overdue. Please pay at your earliest. {link}',
+
+  // ---- e-invoice and e-way bill
+  einvoiceEnabled: false,
+  ewayEnabled: false,
+  /** Only sale invoices of at least this amount are offered for e-invoicing. */
+  einvoiceMinAmount: 0,
+
+  // ---- online payments
+  /** Your UPI ID; shown as a scannable QR on printed invoices. */
+  upiId: '',
+  upiQrOnInvoice: false,
 };
 
 export type FirmSettings = typeof DEFAULT_SETTINGS;
@@ -201,4 +222,15 @@ export class FirmSettingsDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() partyGroupsEnabled?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsIn(['off', 'daily', 'weekly']) autoBackup?: 'off' | 'daily' | 'weekly';
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(60) autoBackupKeep?: number;
+
+  @ApiPropertyOptional() @IsOptional() @IsIn(['off', 'whatsapp', 'sms']) autoSendInvoices?: 'off' | 'whatsapp' | 'sms';
+  @ApiPropertyOptional() @IsOptional() @IsIn(['off', 'whatsapp', 'sms']) autoSendPayments?: 'off' | 'whatsapp' | 'sms';
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) invoiceMessage?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) paymentMessage?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) reminderMessage?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() einvoiceEnabled?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() ewayEnabled?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(1e11) einvoiceMinAmount?: number;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @Matches(/^([\w.-]{2,256}@[A-Za-z]{2,64})?$/, { message: 'UPI ID looks like name@bank' }) upiId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() upiQrOnInvoice?: boolean;
 }

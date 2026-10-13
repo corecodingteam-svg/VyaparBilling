@@ -5,6 +5,8 @@ import 'platform_transports_io.dart' if (dart.library.js_interop) 'platform_tran
 import 'transport.dart';
 
 export 'platform_transports_io.dart' if (dart.library.js_interop) 'platform_transports_web.dart' show supportsNetworkPrinter;
+export 'bluetooth.dart';
+export 'bluetooth_stub.dart' if (dart.library.io) 'bluetooth_io.dart' show BluetoothTransport, bluetoothSupported, scanBluetoothPrinters;
 export 'transport.dart';
 
 /// Every way this device can reach a receipt printer, given the saved network printer address (if any).

@@ -38,6 +38,7 @@ export interface FirmsTable {
   books_lock_date: string | null;
   drive_refresh_token: string | null;
   drive_email: string | null;
+  city: string | null;
   created_at: Timestamp;
   updated_at: Timestamp;
 }
@@ -70,6 +71,8 @@ export interface PartiesTable {
   assigned_user_id: string | null;
   currency_code: string | null;
   loyalty_opening: Generated<number>;
+  city: string | null;
+  pincode: string | null;
   additional_fields: Json<AdditionalField[]>;
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -164,6 +167,22 @@ export interface InvoicesTable {
   loyalty_amount: Numeric;
   fx_total: NullableNumeric;
   fx_received: NullableNumeric;
+  einvoice_status: Generated<'none' | 'generated' | 'cancelled'>;
+  irn: string | null;
+  ack_no: string | null;
+  ack_date: Timestamp | null;
+  signed_qr: string | null;
+  irn_cancelled_at: Timestamp | null;
+  eway_bill_no: string | null;
+  eway_bill_date: Timestamp | null;
+  eway_valid_upto: Timestamp | null;
+  transporter_id: string | null;
+  transporter_name: string | null;
+  transport_mode: 'road' | 'rail' | 'air' | 'ship' | null;
+  transport_doc_no: string | null;
+  transport_doc_date: string | null;
+  vehicle_no: string | null;
+  distance_km: number | null;
   prices_include_tax: Generated<boolean>;
   is_inter_state: Generated<boolean>;
   party_gstin: string | null;
@@ -432,6 +451,51 @@ export interface GodownsTable {
   deleted_at: Timestamp | null;
 }
 
+export type Provider = 'whatsapp' | 'sms' | 'einvoice' | 'razorpay' | 'google_profile';
+
+export interface IntegrationsTable {
+  id: Generated<string>;
+  firm_id: string;
+  provider: Provider;
+  config: ColumnType<Record<string, unknown>, string | undefined, string>;
+  secrets: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface MessageLogTable {
+  id: Generated<string>;
+  firm_id: string;
+  channel: 'whatsapp' | 'sms';
+  kind: 'invoice' | 'payment' | 'reminder' | 'marketing' | 'test' | 'other';
+  party_id: string | null;
+  ref_id: string | null;
+  to_phone: string;
+  body: string;
+  status: 'sent' | 'failed';
+  provider_id: string | null;
+  error: string | null;
+  created_by: string | null;
+  created_at: Timestamp;
+}
+
+export interface PaymentLinksTable {
+  id: Generated<string>;
+  firm_id: string;
+  invoice_id: string;
+  provider: 'razorpay';
+  provider_link_id: string;
+  short_url: string;
+  amount: Numeric;
+  status: Generated<'created' | 'paid' | 'cancelled' | 'expired' | 'failed'>;
+  payment_id: string | null;
+  provider_payment_id: string | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: Timestamp;
+  paid_at: Timestamp | null;
+}
+
 export interface BackupsTable {
   id: Generated<string>;
   firm_id: string;
@@ -551,6 +615,9 @@ export interface Database {
   user_locations: UserLocationsTable;
   godowns: GodownsTable;
   backups: BackupsTable;
+  integrations: IntegrationsTable;
+  message_log: MessageLogTable;
+  payment_links: PaymentLinksTable;
   payment_allocations: PaymentAllocationsTable;
   files: FilesTable;
   attachments: AttachmentsTable;
