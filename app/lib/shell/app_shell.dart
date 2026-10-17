@@ -37,7 +37,7 @@ class AppShell extends StatelessWidget {
     final body = Column(
       children: [
         SyncBanner(onOpen: () => context.go('/sync')),
-        Expanded(child: child),
+        Expanded(child: FocusFirstField(page: location, child: child)),
       ],
     );
     final sidebar = _Sidebar(location: location, closeOnNavigate: !wide, collapsed: collapsed);
@@ -88,24 +88,34 @@ class AppShell extends StatelessWidget {
     );
 
     Widget wrap(Widget w) => posOnly ? SyncPrompt(child: w) : w;
+    // Tab goes through the page first, then the top bar, then the menu.
+    final page = FocusSection(order: 1, child: body);
+    final bar = PreferredSize(preferredSize: topBar.preferredSize, child: FocusSection(order: 2, child: topBar));
     if (!wide) {
       return wrap(_ShellKeys(
-        child: Scaffold(
-          appBar: topBar,
-          drawer: Drawer(child: sidebar),
-          body: body,
+        child: OrderedFocus(
+          child: Scaffold(
+            appBar: bar,
+            drawer: Drawer(child: sidebar),
+            body: page,
+          ),
         ),
       ));
     }
     return wrap(_ShellKeys(
-      child: Scaffold(
-        body: Row(
-          children: [
-            AnimatedContainer(duration: AppMotion.fast, curve: Curves.easeOutCubic, width: collapsed ? AppSize.sidebarRail : AppSize.sidebar, child: sidebar),
-            Expanded(
-              child: Scaffold(appBar: topBar, body: body),
-            ),
-          ],
+      child: OrderedFocus(
+        child: Scaffold(
+          body: Row(
+            children: [
+              FocusSection(
+                order: 3,
+                child: AnimatedContainer(duration: AppMotion.fast, curve: Curves.easeOutCubic, width: collapsed ? AppSize.sidebarRail : AppSize.sidebar, child: sidebar),
+              ),
+              Expanded(
+                child: Scaffold(appBar: bar, body: page),
+              ),
+            ],
+          ),
         ),
       ),
     ));

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/gst_states.dart';
+import '../../core/keyboard/keyboard.dart';
 import '../../core/status.dart';
 import '../../data/models/cash_bank.dart';
 import '../../data/models/invoice.dart';
@@ -105,8 +106,9 @@ class _InvoiceFormView extends StatelessWidget {
         final cubit = context.read<InvoiceFormCubit>();
         final kind = state.kind;
         final busy = state.submitStatus == SubmitStatus.submitting;
-        return Scaffold(
-          appBar: AppBar(
+        // Tab goes through the form section by section, then the save buttons, then the top bar.
+        return OrderedFocus(child: Scaffold(
+          appBar: PreferredSize(preferredSize: const Size.fromHeight(kToolbarHeight), child: FocusSection(order: 7, child: AppBar(
             shape: const Border(bottom: BorderSide(color: AppColors.border)),
             leading: IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => _close(context, kind)),
             titleSpacing: 0,
@@ -127,15 +129,15 @@ class _InvoiceFormView extends StatelessWidget {
                 ],
               ],
             ),
-          ),
+          ))),
           body: switch (state.loadStatus) {
             LoadStatus.failure => ErrorRetry(error: state.error ?? 'Could not load', onRetry: cubit.load),
-            LoadStatus.success => _FormBody(state: state),
+            LoadStatus.success => FocusFirstField(child: _FormBody(state: state)),
             _ => const LoadingView(),
           },
           bottomNavigationBar: state.loadStatus != LoadStatus.success
               ? null
-              : Material(
+              : FocusSection(order: 6, child: Material(
                   color: AppColors.onPrimary,
                   elevation: 8,
                   child: SafeArea(
@@ -159,8 +161,8 @@ class _InvoiceFormView extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-        );
+                )),
+        ));
       },
     );
   }
@@ -173,11 +175,12 @@ class _FormBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
-    return ListView(
+    // Every section is built, not only those on screen, so Tab and Enter can reach the ones scrolled out of view.
+    return SingleChildScrollView(
       // A new formRev (loaded / reset after Save & New) rebuilds every input with fresh values.
       key: ValueKey('form-${state.formRev}'),
       padding: const EdgeInsets.all(AppSpace.md),
-      children: [
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Card(
           child: Padding(
             padding: const EdgeInsets.all(AppSpace.lg),
@@ -185,22 +188,22 @@ class _FormBody extends StatelessWidget {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 3, child: FieldHighlight(field: 'party', issue: state.issue, child: _PartySection(state: state))),
+                      Expanded(flex: 3, child: FocusSection(order: 1, child: FieldHighlight(field: 'party', issue: state.issue, child: _PartySection(state: state)))),
                       const SizedBox(width: AppSpace.huge),
-                      Expanded(flex: 2, child: FieldHighlight(field: 'number', issue: state.issue, child: _DetailsSection(state: state))),
+                      Expanded(flex: 2, child: FocusSection(order: 2, child: FieldHighlight(field: 'number', issue: state.issue, child: _DetailsSection(state: state)))),
                     ],
                   )
                 : Column(
                     children: [
-                      FieldHighlight(field: 'party', issue: state.issue, child: _PartySection(state: state)),
+                      FocusSection(order: 1, child: FieldHighlight(field: 'party', issue: state.issue, child: _PartySection(state: state))),
                       const SizedBox(height: AppSpace.lg),
-                      FieldHighlight(field: 'number', issue: state.issue, child: _DetailsSection(state: state)),
+                      FocusSection(order: 2, child: FieldHighlight(field: 'number', issue: state.issue, child: _DetailsSection(state: state))),
                     ],
                   ),
           ),
         ),
         const SizedBox(height: AppSpace.md),
-        FieldHighlight(field: 'items', issue: state.issue, child: _LinesCard(state: state, wide: wide)),
+        FocusSection(order: 3, child: FieldHighlight(field: 'items', issue: state.issue, child: _LinesCard(state: state, wide: wide))),
         const SizedBox(height: AppSpace.md),
         Card(
           child: Padding(
@@ -209,21 +212,21 @@ class _FormBody extends StatelessWidget {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(flex: 3, child: FieldHighlight(field: 'payments', also: const ['received', 'currency'], issue: state.issue, child: _PaymentSection(state: state))),
+                      Expanded(flex: 3, child: FocusSection(order: 5, child: FieldHighlight(field: 'payments', also: const ['received', 'currency'], issue: state.issue, child: _PaymentSection(state: state)))),
                       const SizedBox(width: AppSpace.huge),
-                      Expanded(flex: 2, child: FieldHighlight(field: 'billDiscount', also: const ['charges', 'tax', 'loyalty'], issue: state.issue, child: _TotalsSection(state: state))),
+                      Expanded(flex: 2, child: FocusSection(order: 4, child: FieldHighlight(field: 'billDiscount', also: const ['charges', 'tax', 'loyalty'], issue: state.issue, child: _TotalsSection(state: state)))),
                     ],
                   )
                 : Column(
                     children: [
-                      FieldHighlight(field: 'billDiscount', also: const ['charges', 'tax', 'loyalty'], issue: state.issue, child: _TotalsSection(state: state)),
+                      FocusSection(order: 4, child: FieldHighlight(field: 'billDiscount', also: const ['charges', 'tax', 'loyalty'], issue: state.issue, child: _TotalsSection(state: state))),
                       const SizedBox(height: AppSpace.xl),
-                      FieldHighlight(field: 'payments', also: const ['received', 'currency'], issue: state.issue, child: _PaymentSection(state: state)),
+                      FocusSection(order: 5, child: FieldHighlight(field: 'payments', also: const ['received', 'currency'], issue: state.issue, child: _PaymentSection(state: state))),
                     ],
                   ),
           ),
         ),
-      ],
+      ]),
     );
   }
 }

@@ -418,7 +418,7 @@ class _BillingAppState extends State<BillingApp> {
     builder: (context, _) => MaterialApp.router(
     title: 'Billing',
     debugShowCheckedModeBanner: false,
-    theme: buildTheme(),
+    theme: buildTheme(strongFocus: context.select((KeyboardPrefsCubit c) => c.state.mode == KeyboardMode.keyboardOnly)),
     routerConfig: _router,
     // The PIN lock covers everything once someone is signed in; the sign-in pages are not locked.
     builder: (context, child) => BlocBuilder<KeyboardPrefsCubit, KeyboardPrefs>(

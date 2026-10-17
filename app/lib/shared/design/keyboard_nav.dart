@@ -113,7 +113,10 @@ KeyEventResult handleEnterKey(KeyEvent event) {
     return KeyEventResult.handled;
   }
 
-  final startRect = start.rect;
+  // Where Tab order starts again after the last field: reaching it means there is no next field. Asked of the same policy
+  // Tab uses, so sections (FocusTraversalGroups) side by side are followed as Tab follows them.
+  final policy = FocusTraversalGroup.maybeOfNode(start) ?? ReadingOrderTraversalPolicy();
+  final first = policy.findFirstFocus(start, ignoreCurrentFocus: true);
   // Tab order can pass over buttons and read-only fields; keep going until an input is reached.
   for (var i = 0; i < 50; i++) {
     final moved = start.nextFocus();
@@ -121,8 +124,7 @@ KeyEventResult handleEnterKey(KeyEvent event) {
     final now = FocusManager.instance.primaryFocus;
     if (!moved) break;
     if (now == null || now == start) break;
-    final wrapped = now.rect.top < startRect.top - 1 || ((now.rect.top - startRect.top).abs() <= 1 && now.rect.left < startRect.left - 1);
-    if (wrapped) {
+    if (now == first) {
       // Past the last field: stay on it instead of jumping back to the top of the form.
       start.requestFocus();
       return KeyEventResult.handled;

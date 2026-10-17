@@ -3,6 +3,7 @@
 library;
 
 export 'app_command.dart';
+export 'focus_order.dart';
 export 'key_combo.dart';
 export 'keyboard_prefs.dart';
 export 'keyboard_scope.dart';

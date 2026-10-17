@@ -11,13 +11,27 @@ export 'design/theme_cubit.dart';
 export 'design/tokens.dart';
 export 'design/validation.dart';
 
+/// The outline around whatever has keyboard focus: a dark ring just outside the control, so it shows on every
+/// background and is not just a change of colour. [strong] (Keyboard Only mode) makes it thicker; [buildTheme] sets it.
+abstract final class AppFocus {
+  static bool strong = false;
+  static double get width => strong ? 3 : 2;
+  static BorderSide get ring => BorderSide(color: AppColors.text, width: width, strokeAlign: BorderSide.strokeAlignOutside);
+
+  /// [normal], or the ring while focused: for a button style's `side`.
+  static WidgetStateProperty<BorderSide?> side([BorderSide? normal]) => WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) ? ring : normal);
+
+  /// The tint behind a focused row, list item or ink area.
+  static Color get fill => AppColors.primary.withValues(alpha: strong ? 0.28 : 0.2);
+}
+
 /// Button looks that are not the default for their button type. Everything else comes from [buildTheme].
 abstract final class AppButtons {
   /// A filled button that deletes or removes something.
   static final destructive = FilledButton.styleFrom(backgroundColor: AppColors.dangerStrong, foregroundColor: AppColors.onPrimary);
 
   /// An outlined button that deletes or removes something.
-  static final destructiveOutlined = OutlinedButton.styleFrom(foregroundColor: AppColors.dangerText, side: const BorderSide(color: AppColors.dangerBorder));
+  static final destructiveOutlined = OutlinedButton.styleFrom(foregroundColor: AppColors.dangerText).copyWith(side: AppFocus.side(const BorderSide(color: AppColors.dangerBorder)));
 
   /// A tinted button for the second most important action beside a primary one.
   static ButtonStyle get tonal => FilledButton.styleFrom(backgroundColor: AppColors.primarySoft, foregroundColor: AppColors.primaryDark);
@@ -74,7 +88,10 @@ const _controlSize = Size(0, AppSize.control);
 OutlineInputBorder _inputBorder(Color color, [double width = 1]) =>
     OutlineInputBorder(borderRadius: AppRadius.mdAll, borderSide: BorderSide(color: color, width: width));
 
-ThemeData buildTheme() {
+/// The app's theme. [strongFocus] (Keyboard Only mode) draws a thicker focus outline.
+ThemeData buildTheme({bool strongFocus = false}) {
+  AppFocus.strong = strongFocus;
+  final focusOverlay = WidgetStateProperty.resolveWith<Color?>((s) => s.contains(WidgetState.focused) ? AppFocus.fill : null);
   const textTheme = TextTheme(
     displayLarge: AppText.display,
     displayMedium: AppText.display,
@@ -102,7 +119,7 @@ ThemeData buildTheme() {
     hoverColor: AppColors.primary.withValues(alpha: 0.04),
     highlightColor: AppColors.primary.withValues(alpha: 0.06),
     splashColor: AppColors.primary.withValues(alpha: 0.08),
-    focusColor: AppColors.primary.withValues(alpha: 0.12),
+    focusColor: AppFocus.fill,
     iconTheme: const IconThemeData(color: AppColors.textMuted, size: AppIconSize.md),
     pageTransitionsTheme: const PageTransitionsTheme(builders: {
       TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
@@ -123,7 +140,7 @@ ThemeData buildTheme() {
         iconSize: AppIconSize.sm,
         disabledBackgroundColor: AppColors.border,
         disabledForegroundColor: AppColors.textSubtle,
-      ),
+      ).copyWith(side: AppFocus.side()),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -134,7 +151,7 @@ ThemeData buildTheme() {
         textStyle: AppText.bodyStrong,
         backgroundColor: AppColors.primary,
         foregroundColor: AppColors.onPrimary,
-      ),
+      ).copyWith(side: AppFocus.side()),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
@@ -145,9 +162,8 @@ ThemeData buildTheme() {
         iconSize: AppIconSize.sm,
         foregroundColor: AppColors.textBody,
         backgroundColor: AppColors.surfaceMuted,
-        side: const BorderSide(color: AppColors.border),
         disabledForegroundColor: AppColors.textSubtle,
-      ),
+      ).copyWith(side: AppFocus.side(const BorderSide(color: AppColors.border))),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
@@ -158,15 +174,17 @@ ThemeData buildTheme() {
         iconSize: AppIconSize.sm,
         foregroundColor: AppColors.primary,
         disabledForegroundColor: AppColors.textSubtle,
-      ),
+      ).copyWith(side: AppFocus.side()),
     ),
-    iconButtonTheme: IconButtonThemeData(style: IconButton.styleFrom(foregroundColor: AppColors.textMuted, iconSize: AppIconSize.md, shape: _controlShape)),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(foregroundColor: AppColors.textMuted, iconSize: AppIconSize.md, shape: _controlShape).copyWith(side: AppFocus.side()),
+    ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         minimumSize: const WidgetStatePropertyAll(_controlSize),
         shape: WidgetStatePropertyAll(_controlShape),
         textStyle: const WidgetStatePropertyAll(AppText.bodyStrong),
-        side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+        side: AppFocus.side(const BorderSide(color: AppColors.border)),
         backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primarySoft : AppColors.surface),
         foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primaryDark : AppColors.textBody),
         iconSize: const WidgetStatePropertyAll(AppIconSize.sm),
@@ -182,9 +200,9 @@ ThemeData buildTheme() {
       contentPadding: const EdgeInsets.symmetric(horizontal: AppSpace.md, vertical: AppSpace.md),
       border: _inputBorder(AppColors.border),
       enabledBorder: _inputBorder(AppColors.border),
-      focusedBorder: _inputBorder(AppColors.primary, 1.5),
+      focusedBorder: _inputBorder(AppColors.primary, AppFocus.width),
       errorBorder: _inputBorder(AppColors.dangerText),
-      focusedErrorBorder: _inputBorder(AppColors.dangerText, 1.5),
+      focusedErrorBorder: _inputBorder(AppColors.dangerText, AppFocus.width),
       disabledBorder: _inputBorder(AppColors.borderSoft),
       labelStyle: const TextStyle(fontSize: AppFont.body, color: AppColors.textMuted),
       floatingLabelStyle: TextStyle(fontSize: AppFont.body, color: AppColors.primaryDark),
@@ -196,14 +214,22 @@ ThemeData buildTheme() {
     ),
     checkboxTheme: CheckboxThemeData(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xs)),
-      side: const BorderSide(color: AppColors.borderStrong, width: 1.5),
+      side: WidgetStateBorderSide.resolveWith(
+        (s) => s.contains(WidgetState.focused) ? BorderSide(color: AppColors.text, width: AppFocus.width) : const BorderSide(color: AppColors.borderStrong, width: 1.5),
+      ),
       fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : Colors.transparent),
+      overlayColor: focusOverlay,
     ),
-    radioTheme: RadioThemeData(fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.borderStrong)),
+    radioTheme: RadioThemeData(
+      fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) ? AppColors.text : s.contains(WidgetState.selected) ? AppColors.primary : AppColors.borderStrong),
+      overlayColor: focusOverlay,
+    ),
     switchTheme: SwitchThemeData(
       thumbColor: const WidgetStatePropertyAll(AppColors.surface),
       trackColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? AppColors.primary : AppColors.borderStrong),
-      trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+      trackOutlineColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) ? AppColors.text : Colors.transparent),
+      trackOutlineWidth: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) ? AppFocus.width : null),
+      overlayColor: focusOverlay,
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(color: AppColors.primary, linearTrackColor: AppColors.primarySoft),
     sliderTheme: SliderThemeData(activeTrackColor: AppColors.primary, thumbColor: AppColors.primary),
@@ -291,7 +317,7 @@ ThemeData buildTheme() {
       backgroundColor: AppColors.neutralSoft,
       selectedColor: AppColors.primarySoft,
       labelStyle: const TextStyle(fontSize: AppFont.caption, fontWeight: FontWeight.w600, color: AppColors.neutralText),
-      side: BorderSide.none,
+      side: WidgetStateBorderSide.resolveWith((s) => s.contains(WidgetState.focused) ? AppFocus.ring : BorderSide.none),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
       padding: const EdgeInsets.symmetric(horizontal: AppSpace.xs),
     ),
@@ -302,6 +328,7 @@ ThemeData buildTheme() {
       dividerColor: AppColors.border,
       labelStyle: AppText.bodyStrong,
       unselectedLabelStyle: TextStyle(fontSize: AppFont.body, fontWeight: FontWeight.w500),
+      overlayColor: focusOverlay,
     ),
     expansionTileTheme: const ExpansionTileThemeData(shape: Border(), collapsedShape: Border(), iconColor: AppColors.textMuted, collapsedIconColor: AppColors.textMuted),
   );
