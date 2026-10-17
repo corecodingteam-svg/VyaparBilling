@@ -339,7 +339,7 @@ class _Lines extends StatelessWidget {
     Widget row(int index, ExpenseLineDraft l) {
       final uid = l.uid;
       // Saved expense items are suggested while typing; any other text is fine too.
-      final name = Autocomplete<ExpenseItemDef>(
+      final name = PickOnEnter(child: Autocomplete<ExpenseItemDef>(
         key: ValueKey('$uid-name-${l.rev}'),
         initialValue: TextEditingValue(text: l.name),
         displayStringForOption: (d) => d.name,
@@ -348,10 +348,11 @@ class _Lines extends StatelessWidget {
           return state.itemDefs.where((d) => term.isEmpty || d.name.toLowerCase().contains(term));
         },
         onSelected: (d) => cubit.itemDefSelected(uid, d),
-        fieldViewBuilder: (context, controller, focusNode, _) => TextField(
+        fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) => TextField(
           controller: controller,
           focusNode: focusNode,
           onChanged: (v) => cubit.lineNameChanged(uid, v),
+          onSubmitted: (_) => PickOnEnter.submit(context, onFieldSubmitted),
           decoration: _cell.copyWith(hintText: 'Item name', labelText: wide ? null : 'Item'),
         ),
         optionsViewBuilder: (context, onSelected, options) => AutocompleteOptions<ExpenseItemDef>(
@@ -362,7 +363,7 @@ class _Lines extends StatelessWidget {
           subtitle: (d) => d.gstRate == null ? 'Expense item' : 'GST ${numText(d.gstRate)}%',
           trailing: (d) => Text(d.price == 0 ? '' : money(d.price)),
         ),
-      );
+      ));
       final taxField = DropdownButtonFormField<num?>(
         key: ValueKey('$uid-gst-${l.rev}-${l.gstRate}'),
         initialValue: gstRateOptions.contains(l.gstRate) ? l.gstRate : null,

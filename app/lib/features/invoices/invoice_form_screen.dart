@@ -48,14 +48,59 @@ class InvoiceFormScreen extends StatelessWidget {
         create: (ctx) => AttachmentsCubit(ctx.read(), ownerType: 'invoice', ownerId: invoiceId)..load(),
       ),
     ],
-    child: const _InvoiceFormView(),
+    child: RepositoryProvider(create: (_) => _FormFocus(), dispose: (f) => f.dispose(), child: const _InvoiceFormView()),
   );
+}
+
+/// The places on the form the keyboard jumps to: each row's item box, and the amount received (F8).
+class _FormFocus {
+  /// Each row's item box, by row uid. The pickers own these nodes; they are only looked up here.
+  final items = <int, FocusNode>{};
+  final received = FocusNode(debugLabel: 'Received');
+  final receivedInFull = FocusNode(debugLabel: 'Received in full');
+
+  /// Once the next frame is drawn (the row may be new or rebuilt), put the cursor in row [uid]'s item box.
+  void item(int uid) => afterNextFrame(() => items[uid]?.requestFocus());
+
+  /// The amount received, or the "received in full" box while the amount is filled in for you.
+  void payment() => (received.context != null ? received : receivedInFull).requestFocus();
+
+  /// A new row at the end, with the cursor in its item box (or in row 1's, if row 1 must be filled in first).
+  void addRow(InvoiceFormCubit cubit) {
+    cubit.addLine();
+    item(cubit.state.lines.last.uid);
+  }
+
+  /// The row F4 searches in when focus is not in a row: the first one without an item, or the last.
+  void lookup(InvoiceFormState s) => item((s.lines.where((l) => l.isBlank).firstOrNull ?? s.lines.last).uid);
+
+  void dispose() {
+    received.dispose();
+    receivedInFull.dispose();
+  }
 }
 
 class _InvoiceFormView extends StatelessWidget {
   const _InvoiceFormView();
 
   void _close(BuildContext context, InvoiceKind kind) => context.canPop() ? context.pop() : context.go(kind.basePath);
+
+  /// Leaves the form by [go], first asking when something entered would be lost.
+  Future<void> _leave(BuildContext context, VoidCallback go) async {
+    if (!context.read<InvoiceFormCubit>().hasChanges) return go();
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text('What you entered on this form has not been saved.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Discard')),
+          FilledButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep Editing')),
+        ],
+      ),
+    );
+    if (discard == true && context.mounted) go();
+  }
 
   /// Going over a customer's credit limit is allowed, but only knowingly.
   Future<void> _confirmCreditLimit(BuildContext context, InvoiceFormState s) async {
@@ -72,7 +117,7 @@ class _InvoiceFormView extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) cubit.save(andNew: s.pendingAndNew, overLimitConfirmed: true);
+    if (ok == true) cubit.save(andNew: s.pendingAndNew, overLimitConfirmed: true, andPrint: s.printAfterSave);
   }
 
   @override
@@ -95,7 +140,7 @@ class _InvoiceFormView extends StatelessWidget {
         await context.read<AttachmentsCubit>().commit(s.savedId!);
         if (context.mounted && s.kind.isSale && !context.read<InvoiceFormCubit>().editing) context.read<TrackingCubit>().recordSaved('sale', s.savedId!);
         if (!context.mounted || s.result != InvoiceFormResult.saved) return;
-        if (s.settings.showInvoicePreview) {
+        if (s.settings.showInvoicePreview || s.printAfterSave) {
           // Show the printable invoice, replacing the form so Back returns to the list.
           context.pushReplacement('${s.kind.basePath}/${s.savedId}/preview');
         } else {
@@ -106,8 +151,26 @@ class _InvoiceFormView extends StatelessWidget {
         final cubit = context.read<InvoiceFormCubit>();
         final kind = state.kind;
         final busy = state.submitStatus == SubmitStatus.submitting;
+        final ready = state.loadStatus == LoadStatus.success && !busy;
+        final focus = context.read<_FormFocus>();
+        void save({bool andPrint = false}) => cubit.save(andNew: false, andPrint: andPrint);
+        final commands = <AppCommand, VoidCallback?>{
+          AppCommand.cancel: () => _leave(context, () => _close(context, kind)),
+          if (ready) ...{
+            AppCommand.save: save,
+            AppCommand.submit: save,
+            AppCommand.saveAndComplete: () => save(andPrint: true),
+            // A saved invoice with nothing changed is printed as it is; otherwise it is saved first.
+            AppCommand.print: cubit.editing && !cubit.hasChanges ? () => context.push('${kind.basePath}/${cubit.invoiceId}/preview') : () => save(andPrint: true),
+            // A blank new form is already a new invoice.
+            AppCommand.newRecord: cubit.editing || cubit.hasChanges ? () => _leave(context, () => context.pushReplacement('${kind.basePath}/new')) : null,
+            AppCommand.payment: kind.hasPayment ? focus.payment : null,
+            AppCommand.lookup: () => focus.lookup(state),
+            AppCommand.addRow: () => focus.addRow(cubit),
+          },
+        };
         // Tab goes through the form section by section, then the save buttons, then the top bar.
-        return OrderedFocus(child: Scaffold(
+        return KeyboardScope(name: kind.singular, commands: commands, child: OrderedFocus(child: Scaffold(
           appBar: PreferredSize(preferredSize: const Size.fromHeight(kToolbarHeight), child: FocusSection(order: 7, child: AppBar(
             shape: const Border(bottom: BorderSide(color: AppColors.border)),
             leading: IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => _close(context, kind)),
@@ -162,7 +225,7 @@ class _InvoiceFormView extends StatelessWidget {
                     ),
                   ),
                 )),
-        ));
+        )));
       },
     );
   }
@@ -255,7 +318,7 @@ class _PartySection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Autocomplete<Party>(
+                  PickOnEnter(child: Autocomplete<Party>(
                     key: ValueKey('party-${state.partyRev}'),
                     initialValue: TextEditingValue(text: state.partyName),
                     displayStringForOption: (p) => p.name,
@@ -264,10 +327,11 @@ class _PartySection extends StatelessWidget {
                       return state.parties.where((p) => term.isEmpty || p.name.toLowerCase().contains(term) || (p.phone ?? '').contains(term));
                     },
                     onSelected: cubit.partySelected,
-                    fieldViewBuilder: (context, controller, focusNode, _) => TextField(
+                    fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) => TextField(
                       controller: controller,
                       focusNode: focusNode,
                       onChanged: cubit.partyNameChanged,
+                      onSubmitted: (_) => PickOnEnter.submit(context, onFieldSubmitted),
                       decoration: InputDecoration(labelText: label, suffixIcon: const Icon(Icons.arrow_drop_down)),
                     ),
                     optionsViewBuilder: (context, onSelected, options) => AutocompleteOptions<Party>(
@@ -280,7 +344,7 @@ class _PartySection extends StatelessWidget {
                         style: TextStyle(color: balanceColor(p.balance), fontWeight: FontWeight.w600),
                       ),
                     ),
-                  ),
+                  )),
                   if (party != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpace.xs, left: AppSpace.xs),
@@ -524,7 +588,7 @@ class _LinesCard extends StatelessWidget {
               key: ValueKey('line-${state.lines[i].uid}'),
               field: 'row:${state.lines[i].uid}',
               issue: state.issue,
-              child: _LineRow(index: i, line: state.lines[i], state: state, wide: wide),
+              child: _RowKeys(index: i, state: state, child: _LineRow(index: i, line: state.lines[i], state: state, wide: wide)),
             ),
           const Divider(),
           Padding(
@@ -559,6 +623,40 @@ class _LinesCard extends StatelessWidget {
   }
 }
 
+/// What the keyboard does in one item row: Insert adds a row, Delete removes this one (when the cursor is not in a text
+/// box, where Delete deletes text), Ctrl+D copies it, and F4 searches for its item.
+class _RowKeys extends StatelessWidget {
+  const _RowKeys({required this.index, required this.state, required this.child});
+  final int index;
+  final InvoiceFormState state;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<InvoiceFormCubit>();
+    final focus = context.read<_FormFocus>();
+    final uid = state.lines[index].uid;
+    return KeyboardScope(
+      name: 'Item row ${index + 1}',
+      commands: {
+        AppCommand.removeRow: () {
+          cubit.removeLine(uid);
+          final lines = cubit.state.lines;
+          focus.item(lines[index.clamp(0, lines.length - 1)].uid);
+        },
+        AppCommand.duplicateRow: state.lines[index].isBlank
+            ? null
+            : () {
+                final copy = cubit.duplicateLine(uid);
+                if (copy != null) focus.item(copy);
+              },
+        AppCommand.lookup: () => focus.item(uid),
+      },
+      child: child,
+    );
+  }
+}
+
 class _LineRow extends StatelessWidget {
   const _LineRow({required this.index, required this.line, required this.state, required this.wide});
   final int index;
@@ -573,7 +671,8 @@ class _LineRow extends StatelessWidget {
     final cubit = context.read<InvoiceFormCubit>();
     final uid = line.uid;
 
-    final item = Autocomplete<Item>(
+    final focus = context.read<_FormFocus>();
+    final item = PickOnEnter(child: Autocomplete<Item>(
       initialValue: TextEditingValue(text: line.name),
       displayStringForOption: (i) => i.name,
       optionsBuilder: (v) {
@@ -581,12 +680,17 @@ class _LineRow extends StatelessWidget {
         return state.items.where((i) => term.isEmpty || i.name.toLowerCase().contains(term) || (i.itemCode ?? '').toLowerCase().contains(term));
       },
       onSelected: (i) => cubit.itemSelected(uid, i),
-      fieldViewBuilder: (context, controller, focusNode, _) => TextField(
-        controller: controller,
-        focusNode: focusNode,
-        onChanged: (v) => cubit.lineNameChanged(uid, v),
-        decoration: _cell.copyWith(hintText: 'Item name', labelText: wide ? null : 'Item'),
-      ),
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        focus.items[uid] = focusNode;
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          onChanged: (v) => cubit.lineNameChanged(uid, v),
+          // Enter picks the highlighted item and goes on to its quantity.
+          onSubmitted: (_) => PickOnEnter.submit(context, onFieldSubmitted),
+          decoration: _cell.copyWith(hintText: 'Item name', labelText: wide ? null : 'Item'),
+        );
+      },
       optionsViewBuilder: (context, onSelected, options) => AutocompleteOptions<Item>(
         width: AppSize.dialogMd,
         options: options,
@@ -596,7 +700,7 @@ class _LineRow extends StatelessWidget {
             !i.isProduct ? 'Service' : (state.settings.stockMaintenance ? 'Stock: ${qty(i.stockQty)} ${i.unit ?? ''}' : (i.unit ?? 'Product')),
         trailing: (i) => Text(money(state.kind.usesSalePrice ? i.salePrice : i.purchasePrice)),
       ),
-    );
+    ));
 
     Widget number(String keySuffix, String value, ValueChanged<String> onChanged, {String? label, String? prefix}) => TextFormField(
       key: ValueKey('$uid-$keySuffix'),
@@ -618,8 +722,10 @@ class _LineRow extends StatelessWidget {
     );
 
     final unitNames = {for (final u in state.units) u.shortName, if (line.unit != null) line.unit!};
-    final unitField = DropdownButtonFormField<String?>(
-      key: ValueKey('$uid-unit-${line.rowRev}-${line.unit}'),
+    // Enter goes from the quantity straight to the price; Tab still stops on the unit. The key changes only when the row
+    // is refilled (an item picked), so focus stays put while the unit is changed here.
+    final unitField = SkipOnEnter(child: DropdownButtonFormField<String?>(
+      key: ValueKey('$uid-unit-${line.rowRev}'),
       initialValue: line.unit,
       isExpanded: true,
       decoration: _cell.copyWith(labelText: wide ? null : 'Unit'),
@@ -632,10 +738,10 @@ class _LineRow extends StatelessWidget {
           ),
       ],
       onChanged: (v) => cubit.lineUnitChanged(uid, v),
-    );
+    ));
 
     final taxField = DropdownButtonFormField<num?>(
-      key: ValueKey('$uid-gst-${line.rowRev}-${line.gstRate}'),
+      key: ValueKey('$uid-gst-${line.rowRev}'),
       initialValue: gstRateOptions.contains(line.gstRate) ? line.gstRate : null,
       isExpanded: true,
       decoration: _cell.copyWith(labelText: wide ? null : 'Tax %'),
@@ -647,7 +753,12 @@ class _LineRow extends StatelessWidget {
             child: Text('GST@${numText(r)}%', overflow: TextOverflow.ellipsis),
           ),
       ],
-      onChanged: (v) => cubit.lineGstRateChanged(uid, v),
+      onChanged: (v) {
+        cubit.lineGstRateChanged(uid, v);
+        // The tax is the last thing in a row: go on to the next row's item.
+        final next = state.lines.skipWhile((l) => l.uid != uid).skip(1).firstOrNull;
+        if (next != null) focus.item(next.uid);
+      },
     );
     final taxAmount = Text(
       line.gstRate == null ? '-' : state.fmt(state.taxOf(line)),
@@ -1196,7 +1307,7 @@ class _TotalsSection extends StatelessWidget {
           row(
             Row(
               children: [
-                Checkbox(value: locked, onChanged: state.isCash ? null : (v) => cubit.receivedInFullToggled(v!)),
+                Checkbox(focusNode: context.read<_FormFocus>().receivedInFull, value: locked, onChanged: state.isCash ? null : (v) => cubit.receivedInFullToggled(v!)),
                 Flexible(
                   child: Text(
                     split ? '$paidLabel (${paymentModes[state.paymentMode]})' : paidLabel,
@@ -1211,6 +1322,7 @@ class _TotalsSection extends StatelessWidget {
                     child: Text(state.fmt(state.firstPartValue), textAlign: TextAlign.right),
                   )
                 : TextFormField(
+                    focusNode: context.read<_FormFocus>().received,
                     initialValue: state.received,
                     onChanged: cubit.receivedChanged,
                     keyboardType: _numeric,

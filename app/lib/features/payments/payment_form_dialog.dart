@@ -154,7 +154,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Autocomplete<Party>(
+        PickOnEnter(child: Autocomplete<Party>(
           initialValue: TextEditingValue(text: party?.name ?? ''),
           displayStringForOption: (p) => p.name,
           optionsBuilder: (v) {
@@ -162,10 +162,11 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
             return state.parties.where((p) => term.isEmpty || p.name.toLowerCase().contains(term) || (p.phone ?? '').contains(term));
           },
           onSelected: _cubit.partySelected,
-          fieldViewBuilder: (context, controller, focusNode, _) => TextFormField(
+          fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) => TextFormField(
             controller: controller,
             focusNode: focusNode,
             onChanged: _cubit.partyTextChanged,
+            onFieldSubmitted: (_) => PickOnEnter.submit(context, onFieldSubmitted),
             decoration: const InputDecoration(labelText: 'Party *', suffixIcon: Icon(Icons.arrow_drop_down)),
             validator: Validators.choose<String>('party'),
           ),
@@ -179,7 +180,7 @@ class _PaymentFormDialogState extends State<_PaymentFormDialog> {
               style: TextStyle(color: balanceColor(p.balance), fontWeight: FontWeight.w600),
             ),
           ),
-        ),
+        )),
         if (party != null)
           Padding(
             padding: const EdgeInsets.only(top: AppSpace.xs, left: AppSpace.xs),

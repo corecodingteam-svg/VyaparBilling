@@ -52,8 +52,34 @@ class EnterKeyNavigation extends StatelessWidget {
         canRequestFocus: false,
         skipTraversal: true,
         onKeyEvent: (_, event) => enabled ? handleEnterKey(event) : KeyEventResult.ignored,
-        child: EnterKeyBehavior(action: action, child: child),
+        child: EnterKeyBehavior(action: enabled ? action : EnterKeyAction.ignore, child: child),
       );
+}
+
+/// A control Enter passes over when moving to the next field; Tab still stops on it. For a choice that usually stays as
+/// it is, such as an invoice row's unit between its quantity and price.
+class SkipOnEnter extends StatelessWidget {
+  const SkipOnEnter({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+
+/// Runs [f] once the next frame has been drawn, and makes sure there is one: a key press alone does not draw a frame,
+/// so a focus change waiting for one would otherwise wait for the next mouse move.
+void afterNextFrame(VoidCallback f) {
+  WidgetsBinding.instance.addPostFrameCallback((_) => f());
+  WidgetsBinding.instance.ensureVisualUpdate();
+}
+
+bool _inAutocomplete(BuildContext context) {
+  var found = false;
+  context.visitAncestorElements((e) {
+    found = e.widget is RawAutocomplete;
+    return !found;
+  });
+  return found;
 }
 
 bool _isEnter(KeyEvent e) => e.logicalKey == LogicalKeyboardKey.enter || e.logicalKey == LogicalKeyboardKey.numpadEnter;
@@ -67,6 +93,8 @@ bool _hasOwnSubmit(EditableTextState state) {
 
 /// Whether [state]'s field leaves Enter alone, given the chosen [action].
 bool enterBelongsToField(EditableTextState state, EnterKeyAction action) {
+  // An item or party picker's Enter chooses the highlighted suggestion, whatever Enter does elsewhere.
+  if (action != EnterKeyAction.ignore && _inAutocomplete(state.context)) return true;
   switch (action) {
     case EnterKeyAction.next:
     case EnterKeyAction.tab:
@@ -87,6 +115,7 @@ bool enterBelongsToField(EditableTextState state, EnterKeyAction action) {
 bool _eligible(FocusNode node) {
   final context = node.context;
   if (context == null || !node.canRequestFocus) return false;
+  if (context.findAncestorWidgetOfExactType<SkipOnEnter>() != null) return false;
   final editable = context.findAncestorStateOfType<EditableTextState>();
   if (editable != null) return !editable.widget.readOnly;
   return context.findAncestorStateOfType<FormFieldState<dynamic>>() != null;
@@ -113,6 +142,13 @@ KeyEventResult handleEnterKey(KeyEvent event) {
     return KeyEventResult.handled;
   }
 
+  focusNextField(start);
+  return KeyEventResult.handled;
+}
+
+/// Moves focus from [start] to the next input in Tab order, passing over buttons and read-only fields. Past the last
+/// input focus stays on [start] rather than going back to the top. Returns whether it moved.
+bool focusNextField(FocusNode start) {
   // Where Tab order starts again after the last field: reaching it means there is no next field. Asked of the same policy
   // Tab uses, so sections (FocusTraversalGroups) side by side are followed as Tab follows them.
   final policy = FocusTraversalGroup.maybeOfNode(start) ?? ReadingOrderTraversalPolicy();
@@ -127,10 +163,59 @@ KeyEventResult handleEnterKey(KeyEvent event) {
     if (now == first) {
       // Past the last field: stay on it instead of jumping back to the top of the form.
       start.requestFocus();
-      return KeyEventResult.handled;
+      return false;
     }
-    if (_eligible(now)) return KeyEventResult.handled;
+    if (_eligible(now)) return true;
   }
   start.requestFocus();
-  return KeyEventResult.handled;
+  return false;
+}
+
+/// Put around an [Autocomplete] (an item or party picker) whose field's `onSubmitted` calls [PickOnEnter.submit]. Enter
+/// then picks the highlighted suggestion and goes on to the next input, as Enter does in other inputs, even when picking
+/// rebuilds the field. With Enter navigation off it only picks.
+class PickOnEnter extends StatefulWidget {
+  const PickOnEnter({super.key, required this.child});
+  final Widget child;
+
+  /// For the picker's text field: `onSubmitted: (_) => PickOnEnter.submit(context, onFieldSubmitted)`.
+  static void submit(BuildContext context, VoidCallback onFieldSubmitted) {
+    final state = context.findAncestorStateOfType<_PickOnEnterState>();
+    onFieldSubmitted();
+    state?._moveOnSoon();
+  }
+
+  @override
+  State<PickOnEnter> createState() => _PickOnEnterState();
+}
+
+class _PickOnEnterState extends State<PickOnEnter> {
+  final _node = FocusNode(debugLabel: 'PickOnEnter', skipTraversal: true, canRequestFocus: false);
+
+  void _moveOnSoon() {
+    final moveOn = EnterKeyBehavior.of(context) != EnterKeyAction.ignore;
+    final hadFocus = _node.hasFocus;
+    // After the pick has been drawn: it may have replaced the field, and the fields after it.
+    afterNextFrame(() {
+      if (!mounted) return;
+      if (hadFocus && !_node.hasFocus && FocusManager.instance.primaryFocus is FocusScopeNode) {
+        // Picking rebuilt the field and its focus was dropped: put the cursor in the new one.
+        final field = _node.traversalDescendants.where(_eligible).firstOrNull;
+        if (field == null) return;
+        field.requestFocus();
+        FocusManager.instance.applyFocusChangesIfNeeded();
+      }
+      final here = FocusManager.instance.primaryFocus;
+      if (moveOn && here != null && _node.hasFocus) focusNextField(here);
+    });
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(focusNode: _node, child: widget.child);
 }

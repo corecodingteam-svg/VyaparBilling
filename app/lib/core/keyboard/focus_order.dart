@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../shared/design/keyboard_nav.dart';
 import 'keyboard_prefs.dart';
 
 /// A part of a page that Tab and Enter finish before moving on, so the customer's fields come before the invoice
@@ -68,7 +69,7 @@ class _FocusFirstFieldState extends State<FocusFirstField> {
     final mode = context.read<KeyboardPrefsCubit?>()?.state.mode ?? KeyboardMode.standard;
     if (mode == KeyboardMode.standard) return;
     // After the next frame, when the fields are laid out and their positions known.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusFirst(again: again));
+    afterNextFrame(() => _focusFirst(again: again));
   }
 
   void _focusFirst({required bool again}) {

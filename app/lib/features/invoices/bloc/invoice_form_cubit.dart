@@ -97,6 +97,7 @@ class LineDraft extends Equatable {
   List<String> get serials => {for (final s in serialNos.split(RegExp(r'[,\n]'))) if (s.trim().isNotEmpty) s.trim()}.toList();
 
   LineDraft copyWith({
+    int? uid,
     String? Function()? itemId,
     String? name,
     String? qty,
@@ -118,7 +119,7 @@ class LineDraft extends Equatable {
     int? priceRev,
   }) =>
       LineDraft(
-        uid: uid,
+        uid: uid ?? this.uid,
         itemId: itemId != null ? itemId() : this.itemId,
         name: name ?? this.name,
         qty: qty ?? this.qty,
@@ -285,6 +286,7 @@ class InvoiceFormState extends Equatable {
     this.godowns = const [],
     this.creditPrompt = 0,
     this.pendingAndNew = false,
+    this.printAfterSave = false,
     this.description = '',
     this.formRev = 0,
     this.partyRev = 0,
@@ -352,6 +354,9 @@ class InvoiceFormState extends Equatable {
   /// Bumped when saving needs the user to confirm going over the party's credit limit.
   final int creditPrompt;
   final bool pendingAndNew;
+
+  /// Show the printable document after saving, whatever the "show preview" setting says (Save & complete, Print).
+  final bool printAfterSave;
   final String description;
 
   /// Bumped to rebuild every input (form loaded / reset for the next invoice).
@@ -509,6 +514,7 @@ class InvoiceFormState extends Equatable {
     List<Godown>? godowns,
     int? creditPrompt,
     bool? pendingAndNew,
+    bool? printAfterSave,
     String? description,
     int? formRev,
     int? partyRev,
@@ -555,6 +561,7 @@ class InvoiceFormState extends Equatable {
         godowns: godowns ?? this.godowns,
         creditPrompt: creditPrompt ?? this.creditPrompt,
         pendingAndNew: pendingAndNew ?? this.pendingAndNew,
+        printAfterSave: printAfterSave ?? this.printAfterSave,
         description: description ?? this.description,
         formRev: formRev ?? this.formRev,
         partyRev: partyRev ?? this.partyRev,
@@ -570,8 +577,15 @@ class InvoiceFormState extends Equatable {
         kind, loadStatus, parties, items, units, isCash, partyId, partyName, phone, billingAddress, number, date,
         stateOfSupply, lines, gstEnabled, pricesIncludeTax, roundOff, receivedInFull, received, paymentMode, bankAccountId, bankAccounts, description, formRev, partyRev,
         extraParts, linkedAmount, originalUnpaid, shippingAddress, dueDate, dueDateAuto, currencies, currencyCode, exchangeRate, settings, extras, godowns, creditPrompt,
-        pendingAndNew, submitStatus, result, savedId, error, issue,
+        pendingAndNew, printAfterSave, submitStatus, result, savedId, error, issue,
       ];
+}
+
+/// Compares field values deeply (lists of lines by their contents), as Equatable does.
+class _Entered extends Equatable {
+  const _Entered(this.props);
+  @override
+  final List<Object?> props;
 }
 
 /// State and rules of the create/edit invoice screen.
@@ -608,6 +622,24 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   int _nextUid = 0;
 
   bool get editing => invoiceId != null;
+
+  /// The form as it was loaded or last reset (after Save & New), to tell whether anything was changed since.
+  InvoiceFormState? _pristine;
+
+  @override
+  void emit(InvoiceFormState state) {
+    super.emit(state);
+    if (state.loadStatus == LoadStatus.success && (_pristine == null || state.formRev != _pristine!.formRev)) _pristine = state;
+  }
+
+  static List<Object?> _entered(InvoiceFormState s) => [
+        s.isCash, s.partyId, s.partyName, s.phone, s.billingAddress, s.shippingAddress, s.number, s.date, s.dueDate, s.stateOfSupply,
+        s.lines, s.pricesIncludeTax, s.roundOff, s.receivedInFull, s.received, s.paymentMode, s.bankAccountId, s.extraParts,
+        s.currencyCode, s.exchangeRate, s.description, s.extras,
+      ];
+
+  /// Whether anything the user can enter differs from when the form was loaded or last reset.
+  bool get hasChanges => _pristine != null && _Entered(_entered(state)) != _Entered(_entered(_pristine!));
 
   LineDraft _blank() => LineDraft(uid: _nextUid++);
 
@@ -841,6 +873,16 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
       return;
     }
     emit(state.copyWith(lines: [...state.lines, _blank()]));
+  }
+
+  /// A copy of row [uid] just below it, for the same item again with other details. Serial numbers are not copied: each
+  /// is sold once. Returns the new row's uid, or null when the row is empty.
+  int? duplicateLine(int uid) {
+    final i = state.lines.indexWhere((l) => l.uid == uid);
+    if (i < 0 || state.lines[i].isBlank) return null;
+    final copy = state.lines[i].copyWith(uid: _nextUid++, serialNos: '');
+    emit(state.copyWith(lines: [...state.lines.take(i + 1), copy, ...state.lines.skip(i + 1)]));
+    return copy.uid;
   }
 
   void removeLine(int uid) {
@@ -1178,7 +1220,9 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   /// Saves the document. Going over the party's credit limit is allowed, but only after the user
   /// confirms: the first call raises [InvoiceFormState.creditPrompt], and the screen calls again
   /// with [overLimitConfirmed].
-  Future<void> save({required bool andNew, bool overLimitConfirmed = false}) async {
+  ///
+  /// [andPrint] shows the printable document after saving even when the "show preview" setting is off.
+  Future<void> save({required bool andNew, bool overLimitConfirmed = false, bool andPrint = false}) async {
     if (state.submitStatus == SubmitStatus.submitting) return;
     final issue = firstIssue();
     final problem = issue?.message;
@@ -1195,10 +1239,10 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
       return;
     }
     if (state.creditLimitWarning != null && !overLimitConfirmed) {
-      emit(state.copyWith(creditPrompt: state.creditPrompt + 1, pendingAndNew: andNew, submitStatus: SubmitStatus.idle));
+      emit(state.copyWith(creditPrompt: state.creditPrompt + 1, pendingAndNew: andNew, printAfterSave: andPrint, submitStatus: SubmitStatus.idle));
       return;
     }
-    emit(state.copyWith(submitStatus: SubmitStatus.submitting, result: InvoiceFormResult.none));
+    emit(state.copyWith(submitStatus: SubmitStatus.submitting, result: InvoiceFormResult.none, printAfterSave: andPrint));
     try {
       final saved = await _invoices.save(invoiceId, _body());
       if (!andNew) {
