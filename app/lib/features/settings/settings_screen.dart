@@ -110,6 +110,7 @@ class _SettingsView extends StatelessWidget {
                 children: [
                   Text(title, style: AppText.title),
                   const SizedBox(height: AppSpace.md),
+                  _Section('License', 'general', [const LicenseInfo()]),
                   // Salesmen cannot change business settings; they only get their own account below.
                   if (!(user?.isSalesman ?? false)) ...[
                     _Section('Taxes & GST', 'tax', [
@@ -661,7 +662,6 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ]),
                   const _Section('Theme', 'theme', [_ThemeManager()]),
-                  _Section('License', 'general', [const LicenseInfo()]),
                   _Section('Account', 'general', [
                     BlocBuilder<LockCubit, AppLockState>(
                       builder: (context, lock) => ListTile(
