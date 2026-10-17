@@ -53,10 +53,13 @@ enum AppCommand {
   cancel('Cancel / close', 'Cancel what you are doing, or close the dialog or form.', ShortcutSection.general, 'Windows/Dialogs'),
   shortcutHelp('Show shortcuts', 'Show the shortcuts for this screen.', ShortcutSection.general, 'Windows/Dialogs'),
 
-  // Billing › Items
-  addRow('Add item row', 'Add a new row to the items.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows),
-  removeRow('Remove item row', 'Remove the row you are on.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows),
-  duplicateRow('Duplicate item row', 'Copy the row you are on into a new row below it.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows, overrides: AppCommand.delete);
+  // Billing › Items (also any list of rows: Insert adds, Delete removes the row you are on)
+  addRow('Add row', 'Add a new row: an invoice item, or a new record in a list.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows),
+  removeRow('Remove row', 'Remove or delete the row you are on (not while typing in a box).', ShortcutSection.billing, 'Items', area: ShortcutArea.rows),
+  duplicateRow('Duplicate item row', 'Copy the row you are on into a new row below it.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows, overrides: AppCommand.delete),
+
+  // Inventory › Adjustment
+  adjustStock('Adjust stock', 'Add or reduce the stock of the selected item.', ShortcutSection.inventory, 'Adjustment');
 
   const AppCommand(this.label, this.description, this.section, this.group, {this.area = ShortcutArea.global, this.overrides});
 
@@ -99,6 +102,7 @@ enum AppCommand {
         addRow => plain(LogicalKeyboardKey.insert),
         removeRow => plain(LogicalKeyboardKey.delete),
         duplicateRow => ctrl(LogicalKeyboardKey.keyD),
+        adjustStock => alt(LogicalKeyboardKey.keyA),
       };
 
   /// Other keys that also do it, which are not changed in Settings (F5 refreshes beside Ctrl+R on Windows).

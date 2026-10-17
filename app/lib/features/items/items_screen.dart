@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/keyboard/keyboard.dart';
 import '../../core/status.dart';
 import '../../data/models/item.dart';
 import '../../data/repositories/items_repository.dart';
@@ -123,6 +124,21 @@ class _ItemsTab extends StatelessWidget {
           );
         }
         final wide = isWide(context);
+        final selected = state.selected;
+        void add() => showItemForm(context, type: type);
+        void edit() => showItemForm(context, item: selected!);
+        final adjust = selected != null && selected.isProduct && settingsOf(context).stockMaintenance;
+        final keys = <AppCommand, VoidCallback?>{
+          AppCommand.newRecord: add,
+          AppCommand.addRow: add,
+          AppCommand.refresh: () => context.read<ItemsBloc>().add(const ItemsRequested()),
+          if (selected != null) ...{
+            AppCommand.editSelected: edit,
+            AppCommand.edit: edit,
+            AppCommand.delete: () => deleteItem(context, selected),
+            if (adjust) AppCommand.adjustStock: () => showAdjustStockDialog(context, selected),
+          },
+        };
         final list = _ItemList(
           state: state,
           highlight: wide,
@@ -130,7 +146,7 @@ class _ItemsTab extends StatelessWidget {
           onAdd: () => showItemForm(context, type: type),
           onTap: (i) => _open(context, i),
         );
-        return Padding(
+        return KeyboardScope(name: type == 'product' ? 'Items' : 'Services', commands: keys, child: Padding(
           padding: const EdgeInsets.all(AppSpace.md),
           child: wide
               ? Row(
@@ -142,7 +158,7 @@ class _ItemsTab extends StatelessWidget {
                   ],
                 )
               : list,
-        );
+        ));
       },
     );
   }
@@ -198,7 +214,10 @@ class _ItemList extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: PagedListPane<Item>(
+            child: KeyboardScope(
+              name: 'Item list',
+              commands: {if (state.selected != null) AppCommand.removeRow: () => deleteItem(context, state.selected!)},
+              child: PagedListPane<Item>(
               items: shown,
               headings: const ['ITEM', 'QUANTITY / PRICE'],
               sortKeys: [(i) => i.name, (i) => isProduct && trackStock ? i.stockQty : i.salePrice],
@@ -229,13 +248,28 @@ class _ItemList extends StatelessWidget {
                           ],
                         ),
                         onTap: () => onTap(item),
+                        // Beside the details, moving through the list with the keyboard shows each item's details.
+                        onFocusChange: highlight ? (f) => f ? context.read<ItemsBloc>().add(ItemSelected(item.id)) : null : null,
                       );
                     },
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+/// Deletes [item] once the user confirms.
+Future<void> deleteItem(BuildContext context, Item item) async {
+  final repo = context.read<ItemsRepository>();
+  if (!await confirmDelete(context, title: 'Delete item', message: 'Do you really want to delete "${item.name}"?')) return;
+  try {
+    await repo.delete(item.id);
+    if (context.mounted) showSuccess(context, 'Item deleted');
+  } catch (e) {
+    if (context.mounted) showError(context, e);
   }
 }
 
@@ -248,18 +282,7 @@ class _RowMenu extends StatelessWidget {
     return PopupMenuButton<String>(
       tooltip: 'More',
       icon: const Icon(Icons.more_vert, size: AppIconSize.md),
-      onSelected: (v) async {
-        if (v == 'edit') return showItemForm(context, item: item);
-        final repo = context.read<ItemsRepository>();
-        if (await confirmDelete(context, title: 'Delete item', message: 'Do you really want to delete "${item.name}"?')) {
-          try {
-            await repo.delete(item.id);
-            if (context.mounted) showSuccess(context, 'Item deleted');
-          } catch (e) {
-            if (context.mounted) showError(context, e);
-          }
-        }
-      },
+      onSelected: (v) async => v == 'edit' ? showItemForm(context, item: item) : deleteItem(context, item),
       itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('View/Edit')), PopupMenuItem(value: 'delete', child: Text('Delete'))],
     );
   }

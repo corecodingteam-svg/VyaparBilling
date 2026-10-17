@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/keyboard/row_navigation.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -140,7 +141,12 @@ class PagedDataTable extends StatelessWidget {
           final start = page * pageSize;
           final shown = matching.skip(start).take(pageSize).toList();
           final lastPage = page == pages - 1;
-          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          return RowNavigation(
+            onNextPage: page < pages - 1 ? () => cubit.goTo(page + 1) : null,
+            onPreviousPage: page > 0 ? () => cubit.goTo(page - 1) : null,
+            onFirstPage: page > 0 ? () => cubit.goTo(0) : null,
+            onLastPage: page < pages - 1 ? () => cubit.goTo(pages - 1) : null,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             if (searchable && !plain)
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppSpace.lg, 0, AppSpace.lg, AppSpace.md),
@@ -183,7 +189,7 @@ class PagedDataTable extends StatelessWidget {
               ),
             if (!plain && (matching.length > 10 || state.pageSize != 25))
               TablePager(total: matching.length, page: page, pages: pages, pageSize: state.pageSize, filtered: matching.length != rows.where((r) => !r.pinned).length),
-          ]);
+          ]));
         }),
       );
 }
@@ -281,7 +287,12 @@ class PagedListPane<T> extends StatelessWidget {
               ? Center(child: Text(emptyText))
               : ListView.separated(itemCount: shown.length, separatorBuilder: (_, _) => const Divider(), itemBuilder: (context, i) => itemBuilder(context, shown[i]));
           if (onRefresh != null && shown.isNotEmpty) list = PullToRefresh(onRefresh: onRefresh, child: list);
-          return Column(children: [
+          return RowNavigation(
+            onNextPage: page < pages - 1 ? () => cubit.goTo(page + 1) : null,
+            onPreviousPage: page > 0 ? () => cubit.goTo(page - 1) : null,
+            onFirstPage: page > 0 ? () => cubit.goTo(0) : null,
+            onLastPage: page < pages - 1 ? () => cubit.goTo(pages - 1) : null,
+            child: Column(children: [
             Container(
               color: AppColors.background,
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.sm),
@@ -289,7 +300,7 @@ class PagedListPane<T> extends StatelessWidget {
             ),
             Expanded(child: list),
             if (items.length > state.pageSize) TablePager(total: items.length, page: page, pages: pages, pageSize: state.pageSize, filtered: false, compact: true),
-          ]);
+          ]));
         }),
       );
 }

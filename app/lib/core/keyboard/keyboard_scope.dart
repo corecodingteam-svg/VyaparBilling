@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../shared/theme.dart' show AppButtons;
 import 'app_command.dart';
 import 'key_combo.dart';
 import 'keyboard_prefs.dart';
@@ -91,7 +92,58 @@ KeyEventResult handleShortcutKey(KeyEvent event, KeyboardPrefs prefs) {
       return KeyEventResult.handled;
     }
   }
-  return KeyEventResult.ignored;
+  // No screen took it. A few commands still mean something everywhere: Search goes to the page's search box, and Save in
+  // a dialog presses the dialog's main button.
+  final fallback = _fallback(commands);
+  if (fallback == null) return KeyEventResult.ignored;
+  if (event is KeyDownEvent) fallback();
+  return KeyEventResult.handled;
+}
+
+VoidCallback? _fallback(List<AppCommand> commands) {
+  final focus = FocusManager.instance.primaryFocus;
+  final page = (focus is FocusScopeNode ? focus : focus?.nearestScope)?.context;
+  if (focus?.context == null || page == null) return null;
+  if (commands.contains(AppCommand.find)) {
+    final box = _searchBox(page);
+    if (box != null && box != focus) return box.requestFocus;
+  }
+  if (commands.any(const {AppCommand.save, AppCommand.submit, AppCommand.saveAndComplete}.contains) && ModalRoute.of(focus!.context!) is PopupRoute) {
+    return _mainButton(page);
+  }
+  return null;
+}
+
+/// The top-left search box (a text input whose keyboard action is Search) on the page.
+FocusNode? _searchBox(BuildContext page) {
+  final boxes = <FocusNode>[];
+  void visit(Element e) {
+    final w = e.widget;
+    if (w is EditableText && w.textInputAction == TextInputAction.search && w.focusNode.canRequestFocus && !w.readOnly) boxes.add(w.focusNode);
+    e.visitChildren(visit);
+  }
+
+  page.visitChildElements(visit);
+  boxes.sort((a, b) => (a.rect.top - b.rect.top).abs() > 4 ? a.rect.top.compareTo(b.rect.top) : a.rect.left.compareTo(b.rect.left));
+  return boxes.firstOrNull;
+}
+
+/// What a dialog's main button (its filled one, the last if there are several) does; null when there is none to press.
+/// A button that deletes (styled [AppButtons.destructive]) is never pressed this way: that takes a deliberate Enter on it.
+VoidCallback? _mainButton(BuildContext dialog) {
+  final buttons = <(Rect, VoidCallback)>[];
+  void visit(Element e) {
+    final w = e.widget;
+    final box = e.renderObject;
+    if (w is FilledButton && w.onPressed != null && !identical(w.style, AppButtons.destructive) && box is RenderBox && box.hasSize) {
+      buttons.add((box.localToGlobal(Offset.zero) & box.size, w.onPressed!));
+    }
+    e.visitChildren(visit);
+  }
+
+  dialog.visitChildElements(visit);
+  buttons.sort((a, b) => (a.$1.bottom - b.$1.bottom).abs() > 4 ? a.$1.bottom.compareTo(b.$1.bottom) : a.$1.right.compareTo(b.$1.right));
+  return buttons.lastOrNull?.$2;
 }
 
 /// Sends shortcut keys to the [KeyboardScope]s. One sits at the top of the app, above the Navigator, so it sees every key
