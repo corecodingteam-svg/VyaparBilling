@@ -11,18 +11,21 @@ class AppUser extends Equatable {
     this.features = const {},
     this.plan = 'full',
     this.platformAdmin = false,
+    this.master = false,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
         id: json['id'] as String,
         email: json['email'] as String,
         fullName: json['fullName'] as String,
-        firmId: ((json['firm'] as Map)['id'] as String?) ?? '',
-        firmName: (json['firm'] as Map)['name'] as String,
+        // The master admin belongs to no business.
+        firmId: ((json['firm'] as Map?)?['id'] as String?) ?? '',
+        firmName: ((json['firm'] as Map?)?['name'] as String?) ?? 'Master admin',
         role: (json['role'] as String?) ?? 'owner',
         features: {for (final e in ((json['features'] as Map?) ?? const {}).entries) '${e.key}': e.value == true},
         plan: (json['plan'] as String?) ?? 'full',
         platformAdmin: (json['platformAdmin'] as bool?) ?? false,
+        master: (json['master'] as bool?) ?? false,
       );
 
   final String id;
@@ -44,8 +47,11 @@ class AppUser extends Equatable {
   final Map<String, bool> features;
   final String plan;
 
-  /// Provider staff: may manage every business on this server.
+  /// May manage every business on this server (only the master admin).
   final bool platformAdmin;
+
+  /// The master admin: the provider's single account. It belongs to no business and only sees the master pages.
+  final bool master;
 
   /// Whether [name] is on for this business; every feature but `posOnly` is on unless the provider turned it off.
   bool feature(String name) => features[name] ?? name != 'posOnly';
@@ -64,10 +70,11 @@ class AppUser extends Equatable {
         features: features,
         plan: plan,
         platformAdmin: platformAdmin,
+        master: master,
       );
 
   @override
-  List<Object?> get props => [id, email, fullName, firmId, firmName, role, features, plan, platformAdmin];
+  List<Object?> get props => [id, email, fullName, firmId, firmName, role, features, plan, platformAdmin, master];
 }
 
 const roleLabels = {'owner': 'Owner', 'admin': 'Admin', 'accountant': 'Accountant', 'salesman': 'Salesman'};

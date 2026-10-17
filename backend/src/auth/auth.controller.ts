@@ -28,14 +28,14 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   changePassword(@CurrentUser() user: JwtPayload, @Body() dto: ChangePasswordDto) {
-    return this.auth.changePassword(user.sub, dto);
+    return this.auth.changePassword(user.sub, dto, user.master);
   }
 
   @Get('auth/me')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {
-    return this.auth.me(user.sub, user.firmId);
+    return user.master ? this.auth.masterMe(user.sub) : this.auth.me(user.sub, user.firmId);
   }
 
   /** Returns a new token that works in the chosen company. */

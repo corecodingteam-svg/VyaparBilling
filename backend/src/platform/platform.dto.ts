@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsInt, IsUUID, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { STATE_CODES } from '../common/states';
 import { PLANS } from '../auth/tenant-access';
 
@@ -55,4 +55,14 @@ export class UpdateTenantDto {
 
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(1000)
   maxDevices?: number;
+}
+
+export class SetUserDisabledDto {
+  @ApiProperty({ description: 'true = this login can no longer sign in (in any business)' }) @IsBoolean()
+  disabled: boolean;
+}
+
+export class SetOwnerDto {
+  @ApiProperty({ description: 'A user already in the business; the current owner becomes an admin' }) @IsUUID()
+  userId: string;
 }

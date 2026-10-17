@@ -36,8 +36,6 @@ services:
       PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/billing
       JWT_SECRET: ${BILLING_JWT_SECRET}
-      # Provider staff (comma-separated emails) who may manage every business at /platform. Empty = nobody.
-      PLATFORM_ADMIN_EMAILS: ${BILLING_PLATFORM_ADMIN_EMAILS:-}
       # Ed25519 key that signs licences (make with backend/scripts/license-keygen.js). The private half stays on the server only.
       LICENSE_SIGNING_PRIVATE_KEY: ${BILLING_LICENSE_SIGNING_PRIVATE_KEY:-}
       LICENSE_SUPPORT_CONTACT: ${BILLING_LICENSE_SUPPORT_CONTACT:-}

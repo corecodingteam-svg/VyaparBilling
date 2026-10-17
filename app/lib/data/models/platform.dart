@@ -101,3 +101,63 @@ class PlatformCatalog extends Equatable {
   @override
   List<Object?> get props => [plans, features];
 }
+
+/// A login in a business, as the master admin sees it.
+class TenantUser extends Equatable {
+  TenantUser.fromJson(Map<String, dynamic> j)
+    : id = j['id'] as String,
+      email = j['email'] as String,
+      fullName = j['fullName'] as String,
+      role = j['role'] as String,
+      disabled = (j['disabled'] as bool?) ?? false;
+  final String id;
+  final String email;
+  final String fullName;
+  final String role;
+  final bool disabled;
+
+  @override
+  List<Object?> get props => [id, email, fullName, role, disabled];
+}
+
+/// One thing the master admin did.
+class AuditEntry extends Equatable {
+  AuditEntry.fromJson(Map<String, dynamic> j)
+    : id = '${j['id']}',
+      at = DateTime.parse(j['at'] as String).toLocal(),
+      actor = j['actor'] as String,
+      action = j['action'] as String,
+      firmId = j['firmId'] as String?,
+      firmName = j['firmName'] as String?,
+      target = j['target'] as String?,
+      details = (j['details'] as Map?)?.cast<String, dynamic>() ?? const {};
+  final String id;
+  final DateTime at;
+  final String actor;
+  final String action;
+  final String? firmId;
+  final String? firmName;
+  final String? target;
+  final Map<String, dynamic> details;
+
+  @override
+  List<Object?> get props => [id];
+}
+
+/// "license.suspended" → "Licence suspended".
+const auditActionLabels = {
+  'master.login': 'Master admin signed in',
+  'master.created': 'Master admin account created',
+  'master.updated': 'Master admin account changed',
+  'master.password_changed': 'Master admin password changed',
+  'tenant.created': 'Business signed up',
+  'tenant.updated': 'Plan, features or licence changed',
+  'tenant.owner_changed': 'Owner changed',
+  'license.suspended': 'Licence suspended',
+  'license.revoked': 'Licence revoked',
+  'license.reinstated': 'Licence reinstated',
+  'device.removed': 'Device removed',
+  'user.password_reset': 'Password reset',
+  'user.disabled': 'Login disabled',
+  'user.enabled': 'Login enabled',
+};

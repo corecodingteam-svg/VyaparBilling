@@ -21,4 +21,23 @@ class PlatformRepository {
     await _api.delete('/platform/tenants/$tenantId/devices/$deviceId');
     return (await tenants()).firstWhere((t) => t.id == tenantId);
   }
+
+  Future<List<TenantUser>> users(String tenantId) async =>
+      [for (final j in await _api.get<List<dynamic>>('/platform/tenants/$tenantId/users')) TenantUser.fromJson(j as Map<String, dynamic>)];
+
+  /// Returns the new password, to hand to the person once.
+  Future<String> resetPassword(String tenantId, String userId) async =>
+      (await _api.post<Map<String, dynamic>>('/platform/tenants/$tenantId/users/$userId/reset-password'))['password'] as String;
+
+  Future<List<TenantUser>> setDisabled(String tenantId, String userId, bool disabled) async => [
+    for (final j in await _api.patch<List<dynamic>>('/platform/tenants/$tenantId/users/$userId', {'disabled': disabled})) TenantUser.fromJson(j as Map<String, dynamic>),
+  ];
+
+  Future<List<TenantUser>> setOwner(String tenantId, String userId) async => [
+    for (final j in await _api.post<List<dynamic>>('/platform/tenants/$tenantId/owner', {'userId': userId})) TenantUser.fromJson(j as Map<String, dynamic>),
+  ];
+
+  Future<List<AuditEntry>> audit({String? firmId}) async => [
+    for (final j in await _api.get<List<dynamic>>('/platform/audit', query: {'firmId': firmId, 'limit': 500})) AuditEntry.fromJson(j as Map<String, dynamic>),
+  ];
 }

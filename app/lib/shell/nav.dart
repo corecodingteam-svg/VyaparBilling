@@ -60,6 +60,12 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
   final salesman = user?.isSalesman ?? false;
   final admin = user?.isAdmin ?? false;
   bool on(String feature) => user?.feature(feature) ?? true;
+  if (user?.master ?? false) {
+    return const [
+      NavSection('Businesses', Icons.apartment_outlined, path: '/platform'),
+      NavSection('Audit log', Icons.history, path: '/platform-audit'),
+    ];
+  }
   if (user?.posOnly ?? false) {
     // A POS-only business sees the counter and the sync page; owners and admins also keep the item list and settings,
     // so they can stock the counter and switch this mode off.
@@ -68,7 +74,6 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
       const NavSection('Sync', Icons.sync, path: '/sync'),
       if (admin) const NavSection('Items', Icons.inventory_2_outlined, path: '/items'),
       if (admin) const NavSection('Settings', Icons.settings_outlined, path: '/settings'),
-      if (user?.platformAdmin ?? false) const NavSection('Businesses', Icons.apartment_outlined, path: '/platform'),
     ];
   }
   return [
@@ -155,7 +160,6 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
         // Salesmen cannot change business settings: only their account and theme.
         if (!salesman || g.$1 == 'general' || g.$1 == 'keyboard' || g.$1 == 'theme') NavLeaf(g.$2, '/settings?tab=${g.$1}'),
     ]),
-    if (user?.platformAdmin ?? false) const NavSection('Businesses', Icons.apartment_outlined, path: '/platform'),
   ];
 }
 
@@ -167,6 +171,12 @@ final navSections = navFor(
 
 /// Where a POS-only business sends a signed-in person who opened [location]: null if that page is allowed there.
 /// Everyone may use the counter, the receipt of a bill and the sync page; owners and admins also the item list and settings.
+/// Where the master admin is sent from [location]: only the master pages exist for that account.
+String? masterRedirect(String location) {
+  final path = Uri.parse(location).path;
+  return path == '/platform' || path == '/platform-audit' ? null : '/platform';
+}
+
 String? posOnlyRedirect(String location, {required bool admin, bool platformAdmin = false}) {
   final path = Uri.parse(location).path;
   final allowed = path == '/pos' ||

@@ -221,11 +221,18 @@ App:
   **`Billing-Setup.exe` installer** (Inno Setup script `app/windows/installer/billing.iss`: Start-menu and desktop shortcuts,
   optional start-at-sign-in for a counter PC, installs the Visual C++ runtime, upgrades in place). **Never run**, since a
   Windows build needs Windows; the installer script has not been compiled either. It is unsigned, so Windows SmartScreen will warn.
-- **Provider control of businesses (Businesses page, provider staff only):** the emails in `PLATFORM_ADMIN_EMAILS` get a
-  "Businesses" page to **sign up a new business** (company, owner login and first password, plan, licence end date), and per
-  business to change the plan, switch features (POS only, accounting, reports, manufacturing, integrations, online store,
-  location tracking, several companies), set a licence end date, and suspend or resume. These live apart from the business's
-  own settings, so its owner cannot change them. Plans are **Full billing** and **POS only** (a starting set of switches).
+- **Master admin (one account, the provider):** kept apart from every business's users (its own table, which can hold
+  only one row; created or changed on the server with `backend/scripts/set-master-admin.js`). It signs in on the normal
+  sign-in screen and sees only **Businesses** and **Audit log**; the server refuses it everywhere else. On Businesses it can
+  **sign up a new business** (company, owner login and first password, plan, licence end date, device limit), and per
+  business change the plan, switch features (POS only, accounting, reports, manufacturing, integrations, online store,
+  location tracking, several companies), set the licence end date and device limit, suspend / revoke / reinstate, remove
+  devices, and manage the business's **users**: reset a password (a random one, shown once), disable or enable a login
+  (a disabled login is refused at sign-in and on every request, in every business it belongs to), and make someone the
+  owner (the old owner becomes an admin). A suspended or revoked business is fully locked out.
+- **Audit log:** every master-admin action is recorded with who, when, which business and user, and what changed
+  (sign-in, sign-up, plan/feature/licence changes, suspend/revoke/reinstate, device removal, password reset, disable/enable,
+  owner change, master password change). Passwords are never recorded. Viewable for all businesses or one ("History").
 - **Server-side enforcement:** on every request the server reads the business's switches. **POS only** is deny-by-default:
   only items, bank accounts, sale bills and their receipts, the company profile, files and users are reachable; purchases,
   parties, reports, payments, expenses, backup, new companies etc. get 403. A suspended business, or one whose licence has

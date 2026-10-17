@@ -136,6 +136,19 @@ void main() {
     const owner = AppUser(id: 'u', email: 'o@x.in', fullName: 'O', firmId: 'f', firmName: 'F');
     const cashier = AppUser(id: 'c', email: 'c@x.in', fullName: 'C', firmId: 'f', firmName: 'F', role: 'salesman');
 
+    test('the master admin belongs to no business and only gets the master pages', () {
+      final m = AppUser.fromJson({'id': 'm', 'email': 'master@x.in', 'fullName': 'Master', 'role': 'master', 'firm': null, 'features': {}, 'plan': '', 'platformAdmin': true, 'master': true});
+      expect([m.master, m.firmId, m.firmName], [true, '', 'Master admin']);
+      expect(navFor(m, const FirmSettings()).map((s) => s.label), ['Businesses', 'Audit log']);
+      expect(masterRedirect('/'), '/platform');
+      expect(masterRedirect('/items'), '/platform');
+      expect(masterRedirect('/settings?tab=general'), '/platform');
+      expect(masterRedirect('/platform'), isNull);
+      expect(masterRedirect('/platform-audit?firm=abc'), isNull);
+      // A business user never sees the master pages in the sidebar.
+      expect(navFor(owner, const FirmSettings()).map((s) => s.label), isNot(contains('Businesses')));
+    });
+
     test('features come from the provider and default to on, except POS only', () {
       final u = AppUser.fromJson({'id': 'u', 'email': 'e@x.in', 'fullName': 'E', 'firm': {'id': 'f', 'name': 'F'}, 'features': {'reports': false, 'posOnly': true}, 'plan': 'pos', 'platformAdmin': true});
       expect([u.posOnly, u.feature('reports'), u.feature('accounting'), u.plan, u.platformAdmin], [true, false, true, 'pos', true]);
@@ -159,7 +172,7 @@ void main() {
           AppUser(id: u.id, email: u.email, fullName: u.fullName, firmId: u.firmId, firmName: u.firmName, role: u.role, features: const {'posOnly': true}, platformAdmin: platform);
       expect(navFor(posOnly(cashier), settings).map((s) => s.label), ['POS', 'Sync']);
       expect(navFor(posOnly(owner), settings).map((s) => s.label), ['POS', 'Sync', 'Items', 'Settings']);
-      expect(navFor(posOnly(owner, platform: true), settings).map((s) => s.label), ['POS', 'Sync', 'Items', 'Settings', 'Businesses']);
+      expect(navFor(posOnly(owner, platform: true), settings).map((s) => s.label), ['POS', 'Sync', 'Items', 'Settings']);
       expect(navFor(owner, settings).length, greaterThan(6));
     });
 

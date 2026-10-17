@@ -7,7 +7,12 @@ import '../../data/models/platform.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
+
+import '../settings/settings_screen.dart' show showChangePasswordDialog;
 import 'platform_cubit.dart';
+import 'tenant_users_cubit.dart';
 
 /// Provider only: the businesses on this server, signing one up, and switching what each may use.
 class PlatformScreen extends StatelessWidget {
@@ -51,6 +56,7 @@ class _PlatformView extends StatelessWidget {
                   icon: const Icon(Icons.add),
                   label: const Text('New business'),
                 ),
+                TextButton.icon(onPressed: () => showChangePasswordDialog(context), icon: const Icon(Icons.key_outlined), label: const Text('Change my password')),
               ],
             ),
             const SizedBox(height: AppSpace.xs),
@@ -114,6 +120,8 @@ class _TenantCard extends StatelessWidget {
               spacing: AppSpace.sm,
               children: [
                 OutlinedButton(onPressed: busy ? null : () => _openDialog(context, t), child: const Text('Edit')),
+                OutlinedButton(onPressed: () => _openUsers(context, t), child: const Text('Users')),
+                OutlinedButton(onPressed: () => context.go('/platform-audit?firm=${t.id}'), child: const Text('History')),
                 if (t.license.status != 'active')
                   OutlinedButton(onPressed: busy ? null : () => _resume(context, t), child: const Text('Reinstate'))
                 else ...[
@@ -359,6 +367,148 @@ class _TenantDialogState extends State<_TenantDialog> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------- a business's users
+
+Future<void> _openUsers(BuildContext context, Tenant t) => showDialog<void>(
+  context: context,
+  builder: (_) => BlocProvider(create: (ctx) => TenantUsersCubit(context.read(), t.id)..load(), child: _UsersDialog(tenant: t)),
+);
+
+const _roleNames = {'owner': 'Owner', 'admin': 'Admin', 'accountant': 'Accountant', 'salesman': 'Salesman'};
+
+class _UsersDialog extends StatelessWidget {
+  const _UsersDialog({required this.tenant});
+  final Tenant tenant;
+
+  Future<bool> _confirm(BuildContext context, String title, String message, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(width: AppSize.dialogSm, child: Text(message)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+          ],
+        ),
+      ) ??
+      false;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocConsumer<TenantUsersCubit, TenantUsersState>(
+      listenWhen: (a, b) => (b.error != null && a.error != b.error) || (b.newPassword != null && a.newPassword != b.newPassword),
+      listener: (context, s) {
+        if (s.error != null) showError(context, s.error!);
+        final np = s.newPassword;
+        if (np != null) {
+          showDialog<void>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('New password'),
+              content: SizedBox(
+                width: AppSize.dialogSm,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Give this to ${np.email}. It is shown only now; they can change it after signing in.'),
+                    const SizedBox(height: AppSpace.md),
+                    SelectableText(np.password, style: AppText.headline),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Clipboard.setData(ClipboardData(text: np.password)), child: const Text('Copy')),
+                FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Done')),
+              ],
+            ),
+          );
+        }
+      },
+      builder: (context, s) {
+        final cubit = context.read<TenantUsersCubit>();
+        return AlertDialog(
+          title: Text('Users · ${tenant.name}'),
+          content: SizedBox(
+            width: AppSize.dialogLg,
+            child: switch (s.status) {
+              LoadStatus.success => ListView(
+                shrinkWrap: true,
+                children: [
+                  Text('Disabling a login stops it in every business it belongs to.', style: AppText.helper),
+                  const SizedBox(height: AppSpace.sm),
+                  for (final u in s.users)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpace.sm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: AppSpace.sm,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(u.fullName, style: AppText.bodyStrong),
+                                Chip(label: Text(_roleNames[u.role] ?? u.role), visualDensity: VisualDensity.compact),
+                                if (u.disabled) Chip(label: const Text('Disabled'), backgroundColor: AppColors.dangerSoft, visualDensity: VisualDensity.compact),
+                              ],
+                            ),
+                            Text(u.email, style: AppText.helper),
+                            Wrap(
+                              spacing: AppSpace.xs,
+                              children: [
+                                TextButton(
+                                  onPressed: s.busy
+                                      ? null
+                                      : () async {
+                                          if (await _confirm(context, 'Reset password', 'Make a new password for ${u.email}? The old one stops working.', 'Reset')) {
+                                            await cubit.resetPassword(u);
+                                          }
+                                        },
+                                  child: const Text('Reset password'),
+                                ),
+                                TextButton(
+                                  onPressed: s.busy
+                                      ? null
+                                      : () async {
+                                          final off = !u.disabled;
+                                          if (!off || await _confirm(context, 'Disable login', '${u.email} will be signed out and cannot sign in, in any business.', 'Disable')) {
+                                            await cubit.setDisabled(u, off);
+                                          }
+                                        },
+                                  child: Text(u.disabled ? 'Enable' : 'Disable'),
+                                ),
+                                if (u.role != 'owner')
+                                  TextButton(
+                                    onPressed: s.busy
+                                        ? null
+                                        : () async {
+                                            if (await _confirm(context, 'Change owner', 'Make ${u.email} the owner of ${tenant.name}? The current owner becomes an admin.', 'Make owner')) {
+                                              await cubit.makeOwner(u);
+                                            }
+                                          },
+                                    child: const Text('Make owner'),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              LoadStatus.failure => Text(s.error ?? 'Could not load', style: AppText.error),
+              _ => const SizedBox(height: 120, child: LoadingView()),
+            },
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+        );
+      },
     );
   }
 }

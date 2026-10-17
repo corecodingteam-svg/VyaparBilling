@@ -17,10 +17,15 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     if (!(await super.canActivate(context))) return false;
     // What the provider allows this business (POS only, features, licence, suspension).
     const req = context.switchToHttp().getRequest();
+    const path = String(req.path ?? '').replace(/^\/api\/v1/, '') || '/';
+    if ((req.user as JwtPayload).master) {
+      // The master admin account has no business: it may only manage businesses, and its own sign-in.
+      if (path.startsWith('/platform') || path === '/auth/me' || path === '/auth/change-password') return true;
+      throw new ForbiddenException({ code: 'MASTER_ONLY', message: 'The master admin account only manages businesses.' });
+    }
     const tenant = (req.user as JwtPayload).tenant;
     if (tenant) {
-      const path = String(req.path ?? '').replace(/^\/api\/v1/, '') || '/';
-      const refusal = tenantRefusal({ method: req.method, path, query: req.query ?? {}, body: req.body }, tenant);
+      const refusal = tenantRefusal({ method: req.method, path: path, query: req.query ?? {}, body: req.body }, tenant);
       if (refusal) throw new ForbiddenException(refusal);
     }
     const allowed = this.reflector.getAllAndOverride<MemberRole[] | undefined>(ROLES_KEY, [context.getHandler(), context.getClass()]);

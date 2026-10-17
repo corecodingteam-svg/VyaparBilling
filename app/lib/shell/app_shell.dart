@@ -31,6 +31,7 @@ class AppShell extends StatelessWidget {
     final isSalesman = context.select((AuthBloc b) => b.state.user?.isSalesman ?? false);
     final collapsed = wide && context.watch<SidebarCubit>().state;
     final posOnly = context.select((AuthBloc b) => b.state.user?.posOnly ?? false);
+    final master = context.select((AuthBloc b) => b.state.user?.master ?? false);
     // Bills kept on the device, or a daily sync not yet done, are shown above every page.
     final body = Column(
       children: [
@@ -64,7 +65,9 @@ class AppShell extends StatelessWidget {
             TrackingStatus.off => const SizedBox.shrink(),
           },
         ),
-        if (MediaQuery.sizeOf(context).width >= AppSize.compactBar)
+        if (master)
+          const SizedBox.shrink()
+        else if (MediaQuery.sizeOf(context).width >= AppSize.compactBar)
           OutlinedButton.icon(
             onPressed: () => showQuickSearch(context),
             icon: const Icon(Icons.search),
@@ -73,7 +76,7 @@ class AppShell extends StatelessWidget {
         else
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => showQuickSearch(context)),
         const SizedBox(width: AppSpace.sm),
-        if (!posOnly && MediaQuery.sizeOf(context).width >= AppSize.phone) ...[
+        if (!posOnly && !master && MediaQuery.sizeOf(context).width >= AppSize.phone) ...[
           FilledButton.icon(onPressed: () => context.push('/sale-invoices/new'), icon: const Icon(Icons.add), label: const Text('Add Sale')),
           const SizedBox(width: AppSpace.sm),
           if (!isSalesman)

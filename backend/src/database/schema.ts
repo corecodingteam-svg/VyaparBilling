@@ -74,6 +74,27 @@ export interface LicenseDevicesTable {
   last_seen_at: Timestamp;
 }
 
+export interface MasterAdminTable {
+  id: Generated<string>;
+  singleton: Generated<boolean>;
+  email: string;
+  full_name: string;
+  password_hash: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface PlatformAuditTable {
+  id: Generated<string>;
+  at: Timestamp;
+  actor_email: string;
+  action: string;
+  firm_id: string | null;
+  firm_name: string | null;
+  target: string | null;
+  details: ColumnType<Record<string, unknown>, string | undefined, string>;
+}
+
 export interface UsersTable {
   id: Generated<string>;
   firm_id: string;
@@ -81,6 +102,8 @@ export interface UsersTable {
   password_hash: string;
   full_name: string;
   role: Generated<string>;
+  /** Set when the master admin has disabled this login. */
+  disabled_at: Timestamp | null;
   created_at: Timestamp;
 }
 
@@ -745,6 +768,8 @@ export interface Database {
   expense_item_defs: ExpenseItemDefsTable;
   firm_members: FirmMembersTable;
   licenses: LicensesTable;
+  master_admin: MasterAdminTable;
+  platform_audit: PlatformAuditTable;
   license_devices: LicenseDevicesTable;
   ledger_accounts: LedgerAccountsTable;
   journal_entries: JournalEntriesTable;

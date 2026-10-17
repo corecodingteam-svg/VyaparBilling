@@ -58,6 +58,7 @@ import 'features/parties/party_groups_screen.dart';
 import 'features/stock/godowns_screen.dart';
 import 'features/payments/payments_screen.dart';
 import 'features/pos/pos_screen.dart';
+import 'features/platform/audit_screen.dart';
 import 'features/platform/platform_screen.dart';
 import 'features/sync/sync_screen.dart';
 import 'data/models/firm.dart';
@@ -258,6 +259,7 @@ GoRouter buildRouter(AuthBloc auth) {
           if (authPages.contains(loc) || loc == '/splash') return '/';
           // A POS-only business only gets the counter and the pages that serve it.
           final user = auth.state.user;
+          if (user != null && user.master) return masterRedirect(loc);
           if (user != null && user.posOnly) return posOnlyRedirect(loc, admin: user.isAdmin, platformAdmin: user.platformAdmin);
           return null;
       }
@@ -354,6 +356,10 @@ GoRouter buildRouter(AuthBloc auth) {
           GoRoute(path: '/pos', builder: (_, _) => const PosScreen()),
           GoRoute(path: '/sync', builder: (_, _) => const SyncScreen()),
           GoRoute(path: '/platform', builder: (_, _) => const PlatformScreen()),
+          GoRoute(
+            path: '/platform-audit',
+            builder: (_, state) => AuditScreen(key: ValueKey('audit-${state.uri.queryParameters['firm']}'), firmId: state.uri.queryParameters['firm']),
+          ),
           GoRoute(path: '/bank-accounts', builder: (_, _) => const BankAccountsScreen()),
           GoRoute(path: '/cash-in-hand', builder: (_, _) => const CashInHandScreen()),
           GoRoute(path: '/cheques', builder: (_, _) => const ChequesScreen()),
@@ -411,18 +417,19 @@ class _BillingAppState extends State<BillingApp> {
     // The PIN lock covers everything once someone is signed in; the sign-in pages are not locked.
     builder: (context, child) => BlocBuilder<KeyboardNavCubit, bool>(
       builder: (context, enterNav) => EnterKeyNavigation(enabled: enterNav, child: BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, auth) => auth.status == AuthStatus.signedIn
-          ? LicenseGate(
-              child: AppLock(
-                onForgot: () {
-                  // Signing in again with the password proves it is the owner, so the PIN is cleared.
-                  context.read<LockCubit>().forgot();
-                  context.read<AuthBloc>().add(const AuthLogoutRequested());
-                },
-                child: child!,
-              ),
-            )
-          : child!,
+      builder: (context, auth) {
+        if (auth.status != AuthStatus.signedIn) return child!;
+        final locked = AppLock(
+          onForgot: () {
+            // Signing in again with the password proves it is the owner, so the PIN is cleared.
+            context.read<LockCubit>().forgot();
+            context.read<AuthBloc>().add(const AuthLogoutRequested());
+          },
+          child: child!,
+        );
+        // The master admin has no business, so there is no business licence to check.
+        return (auth.user?.master ?? false) ? locked : LicenseGate(child: locked);
+      },
     ))),
   ));
 }

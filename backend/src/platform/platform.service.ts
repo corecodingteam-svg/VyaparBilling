@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
+import { randomInt } from 'crypto';
 import { sql } from 'kysely';
 import { expiresAtFor, lastDayOf } from '../licensing/license-token';
 import { createFirm } from '../auth/auth.service';
 import { effectiveFeatures, FEATURE_DEFAULTS, FEATURE_LABELS, PLANS } from '../auth/tenant-access';
 import { Db, KYSELY } from '../database/database.module';
+import { audit } from './audit';
 import { CreateTenantDto, UpdateTenantDto } from './platform.dto';
 
 /** Only the switches that exist, and only true/false values. */
@@ -76,7 +78,7 @@ export class PlatformService {
   }
 
   /** Signs up a new business: the company, its owner's login, and the plan it is on. */
-  async create(dto: CreateTenantDto) {
+  async create(actor: string, dto: CreateTenantDto) {
     const extra = cleanFeatures(dto.features);
     const taken = await this.db.selectFrom('users').select('id').where('email', '=', dto.ownerEmail).executeTakeFirst();
     if (taken) throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'An account with this email already exists.' });
@@ -96,6 +98,13 @@ export class PlatformService {
         .returning('id')
         .executeTakeFirstOrThrow();
       await trx.insertInto('firm_members').values({ firm_id: firmId, user_id: user.id, role: 'owner' }).execute();
+      await audit(trx, actor, {
+        action: 'tenant.created',
+        firmId,
+        firmName: dto.firmName,
+        target: dto.ownerEmail,
+        details: { plan: dto.plan, features: extra, licenceExpiresOn: dto.licenceExpiresOn ?? null, maxDevices: dto.maxDevices ?? 5 },
+      });
       return firmId;
     });
     return this.get(id);
@@ -107,8 +116,8 @@ export class PlatformService {
     return row;
   }
 
-  async update(id: string, dto: UpdateTenantDto) {
-    const current = await this.db.selectFrom('firms').select(['features']).where('id', '=', id).executeTakeFirst();
+  async update(actor: string, id: string, dto: UpdateTenantDto) {
+    const current = await this.db.selectFrom('firms').select(['features', 'name']).where('id', '=', id).executeTakeFirst();
     if (!current) throw new NotFoundException({ code: 'NOT_FOUND', message: 'That business was not found.' });
     const firmSet: Record<string, unknown> = {};
     if (dto.plan !== undefined || dto.features !== undefined) {
@@ -130,15 +139,111 @@ export class PlatformService {
       if (Object.keys(licenseSet).length || Object.keys(firmSet).length) {
         await trx.updateTable('licenses').set({ ...licenseSet, version: sql`version + 1`, updated_at: new Date() } as never).where('firm_id', '=', id).execute();
       }
+      // Suspend / revoke / reinstate get their own entry so they are easy to find; any other change is "updated".
+      const action = dto.status === 'active' ? 'license.reinstated' : dto.status ? `license.${dto.status}` : 'tenant.updated';
+      await audit(trx, actor, { action, firmId: id, firmName: current.name, details: { ...dto } });
     });
     return this.get(id);
   }
 
   /** Frees a device slot, e.g. for a lost phone. */
-  async removeDevice(firmId: string, deviceId: string) {
+  async removeDevice(actor: string, firmId: string, deviceId: string) {
+    const firm = await this.firm(firmId);
     const license = await this.db.selectFrom('licenses').select('id').where('firm_id', '=', firmId).executeTakeFirst();
     if (!license) throw new NotFoundException({ code: 'NOT_FOUND', message: 'That business was not found.' });
-    await this.db.deleteFrom('license_devices').where('license_id', '=', license.id).where('id', '=', deviceId).execute();
+    const removed = await this.db.deleteFrom('license_devices').where('license_id', '=', license.id).where('id', '=', deviceId).returning(['installation_id', 'device_name']).executeTakeFirst();
+    if (removed) {
+      await audit(this.db, actor, { action: 'device.removed', firmId, firmName: firm.name, target: `${removed.device_name ?? 'device'} ${removed.installation_id.slice(0, 8)}` });
+    }
     return this.get(firmId);
+  }
+
+  private async firm(id: string) {
+    const firm = await this.db.selectFrom('firms').select(['id', 'name']).where('id', '=', id).executeTakeFirst();
+    if (!firm) throw new NotFoundException({ code: 'NOT_FOUND', message: 'That business was not found.' });
+    return firm;
+  }
+
+  /** A user of [firmId], or 404: the master admin acts on a business's users only through that business. */
+  private async member(firmId: string, userId: string) {
+    const m = await this.db
+      .selectFrom('firm_members as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .select(['u.id', 'u.email', 'u.full_name', 'u.disabled_at', 'm.role'])
+      .where('m.firm_id', '=', firmId)
+      .where('m.user_id', '=', userId)
+      .executeTakeFirst();
+    if (!m) throw new NotFoundException({ code: 'NOT_FOUND', message: 'That user is not in this business.' });
+    return m;
+  }
+
+  // ---------------------------------------------------------------- a business's users
+
+  async users(firmId: string) {
+    await this.firm(firmId);
+    const rows = await this.db
+      .selectFrom('firm_members as m')
+      .innerJoin('users as u', 'u.id', 'm.user_id')
+      .select(['u.id', 'u.email', 'u.full_name', 'u.disabled_at', 'u.created_at', 'm.role'])
+      .where('m.firm_id', '=', firmId)
+      .orderBy('m.created_at')
+      .execute();
+    return rows.map((r) => ({ id: r.id, email: r.email, fullName: r.full_name, role: r.role, disabled: r.disabled_at !== null, createdAt: r.created_at }));
+  }
+
+  /** A new random password for a user (e.g. an owner who forgot theirs). Returned once; only the fact is logged. */
+  async resetPassword(actor: string, firmId: string, userId: string) {
+    const firm = await this.firm(firmId);
+    const m = await this.member(firmId, userId);
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const password = Array.from({ length: 12 }, () => alphabet[randomInt(alphabet.length)]).join('');
+    await this.db.updateTable('users').set({ password_hash: await bcrypt.hash(password, 10) }).where('id', '=', userId).execute();
+    await audit(this.db, actor, { action: 'user.password_reset', firmId, firmName: firm.name, target: m.email });
+    return { email: m.email, password };
+  }
+
+  /** Disables or re-enables a login. A login can be in several businesses; disabling it stops it everywhere. */
+  async setDisabled(actor: string, firmId: string, userId: string, disabled: boolean) {
+    const firm = await this.firm(firmId);
+    const m = await this.member(firmId, userId);
+    await this.db.updateTable('users').set({ disabled_at: disabled ? new Date() : null }).where('id', '=', userId).execute();
+    await audit(this.db, actor, { action: disabled ? 'user.disabled' : 'user.enabled', firmId, firmName: firm.name, target: m.email });
+    return this.users(firmId);
+  }
+
+  /** Makes [userId] the business's owner; whoever was owner becomes an admin. */
+  async setOwner(actor: string, firmId: string, userId: string) {
+    const firm = await this.firm(firmId);
+    const m = await this.member(firmId, userId);
+    await this.db.transaction().execute(async (trx) => {
+      const before = await trx
+        .selectFrom('firm_members as m')
+        .innerJoin('users as u', 'u.id', 'm.user_id')
+        .select('u.email')
+        .where('m.firm_id', '=', firmId)
+        .where('m.role', '=', 'owner')
+        .execute();
+      await trx.updateTable('firm_members').set({ role: 'admin' }).where('firm_id', '=', firmId).where('role', '=', 'owner').where('user_id', '<>', userId).execute();
+      await trx.updateTable('firm_members').set({ role: 'owner' }).where('firm_id', '=', firmId).where('user_id', '=', userId).execute();
+      await audit(trx, actor, { action: 'tenant.owner_changed', firmId, firmName: firm.name, target: m.email, details: { previousOwners: before.map((b) => b.email) } });
+    });
+    return this.users(firmId);
+  }
+
+  // ---------------------------------------------------------------- audit log
+
+  async auditLog(firmId: string | undefined, limit: number) {
+    let q = this.db.selectFrom('platform_audit').selectAll().orderBy('at', 'desc').orderBy('id', 'desc').limit(Math.min(Math.max(limit, 1), 1000));
+    if (firmId && /^[0-9a-f-]{36}$/i.test(firmId)) q = q.where('firm_id', '=', firmId);
+    return (await q.execute()).map((r) => ({
+      id: String(r.id),
+      at: r.at,
+      actor: r.actor_email,
+      action: r.action,
+      firmId: r.firm_id,
+      firmName: r.firm_name,
+      target: r.target,
+      details: r.details,
+    }));
   }
 }

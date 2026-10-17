@@ -12,7 +12,7 @@ import { Database } from '../database/schema';
 import { AddMemberDto, ChangePasswordDto, CreateFirmDto, LoginDto, RegisterDto, UpdateMemberDto } from './dto/auth.dto';
 import { JwtPayload } from './jwt.strategy';
 import { effectiveFeatures } from './tenant-access';
-import { isPlatformAdmin } from './platform-admin';
+import { audit } from '../platform/audit';
 import { lastDayOf } from '../licensing/license-token';
 
 // Compared against when the email is unknown, so response time doesn't reveal which emails exist.
@@ -59,13 +59,22 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.db
       .selectFrom('users')
-      .select(['id', 'firm_id', 'password_hash'])
+      .select(['id', 'firm_id', 'password_hash', 'disabled_at'])
       .where('email', '=', dto.email)
       .executeTakeFirst();
+    // The master admin signs in on the same screen; their account is not a business user.
+    if (!user) {
+      const master = await this.db.selectFrom('master_admin').select(['id', 'email', 'password_hash']).where('email', '=', dto.email).executeTakeFirst();
+      if (master && (await bcrypt.compare(dto.password, master.password_hash))) {
+        await audit(this.db, master.email, { action: 'master.login' });
+        return this.issueMaster(master.id);
+      }
+    }
     const ok = await bcrypt.compare(dto.password, user?.password_hash ?? DUMMY_HASH);
     if (!user || !ok) {
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' });
     }
+    if (user.disabled_at) throw new UnauthorizedException({ code: 'ACCOUNT_DISABLED', message: 'This login has been disabled. Contact your provider.' });
     // Open the company they last used, or any company they still belong to.
     const memberships = await this.db.selectFrom('firm_members').select('firm_id').where('user_id', '=', user.id).orderBy('created_at').execute();
     const firmId = memberships.find((m) => m.firm_id === user.firm_id)?.firm_id ?? memberships[0]?.firm_id;
@@ -73,7 +82,16 @@ export class AuthService {
     return this.issue(user.id, firmId);
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async changePassword(userId: string, dto: ChangePasswordDto, master = false) {
+    if (master) {
+      const admin = await this.db.selectFrom('master_admin').select(['password_hash', 'email']).where('id', '=', userId).executeTakeFirst();
+      if (!admin || !(await bcrypt.compare(dto.currentPassword, admin.password_hash))) {
+        throw new UnauthorizedException({ code: 'WRONG_PASSWORD', message: 'Current password is incorrect.' });
+      }
+      await this.db.updateTable('master_admin').set({ password_hash: await bcrypt.hash(dto.newPassword, 10), updated_at: new Date() }).where('id', '=', userId).execute();
+      await audit(this.db, admin.email, { action: 'master.password_changed' });
+      return;
+    }
     const user = await this.db.selectFrom('users').select('password_hash').where('id', '=', userId).executeTakeFirst();
     if (!user || !(await bcrypt.compare(dto.currentPassword, user.password_hash))) {
       throw new UnauthorizedException({ code: 'WRONG_PASSWORD', message: 'Current password is incorrect.' });
@@ -103,8 +121,21 @@ export class AuthService {
       plan: row.plan,
       licenceExpiresOn: lastDayOf(row.expires_at),
       licenceStatus: row.license_status ?? 'active',
-      platformAdmin: isPlatformAdmin(row.email),
+      platformAdmin: false,
     };
+  }
+
+  /** Who the master admin is: no business, only the master pages. */
+  async masterMe(id: string) {
+    const admin = await this.db.selectFrom('master_admin').select(['id', 'email', 'full_name']).where('id', '=', id).executeTakeFirst();
+    if (!admin) throw new NotFoundException();
+    return { id: admin.id, email: admin.email, fullName: admin.full_name, role: 'master', firm: null, features: {}, plan: '', platformAdmin: true, master: true };
+  }
+
+  async issueMaster(id: string) {
+    const user = await this.masterMe(id);
+    const payload = { sub: id, firmId: '', email: user.email, master: true };
+    return { accessToken: await this.jwt.signAsync(payload), user };
   }
 
   /** A token for [userId] working in [firmId]; that company is remembered as their current one. */

@@ -1,5 +1,4 @@
 import { effectiveFeatures, PLANS, tenantRefusal, TenantInfo } from '../src/auth/tenant-access';
-import { isPlatformAdmin } from '../src/auth/platform-admin';
 
 const tenant = (over: Partial<Omit<TenantInfo, 'features'>> & { features?: Record<string, boolean> } = {}): TenantInfo => ({
   plan: 'full',
@@ -86,10 +85,4 @@ describe('features and platform admins', () => {
     expect([f.posOnly, f.reports, (f as unknown as Record<string, unknown>).bogus]).toEqual([true, true, undefined]);
   });
 
-  it('platform admins come only from the environment list', () => {
-    expect(isPlatformAdmin('Me@x.in', ' me@x.in, you@x.in ')).toBe(true);
-    expect(isPlatformAdmin('other@x.in', 'me@x.in')).toBe(false);
-    expect(isPlatformAdmin('me@x.in', undefined)).toBe(false);
-    expect(isPlatformAdmin('me@x.in', '')).toBe(false);
-  });
 });
