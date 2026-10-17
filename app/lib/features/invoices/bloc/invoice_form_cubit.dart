@@ -890,6 +890,28 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
     emit(state.copyWith(lines: rest.isEmpty ? [_blank()] : rest));
   }
 
+  /// An item code scanned or typed into the scan box: one more of that item. The row already holding it (without a
+  /// batch or serial numbers, which belong to one unit) gets one more; otherwise the first empty row gets the item.
+  /// Returns that row's uid, or null when no item has the code.
+  int? addByCode(String code) {
+    final item = itemByCode(state.items, code);
+    if (item == null) return null;
+    final same = state.lines.where((l) => l.itemId == item.id && l.batchNo.isEmpty && l.serialNos.isEmpty).firstOrNull;
+    if (same != null) {
+      lineQtyChanged(same.uid, numText((parseNum(same.qty) ?? 0) + 1));
+      // The quantity box shows what it was given when built; a new rowRev rebuilds it with the new count.
+      _updateLine(same.uid, (l) => l.copyWith(rowRev: l.rowRev + 1));
+      return same.uid;
+    }
+    var blank = state.lines.where((l) => l.isBlank).firstOrNull;
+    if (blank == null) {
+      blank = _blank();
+      emit(state.copyWith(lines: [...state.lines, blank]));
+    }
+    itemSelected(blank.uid, item);
+    return blank.uid;
+  }
+
   /// Picking an item fills its unit, price and default discount, and opens a fresh row below.
   void itemSelected(int uid, Item item) {
     final isSale = state.kind.usesSalePrice;

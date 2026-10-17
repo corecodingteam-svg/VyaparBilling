@@ -191,3 +191,11 @@ class Unit extends Equatable {
 }
 
 const gstRateOptions = <num>[0, 0.1, 0.25, 1.5, 3, 5, 6, 12, 18, 28, 40];
+
+/// The item whose code is exactly [code] (case and surrounding spaces aside), as a barcode scanner types it; null when
+/// none has it.
+Item? itemByCode(Iterable<Item> items, String code) {
+  final c = code.trim().toLowerCase();
+  if (c.isEmpty) return null;
+  return items.where((i) => (i.itemCode ?? '').trim().toLowerCase() == c).firstOrNull;
+}

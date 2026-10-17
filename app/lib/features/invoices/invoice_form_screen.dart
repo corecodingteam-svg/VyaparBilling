@@ -10,6 +10,7 @@ import '../../data/models/invoice.dart';
 import '../../data/models/item.dart';
 import '../../data/models/party.dart';
 import '../../shared/format.dart';
+import '../../shared/scan_field.dart';
 import '../../shared/selection_cubit.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
@@ -61,6 +62,15 @@ class _FormFocus {
 
   /// Once the next frame is drawn (the row may be new or rebuilt), put the cursor in row [uid]'s item box.
   void item(int uid) => afterNextFrame(() => items[uid]?.requestFocus());
+
+  /// Once the next frame is drawn, put the cursor in row [uid]'s quantity (the box after its item).
+  void quantity(int uid) => afterNextFrame(() {
+        final item = items[uid];
+        if (item == null) return;
+        item.requestFocus();
+        FocusManager.instance.applyFocusChangesIfNeeded();
+        item.nextFocus();
+      });
 
   /// The amount received, or the "received in full" box while the amount is filled in for you.
   void payment() => (received.context != null ? received : receivedInFull).requestFocus();
@@ -528,34 +538,51 @@ class _LinesCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<InvoiceFormCubit>();
     const head = TextStyle(fontWeight: FontWeight.w600, fontSize: AppFont.small);
+    int? scanned; // the row the last scan went to
     return Card(
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (state.gstEnabled)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.sm, AppSpace.md, AppSpace.sm),
-              child: Row(
-                children: [
-                  const Text('Prices are entered', style: AppText.body),
-                  const SizedBox(width: AppSpace.sm),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<bool>(
-                      value: state.pricesIncludeTax,
-                      isDense: true,
-                      // Based on the theme's style so the app font is kept.
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: AppFont.body, fontWeight: FontWeight.w600, color: AppColors.primary),
-                      items: const [
-                        DropdownMenuItem(value: false, child: Text('Without Tax')),
-                        DropdownMenuItem(value: true, child: Text('With Tax')),
-                      ],
-                      onChanged: (v) => cubit.pricesIncludeTaxChanged(v!),
-                    ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpace.md, AppSpace.sm, AppSpace.md, AppSpace.sm),
+            child: Wrap(
+              spacing: AppSpace.lg,
+              runSpacing: AppSpace.sm,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                // A scanned or typed item code adds the item; the box is then ready for the next scan.
+                SizedBox(
+                  width: AppSize.fieldMd,
+                  child: ScanField(
+                    onCode: (code) => (scanned = cubit.addByCode(code)) != null,
+                    onAddedMoveTo: () => context.read<_FormFocus>().quantity(scanned!),
                   ),
-                ],
-              ),
+                ),
+                if (state.gstEnabled)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Prices are entered', style: AppText.body),
+                      const SizedBox(width: AppSpace.sm),
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<bool>(
+                          value: state.pricesIncludeTax,
+                          isDense: true,
+                          // Based on the theme's style so the app font is kept.
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: AppFont.body, fontWeight: FontWeight.w600, color: AppColors.primary),
+                          items: const [
+                            DropdownMenuItem(value: false, child: Text('Without Tax')),
+                            DropdownMenuItem(value: true, child: Text('With Tax')),
+                          ],
+                          onChanged: (v) => cubit.pricesIncludeTaxChanged(v!),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
+          ),
           if (wide)
             Container(
               color: AppColors.background,

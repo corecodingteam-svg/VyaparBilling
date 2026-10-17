@@ -8,6 +8,7 @@ import '../../data/models/invoice.dart';
 import '../../data/models/item.dart';
 import '../../shared/format.dart';
 import '../../shared/theme.dart';
+import '../../shared/scan_field.dart';
 import '../../shared/widgets.dart';
 import '../payments/split_parts_editor.dart';
 import '../../core/sync_cubit.dart';
@@ -94,14 +95,17 @@ class _ItemPicker extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.all(AppSpace.md),
-            child: TextField(
+            child: ScanField(
               autofocus: isWide(context),
               onChanged: cubit.searchChanged,
-              // Enter adds the only match: quick for typing or scanning an item code.
-              onSubmitted: (_) {
-                if (items.length == 1) cubit.add(items.single);
+              // Enter adds the item with exactly that code (a scan), or else the only match of what was typed.
+              onCode: (code) {
+                final item = itemByCode(state.items, code) ?? (items.length == 1 ? items.single : null);
+                if (item != null) cubit.add(item);
+                return item != null;
               },
-              decoration: const InputDecoration(hintText: 'Search item name or scan/type item code', prefixIcon: Icon(Icons.search)),
+              hint: 'Search item name or scan/type item code',
+              notFound: (code) => 'No item has the code "$code", and more than one or none matches it. Type more, or tap the item.',
             ),
           ),
           Expanded(

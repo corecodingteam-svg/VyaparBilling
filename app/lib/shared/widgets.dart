@@ -262,32 +262,61 @@ class AutocompleteOptions<T extends Object> extends StatelessWidget {
   final Widget Function(T) trailing;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.topLeft,
-    child: Material(
-      elevation: 6,
-      shadowColor: AppColors.scrim,
-      borderRadius: AppRadius.mdAll,
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: 260, maxWidth: width),
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
-          children: [
-            for (final o in options)
-              ListTile(
-                dense: true,
-                title: Text(title(o), overflow: TextOverflow.ellipsis),
-                subtitle: subtitle == null ? null : Text(subtitle!(o), overflow: TextOverflow.ellipsis),
-                trailing: trailing(o),
-                onTap: () => onSelected(o),
-              ),
-          ],
+  Widget build(BuildContext context) {
+    // The suggestion ↑ and ↓ have reached, which Enter picks: shown, and scrolled into view.
+    final highlighted = AutocompleteHighlightedOption.of(context);
+    final list = options.toList();
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 6,
+        shadowColor: AppColors.scrim,
+        borderRadius: AppRadius.mdAll,
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: 260, maxWidth: width),
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: [
+              for (var i = 0; i < list.length; i++)
+                _Suggestion(
+                  highlighted: i == highlighted,
+                  child: ListTile(
+                    dense: true,
+                    selected: i == highlighted,
+                    selectedTileColor: AppFocus.fill,
+                    selectedColor: AppColors.text,
+                    title: Text(title(list[i]), overflow: TextOverflow.ellipsis),
+                    subtitle: subtitle == null ? null : Text(subtitle!(list[i]), overflow: TextOverflow.ellipsis),
+                    trailing: trailing(list[i]),
+                    onTap: () => onSelected(list[i]),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+/// Keeps the highlighted suggestion in view as ↑ and ↓ move through a long list.
+class _Suggestion extends StatelessWidget {
+  const _Suggestion({required this.highlighted, required this.child});
+  final bool highlighted;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (highlighted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) Scrollable.ensureVisible(context, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd);
+        if (context.mounted) Scrollable.ensureVisible(context, alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart);
+      });
+    }
+    return child;
+  }
 }
 
 /// "Bank Account" picker shown next to Payment Type when the money goes through a bank.

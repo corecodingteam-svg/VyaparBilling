@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/keyboard/row_navigation.dart';
 import '../../data/models/extras.dart';
 import '../../data/models/invoice.dart';
 import '../../data/repositories/utilities_repository.dart';
@@ -70,7 +72,7 @@ Future<void> showQuickSearch(BuildContext context) async {
   final router = GoRouter.maybeOf(context);
   final hit = await showDialog<SearchHit>(
     context: context,
-    builder: (_) => BlocProvider(create: (_) => SearchCubit(context.read()), child: const _QuickSearchDialog()),
+    builder: (_) => BlocProvider(create: (_) => SearchCubit(context.read()), child: const QuickSearchDialog()),
   );
   if (hit == null) return;
   final path = searchHitPath(hit);
@@ -79,8 +81,9 @@ Future<void> showQuickSearch(BuildContext context) async {
 
 const _icons = {'party': Icons.person_outline, 'item': Icons.inventory_2_outlined, 'invoice': Icons.receipt_long_outlined, 'payment': Icons.payments_outlined, 'expense': Icons.account_balance_wallet_outlined};
 
-class _QuickSearchDialog extends StatelessWidget {
-  const _QuickSearchDialog();
+/// The quick search box and its results; needs a [SearchCubit] above it.
+class QuickSearchDialog extends StatelessWidget {
+  const QuickSearchDialog({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +98,16 @@ class _QuickSearchDialog extends StatelessWidget {
           builder: (context, s) => Column(mainAxisSize: MainAxisSize.min, children: [
             Padding(
               padding: const EdgeInsets.all(AppSpace.md),
-              child: TextField(
+              // ↓ goes from the box into the results; there ↑ ↓ move, Enter opens one and Esc closes.
+              child: Focus(
+                canRequestFocus: false,
+                skipTraversal: true,
+                onKeyEvent: (_, e) {
+                  if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.arrowDown || s.hits.isEmpty) return KeyEventResult.ignored;
+                  FocusManager.instance.primaryFocus?.nextFocus();
+                  return KeyEventResult.handled;
+                },
+                child: TextField(
                 autofocus: true,
                 onChanged: cubit.queryChanged,
                 // Enter opens the first result.
@@ -105,7 +117,7 @@ class _QuickSearchDialog extends StatelessWidget {
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: s.loading ? const Padding(padding: EdgeInsets.all(AppSpace.md), child: InlineSpinner()) : null,
                 ),
-              ),
+              )),
             ),
             const Divider(),
             if (s.error != null)
@@ -116,7 +128,7 @@ class _QuickSearchDialog extends StatelessWidget {
               Padding(padding: const EdgeInsets.all(AppSpace.xl), child: Text('Nothing found for "${s.query}".', style: const TextStyle(color: AppColors.textMuted)))
             else
               Flexible(
-                child: ListView(shrinkWrap: true, children: [
+                child: RowNavigation(child: ListView(shrinkWrap: true, children: [
                   for (final h in s.hits)
                     ListTile(
                       dense: true,
@@ -125,7 +137,7 @@ class _QuickSearchDialog extends StatelessWidget {
                       subtitle: Text(h.subtitle, overflow: TextOverflow.ellipsis),
                       onTap: () => Navigator.of(context).pop(h),
                     ),
-                ]),
+                ])),
               ),
           ]),
         ),
