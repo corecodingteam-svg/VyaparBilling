@@ -244,7 +244,7 @@ GoRoute _receiptRoute(PaymentKind kind) => GoRoute(
 );
 
 GoRouter buildRouter(AuthBloc auth) {
-  const authPages = {'/login', '/register'};
+  const authPages = {'/login', '/register', '/master'};
   return GoRouter(
     initialLocation: '/',
     refreshListenable: _StreamListenable([auth.stream]),
@@ -271,6 +271,7 @@ GoRouter buildRouter(AuthBloc auth) {
       ),
       GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterScreen()),
+      GoRoute(path: '/master', builder: (_, _) => const LoginScreen(key: ValueKey('master'), master: true)),
       // Full-screen pages (no sidebar): invoice forms and PDF previews.
       for (final kind in InvoiceKind.all) ..._invoiceRoutes(kind),
       for (final kind in [PaymentKind.paymentIn, PaymentKind.paymentOut]) _receiptRoute(kind),

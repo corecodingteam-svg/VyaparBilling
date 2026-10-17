@@ -62,14 +62,6 @@ export class AuthService {
       .select(['id', 'firm_id', 'password_hash', 'disabled_at'])
       .where('email', '=', dto.email)
       .executeTakeFirst();
-    // The master admin signs in on the same screen; their account is not a business user.
-    if (!user) {
-      const master = await this.db.selectFrom('master_admin').select(['id', 'email', 'password_hash']).where('email', '=', dto.email).executeTakeFirst();
-      if (master && (await bcrypt.compare(dto.password, master.password_hash))) {
-        await audit(this.db, master.email, { action: 'master.login' });
-        return this.issueMaster(master.id);
-      }
-    }
     const ok = await bcrypt.compare(dto.password, user?.password_hash ?? DUMMY_HASH);
     if (!user || !ok) {
       throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' });
@@ -80,6 +72,15 @@ export class AuthService {
     const firmId = memberships.find((m) => m.firm_id === user.firm_id)?.firm_id ?? memberships[0]?.firm_id;
     if (!firmId) throw new UnauthorizedException({ code: 'NO_ACCESS', message: 'This login no longer has access to any company.' });
     return this.issue(user.id, firmId);
+  }
+
+  /** The master admin's own sign-in (its own page and endpoint; the business sign-in never accepts it). */
+  async masterLogin(dto: LoginDto) {
+    const master = await this.db.selectFrom('master_admin').select(['id', 'email', 'password_hash']).where('email', '=', dto.email).executeTakeFirst();
+    const ok = await bcrypt.compare(dto.password, master?.password_hash ?? DUMMY_HASH);
+    if (!master || !ok) throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Incorrect email or password.' });
+    await audit(this.db, master.email, { action: 'master.login' });
+    return this.issueMaster(master.id);
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto, master = false) {

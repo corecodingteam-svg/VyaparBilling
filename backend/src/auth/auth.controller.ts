@@ -23,6 +23,12 @@ export class AuthController {
     return this.auth.login(dto);
   }
 
+  @Post('auth/master-login')
+  @HttpCode(200)
+  masterLogin(@Body() dto: LoginDto) {
+    return this.auth.masterLogin(dto);
+  }
+
   @Post('auth/change-password')
   @HttpCode(204)
   @ApiBearerAuth()

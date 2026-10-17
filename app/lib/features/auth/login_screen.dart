@@ -9,18 +9,21 @@ import 'bloc/auth_form_cubit.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 
+/// The sign-in page; with [master] it is the master admin's own sign-in (/master), which only that account can use.
 class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.master = false});
+  final bool master;
 
   @override
   Widget build(BuildContext context) => BlocProvider(
         create: (ctx) => AuthFormCubit(ctx.read(), ctx.read<AuthBloc>()),
-        child: const _LoginForm(),
+        child: _LoginForm(master: master),
       );
 }
 
 class _LoginForm extends StatefulWidget {
-  const _LoginForm();
+  const _LoginForm({required this.master});
+  final bool master;
 
   @override
   State<_LoginForm> createState() => _LoginFormState();
@@ -41,7 +44,7 @@ class _LoginFormState extends State<_LoginForm> {
 
   void _submit() {
     if (!validateForm(context, _formKey, report: showError)) return;
-    context.read<AuthFormCubit>().login(email: _email.text, password: _password.text);
+    context.read<AuthFormCubit>().login(email: _email.text, password: _password.text, master: widget.master);
   }
 
   @override
@@ -49,8 +52,8 @@ class _LoginFormState extends State<_LoginForm> {
     final form = context.watch<AuthFormCubit>().state;
     final loading = form.status == SubmitStatus.submitting;
     return AuthLayout(
-      title: 'Welcome back',
-      subtitle: 'Log in with your email and password',
+      title: widget.master ? 'Master admin' : 'Welcome back',
+      subtitle: widget.master ? 'Sign in to manage businesses, licences and users' : 'Log in with your email and password',
       child: Form(autovalidateMode: AutovalidateMode.onUserInteraction, 
         key: _formKey,
         child: AutofillGroup(
@@ -97,10 +100,13 @@ class _LoginFormState extends State<_LoginForm> {
                     : const Text('Log in', style: TextStyle(fontSize: AppFont.subtitle)),
               ),
               const SizedBox(height: AppSpace.xl),
-              Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                const Text("Don't have an account?"),
-                TextButton(onPressed: () => context.go('/register'), child: const Text('Create one')),
-              ]),
+              if (widget.master)
+                Center(child: TextButton(onPressed: () => context.go('/login'), child: const Text('Business sign-in')))
+              else
+                Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                  const Text("Don't have an account?"),
+                  TextButton(onPressed: () => context.go('/register'), child: const Text('Create one')),
+                ]),
             ],
           ),
         ),

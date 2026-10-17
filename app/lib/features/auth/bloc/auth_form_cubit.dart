@@ -37,8 +37,8 @@ class AuthFormCubit extends Cubit<AuthFormState> {
 
   void stateCodeChanged(String? code) => emit(state.copyWith(stateCode: code));
 
-  Future<void> login({required String email, required String password}) =>
-      _submit(() => _repo.login(email: email, password: password));
+  Future<void> login({required String email, required String password, bool master = false}) =>
+      _submit(() => master ? _repo.masterLogin(email: email, password: password) : _repo.login(email: email, password: password));
 
   Future<void> register({required String firmName, required String fullName, required String email, required String password}) =>
       _submit(() => _repo.register(

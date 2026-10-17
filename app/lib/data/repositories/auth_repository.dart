@@ -42,6 +42,10 @@ class AuthRepository {
   Future<AppUser> login({required String email, required String password}) =>
       _authenticate('/auth/login', {'email': email.trim(), 'password': password});
 
+  /// The master admin's own sign-in.
+  Future<AppUser> masterLogin({required String email, required String password}) =>
+      _authenticate('/auth/master-login', {'email': email.trim(), 'password': password});
+
   Future<AppUser> register({
     required String firmName,
     required String stateCode,
