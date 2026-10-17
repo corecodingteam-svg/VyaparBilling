@@ -1,9 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:billing_app/shared/theme.dart';
 
@@ -101,35 +98,14 @@ void main() {
       expect(focused(), 'B');
     });
 
-    test('defaults to on and is remembered per user across restarts', () async {
-      SharedPreferences.setMockInitialValues({});
-      final first = KeyboardNavCubit();
-      await first.loadFor('u1');
-      expect(first.state, isTrue);
-      await first.set(false);
-      await first.close();
-
-      final restarted = KeyboardNavCubit();
-      await restarted.loadFor('u1');
-      expect(restarted.state, isFalse);
-      await restarted.loadFor('u2'); // a new user starts from the last choice on this device
-      expect(restarted.state, isFalse);
-      await restarted.set(true);
-      await restarted.loadFor('u1');
-      expect(restarted.state, isFalse); // u1 keeps their own
-      await restarted.close();
-    });
-
-    test('follows the signed-in user and stops listening when closed', () async {
-      SharedPreferences.setMockInitialValues({'enter_navigation_u1': false});
-      final users = StreamController<String?>();
-      final cubit = KeyboardNavCubit(userIds: users.stream);
-      users.add('u1');
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(cubit.state, isFalse);
-      await cubit.close();
-      expect(users.hasListener, isFalse);
-      await users.close();
+    testWidgets('Follow Tab: Enter moves onto a button like Tab does', (t) async {
+      await t.pumpWidget(MaterialApp(
+        builder: (_, child) => EnterKeyNavigation(enabled: true, action: EnterKeyAction.tab, child: child!),
+        home: Scaffold(body: column([tf('A', onSubmitted: (_) {}), TextButton(onPressed: () {}, child: const Text('Go')), tf('B')])),
+      ));
+      await t.tap(field('A'));
+      await enter(t);
+      expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextButton>(), isNotNull);
     });
   });
 

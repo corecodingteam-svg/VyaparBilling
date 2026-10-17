@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'core/api_client.dart';
 import 'core/change_bus.dart';
+import 'core/keyboard/keyboard.dart';
 import 'data/models/invoice.dart';
 import 'data/models/payment.dart';
 import 'data/repositories/accounting_repository.dart';
@@ -121,7 +122,7 @@ Future<void> main() async {
           BlocProvider(lazy: false, create: (_) => SidebarCubit()..load()),
           BlocProvider(
             lazy: false,
-            create: (ctx) => KeyboardNavCubit(userIds: ctx.read<AuthBloc>().stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.id : null).distinct())..loadFor(null),
+            create: (ctx) => KeyboardPrefsCubit(userIds: ctx.read<AuthBloc>().stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.id : null).distinct())..loadFor(null),
           ),
           BlocProvider(
             lazy: false,
@@ -420,8 +421,15 @@ class _BillingAppState extends State<BillingApp> {
     theme: buildTheme(),
     routerConfig: _router,
     // The PIN lock covers everything once someone is signed in; the sign-in pages are not locked.
-    builder: (context, child) => BlocBuilder<KeyboardNavCubit, bool>(
-      builder: (context, enterNav) => EnterKeyNavigation(enabled: enterNav, child: BlocBuilder<AuthBloc, AuthState>(
+    builder: (context, child) => BlocBuilder<KeyboardPrefsCubit, KeyboardPrefs>(
+      builder: (context, keys) => KeyboardShortcuts(prefs: keys, child: EnterKeyNavigation(
+        enabled: keys.enter != EnterBehavior.off,
+        action: switch (keys.enter) {
+          EnterBehavior.nextField => EnterKeyAction.next,
+          EnterBehavior.tab => EnterKeyAction.tab,
+          _ => EnterKeyAction.automatic,
+        },
+        child: BlocBuilder<AuthBloc, AuthState>(
       builder: (context, auth) {
         if (auth.status != AuthStatus.signedIn) return child!;
         final locked = AppLock(
@@ -435,7 +443,7 @@ class _BillingAppState extends State<BillingApp> {
         // The master admin has no business, so there is no business licence to check.
         return (auth.user?.master ?? false) ? locked : LicenseGate(child: locked);
       },
-    ))),
+    )))),
   ));
 }
 

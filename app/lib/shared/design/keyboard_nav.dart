@@ -1,9 +1,5 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// What the Enter key does in a text input. Set it for a whole area with [EnterKeyBehavior].
 enum EnterKeyAction {
@@ -13,6 +9,9 @@ enum EnterKeyAction {
 
   /// Always move to the next field, even if the field has an `onSubmitted`.
   next,
+
+  /// Move exactly like Tab: to the next thing that takes focus, buttons included, even if the field has an `onSubmitted`.
+  tab,
 
   /// Leave Enter to the field's own `onSubmitted` (the form's submit action).
   submit,
@@ -40,9 +39,12 @@ class EnterKeyBehavior extends InheritedWidget {
 ///
 /// It is one `Focus` at the top of the tree. Key events travel from the focused widget up to it, so it sees Enter
 /// for every field on every screen, dialog and sheet without any per-field code.
+///
+/// [action] is what Enter does everywhere below unless an [EnterKeyBehavior] says otherwise for an area.
 class EnterKeyNavigation extends StatelessWidget {
-  const EnterKeyNavigation({super.key, required this.enabled, required this.child});
+  const EnterKeyNavigation({super.key, required this.enabled, this.action = EnterKeyAction.automatic, required this.child});
   final bool enabled;
+  final EnterKeyAction action;
   final Widget child;
 
   @override
@@ -50,7 +52,7 @@ class EnterKeyNavigation extends StatelessWidget {
         canRequestFocus: false,
         skipTraversal: true,
         onKeyEvent: (_, event) => enabled ? handleEnterKey(event) : KeyEventResult.ignored,
-        child: child,
+        child: EnterKeyBehavior(action: action, child: child),
       );
 }
 
@@ -67,6 +69,7 @@ bool _hasOwnSubmit(EditableTextState state) {
 bool enterBelongsToField(EditableTextState state, EnterKeyAction action) {
   switch (action) {
     case EnterKeyAction.next:
+    case EnterKeyAction.tab:
       return state.widget.maxLines != 1; // a multiline field still needs its Enter for new lines
     case EnterKeyAction.submit:
     case EnterKeyAction.newline:
@@ -103,7 +106,12 @@ KeyEventResult handleEnterKey(KeyEvent event) {
 
   final composing = field.widget.controller.value.composing;
   if (composing.isValid && !composing.isCollapsed) return KeyEventResult.ignored; // Enter confirms an IME suggestion
-  if (enterBelongsToField(field, EnterKeyBehavior.of(context))) return KeyEventResult.ignored;
+  final action = EnterKeyBehavior.of(context);
+  if (enterBelongsToField(field, action)) return KeyEventResult.ignored;
+  if (action == EnterKeyAction.tab) {
+    start.nextFocus();
+    return KeyEventResult.handled;
+  }
 
   final startRect = start.rect;
   // Tab order can pass over buttons and read-only fields; keep going until an input is reached.
@@ -123,49 +131,4 @@ KeyEventResult handleEnterKey(KeyEvent event) {
   }
   start.requestFocus();
   return KeyEventResult.handled;
-}
-
-/// Whether Enter moves to the next field (Settings › Keyboard). Remembered per user on this device; on by default.
-class KeyboardNavCubit extends Cubit<bool> {
-  KeyboardNavCubit({Future<SharedPreferences>? prefs, Stream<String?>? userIds})
-      : _prefs = prefs ?? SharedPreferences.getInstance(),
-        super(true) {
-    _sub = userIds?.listen((id) {
-      if (id != _userId) loadFor(id);
-    });
-  }
-
-  final Future<SharedPreferences> _prefs;
-  StreamSubscription<String?>? _sub;
-  String? _userId;
-
-  static const _lastKey = 'enter_navigation_last';
-  String _key(String? user) => user == null ? _lastKey : 'enter_navigation_$user';
-
-  Future<void> loadFor(String? userId) async {
-    _userId = userId;
-    try {
-      final p = await _prefs;
-      emit(p.getBool(_key(userId)) ?? p.getBool(_lastKey) ?? true);
-    } catch (_) {
-      // Preferences unavailable: keep the current value.
-    }
-  }
-
-  Future<void> set(bool enabled) async {
-    emit(enabled);
-    try {
-      final p = await _prefs;
-      await p.setBool(_key(_userId), enabled);
-      await p.setBool(_lastKey, enabled);
-    } catch (_) {
-      // Still applies for this session.
-    }
-  }
-
-  @override
-  Future<void> close() {
-    _sub?.cancel();
-    return super.close();
-  }
 }

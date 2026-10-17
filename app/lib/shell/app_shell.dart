@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/keyboard/keyboard.dart';
 import '../data/models/app_user.dart';
 import '../features/auth/bloc/auth_bloc.dart';
 import '../features/company/firm_cubit.dart';
@@ -88,7 +89,7 @@ class AppShell extends StatelessWidget {
 
     Widget wrap(Widget w) => posOnly ? SyncPrompt(child: w) : w;
     if (!wide) {
-      return wrap(QuickSearchShortcut(
+      return wrap(_ShellKeys(
         child: Scaffold(
           appBar: topBar,
           drawer: Drawer(child: sidebar),
@@ -96,7 +97,7 @@ class AppShell extends StatelessWidget {
         ),
       ));
     }
-    return wrap(QuickSearchShortcut(
+    return wrap(_ShellKeys(
       child: Scaffold(
         body: Row(
           children: [
@@ -109,6 +110,21 @@ class AppShell extends StatelessWidget {
       ),
     ));
   }
+}
+
+/// The app-wide shortcuts that need the shell, such as quick search. It also holds focus when nothing on the page has it
+/// yet, so shortcuts work before anything is clicked.
+class _ShellKeys extends StatelessWidget {
+  const _ShellKeys({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => KeyboardScope(
+        name: 'App',
+        autofocus: true,
+        commands: {AppCommand.quickSearch: () => showQuickSearch(context)},
+        child: child,
+      );
 }
 
 class _Sidebar extends StatelessWidget {

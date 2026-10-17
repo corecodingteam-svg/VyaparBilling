@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -66,7 +65,7 @@ String searchHitPath(SearchHit hit) => switch (hit.kind) {
       _ => '${InvoiceKind.of(hit.type ?? 'sale').basePath}/${hit.id}/edit',
     };
 
-/// Opens quick search (also on Ctrl/Cmd+K). Picking a result goes to it.
+/// Opens quick search (also the Quick search shortcut, Ctrl+K). Picking a result goes to it.
 Future<void> showQuickSearch(BuildContext context) async {
   final router = GoRouter.maybeOf(context);
   final hit = await showDialog<SearchHit>(
@@ -133,19 +132,4 @@ class _QuickSearchDialog extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Makes Ctrl+K / Cmd+K open quick search anywhere below it.
-class QuickSearchShortcut extends StatelessWidget {
-  const QuickSearchShortcut({super.key, required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => showQuickSearch(context),
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => showQuickSearch(context),
-        },
-        child: Focus(autofocus: true, child: child),
-      );
 }
