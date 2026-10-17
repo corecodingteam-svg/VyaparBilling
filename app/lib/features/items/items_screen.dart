@@ -208,7 +208,7 @@ class _ItemList extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onAdd,
                   icon: const Icon(Icons.add),
-                  label: const Text('Add'),
+                  label: const ShortcutLabel('Add', AppCommand.newRecord, main: true),
                 ),
               ],
             ),
@@ -322,7 +322,7 @@ class _ItemDetail extends StatelessWidget {
                           FilledButton.icon(
                             onPressed: () => showAdjustStockDialog(context, item),
                             icon: const Icon(Icons.tune, size: AppIconSize.sm),
-                            label: const Text('ADJUST ITEM'),
+                            label: const ShortcutLabel('ADJUST ITEM', AppCommand.adjustStock),
                           ),
                       ],
                     ),

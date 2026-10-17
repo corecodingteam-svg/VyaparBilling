@@ -72,7 +72,7 @@ class AppShell extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: () => showQuickSearch(context),
             icon: const Icon(Icons.search),
-            label: const Text('Search   Ctrl K'),
+            label: const ShortcutLabel('Search', AppCommand.quickSearch, always: true),
           )
         else
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => showQuickSearch(context)),

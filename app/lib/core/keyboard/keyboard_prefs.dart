@@ -39,6 +39,7 @@ class KeyboardPrefs extends Equatable {
     this.enter = EnterBehavior.contextAware,
     this.custom = const {},
     this.barcodeReturnFocus = true,
+    this.tutorialSeen = false,
     this.web = kIsWeb,
   });
 
@@ -50,6 +51,9 @@ class KeyboardPrefs extends Equatable {
 
   /// After a scan or an item is added, put the cursor back in the item/barcode box.
   final bool barcodeReturnFocus;
+
+  /// The first-time keyboard tutorial has been offered.
+  final bool tutorialSeen;
 
   /// Browser defaults and reserved keys apply (Flutter web).
   final bool web;
@@ -112,11 +116,12 @@ class KeyboardPrefs extends Equatable {
     return wide.area == ShortcutArea.global && narrow.overrides == wide;
   }
 
-  KeyboardPrefs copyWith({KeyboardMode? mode, EnterBehavior? enter, Map<AppCommand, KeyCombo?>? custom, bool? barcodeReturnFocus}) => KeyboardPrefs(
+  KeyboardPrefs copyWith({KeyboardMode? mode, EnterBehavior? enter, Map<AppCommand, KeyCombo?>? custom, bool? barcodeReturnFocus, bool? tutorialSeen}) => KeyboardPrefs(
         mode: mode ?? this.mode,
         enter: enter ?? this.enter,
         custom: custom ?? this.custom,
         barcodeReturnFocus: barcodeReturnFocus ?? this.barcodeReturnFocus,
+        tutorialSeen: tutorialSeen ?? this.tutorialSeen,
         web: web,
       );
 
@@ -124,6 +129,7 @@ class KeyboardPrefs extends Equatable {
         'mode': mode.name,
         'enter': enter.name,
         'barcodeReturnFocus': barcodeReturnFocus,
+        'tutorialSeen': tutorialSeen,
         'custom': {for (final e in custom.entries) e.key.id: e.value?.encode()},
       };
 
@@ -147,13 +153,14 @@ class KeyboardPrefs extends Equatable {
       mode: pick(KeyboardMode.values, j['mode'], KeyboardMode.standard),
       enter: pick(EnterBehavior.values, j['enter'], EnterBehavior.contextAware),
       barcodeReturnFocus: j['barcodeReturnFocus'] is bool ? j['barcodeReturnFocus']! as bool : true,
+      tutorialSeen: j['tutorialSeen'] == true,
       custom: custom,
       web: web,
     );
   }
 
   @override
-  List<Object?> get props => [mode, enter, custom, barcodeReturnFocus, web];
+  List<Object?> get props => [mode, enter, custom, barcodeReturnFocus, tutorialSeen, web];
 }
 
 /// The keyboard preferences of the signed-in user, remembered on this device; a new user starts from the last choice
@@ -211,6 +218,7 @@ class KeyboardPrefsCubit extends Cubit<KeyboardPrefs> {
   Future<void> setMode(KeyboardMode mode) => _save(state.copyWith(mode: mode));
   Future<void> setEnter(EnterBehavior enter) => _save(state.copyWith(enter: enter));
   Future<void> setBarcodeReturnFocus(bool on) => _save(state.copyWith(barcodeReturnFocus: on));
+  Future<void> tutorialOffered() => _save(state.copyWith(tutorialSeen: true));
 
   /// Gives [command] the shortcut [combo]. Returns why not (and changes nothing) when it cannot have it.
   Future<String?> assign(AppCommand command, KeyCombo combo) async {

@@ -51,7 +51,7 @@ enum AppCommand {
 
   // General › Windows/Dialogs
   cancel('Cancel / close', 'Cancel what you are doing, or close the dialog or form.', ShortcutSection.general, 'Windows/Dialogs'),
-  shortcutHelp('Show shortcuts', 'Show the shortcuts for this screen.', ShortcutSection.general, 'Windows/Dialogs'),
+  shortcutHelp('Show shortcuts', 'Show the shortcuts for this screen (also "?" when not typing in a box).', ShortcutSection.general, 'Windows/Dialogs'),
 
   // Billing › Items (also any list of rows: Insert adds, Delete removes the row you are on)
   addRow('Add row', 'Add a new row: an invoice item, or a new record in a list.', ShortcutSection.billing, 'Items', area: ShortcutArea.rows),
@@ -108,6 +108,8 @@ enum AppCommand {
   /// Other keys that also do it, which are not changed in Settings (F5 refreshes beside Ctrl+R on Windows).
   List<KeyCombo> alsoKeys({required bool web}) => switch (this) {
         refresh => web ? const [] : [ctrl(LogicalKeyboardKey.keyR)],
+        // "?" too, outside text boxes; keyboards give it as Shift+/ or as its own key.
+        shortcutHelp => [plain(LogicalKeyboardKey.question, shift: true), plain(LogicalKeyboardKey.question), plain(LogicalKeyboardKey.slash, shift: true)],
         _ => const [],
       };
 }

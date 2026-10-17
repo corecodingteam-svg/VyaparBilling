@@ -54,6 +54,8 @@ void main() {
 
   testWidgets('mode, Enter behaviour and the barcode option are kept after a restart', (t) async {
     await open(t);
+    await prefs.tutorialOffered(); // the first-time tutorial is tested with the Playbook
+    await t.pumpAndSettle();
     await t.tap(find.text('Keyboard Only'));
     await t.tap(find.text('Move to next field'));
     await t.tap(find.text('Automatically return focus to item/barcode field'));

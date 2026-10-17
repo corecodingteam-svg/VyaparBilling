@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/keyboard/keyboard.dart';
 import '../../../shared/theme.dart';
 import '../../../shared/widgets.dart';
+import 'practice.dart';
 
 /// Settings › Keyboard & Shortcuts: how much the app leans on the keyboard, what Enter does, the barcode box, and every
 /// shortcut, which can be changed, turned off or reset. Saved for this login on this device.
@@ -33,7 +34,14 @@ class KeyboardSettingsScreen extends StatelessWidget {
               _Card(title: 'Keyboard Mode', children: [
                 RadioGroup<KeyboardMode>(
                   groupValue: prefs.mode,
-                  onChanged: (m) => cubit.setMode(m!),
+                  onChanged: (m) async {
+                    await cubit.setMode(m!);
+                    // The first time the keyboard modes are chosen, offer the short tutorial (once).
+                    if (m != KeyboardMode.standard && !prefs.tutorialSeen) {
+                      await cubit.tutorialOffered();
+                      if (context.mounted) showKeyboardTutorial(context);
+                    }
+                  },
                   child: Column(children: [
                     for (final m in KeyboardMode.values) RadioListTile<KeyboardMode>(contentPadding: EdgeInsets.zero, value: m, title: Text(m.label), subtitle: Text(m.description)),
                   ]),

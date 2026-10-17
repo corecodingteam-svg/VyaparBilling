@@ -174,7 +174,7 @@ final navSections = navFor(
 /// Where the master admin is sent from [location]: only the master pages exist for that account.
 String? masterRedirect(String location) {
   final path = Uri.parse(location).path;
-  return path == '/platform' || path == '/platform-audit' ? null : '/platform';
+  return path == '/platform' || path == '/platform-audit' || path.startsWith('/keyboard') ? null : '/platform';
 }
 
 String? posOnlyRedirect(String location, {required bool admin, bool platformAdmin = false}) {

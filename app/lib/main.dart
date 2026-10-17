@@ -74,7 +74,9 @@ import 'features/printing/invoice_print.dart';
 import 'features/printing/pdf_documents.dart';
 import 'features/reports/report_cubit.dart';
 import 'features/reports/reports_screen.dart';
+import 'features/settings/keyboard/keyboard_playbook_screen.dart';
 import 'features/settings/keyboard/keyboard_settings_screen.dart';
+import 'features/settings/keyboard/shortcut_overlay.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/utilities/import_spec.dart';
 import 'features/utilities/utilities_screens.dart';
@@ -245,9 +247,13 @@ GoRoute _receiptRoute(PaymentKind kind) => GoRoute(
   },
 );
 
+/// The app's top navigator, for what opens over any screen (the shortcut list).
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 GoRouter buildRouter(AuthBloc auth) {
   const authPages = {'/login', '/register', '/master'};
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     initialLocation: '/',
     refreshListenable: _StreamListenable([auth.stream]),
     redirect: (context, state) {
@@ -390,6 +396,7 @@ GoRouter buildRouter(AuthBloc auth) {
           GoRoute(path: '/company', builder: (_, _) => const CompanyScreen()),
           GoRoute(path: '/settings', builder: (_, state) => SettingsScreen(group: state.uri.queryParameters['tab'] ?? 'general')),
           GoRoute(path: '/keyboard', builder: (_, _) => const KeyboardSettingsScreen()),
+          GoRoute(path: '/keyboard/playbook', builder: (_, state) => KeyboardPlaybookScreen(topic: state.uri.queryParameters['topic'])),
         ],
       ),
     ],
@@ -424,7 +431,17 @@ class _BillingAppState extends State<BillingApp> {
     routerConfig: _router,
     // The PIN lock covers everything once someone is signed in; the sign-in pages are not locked.
     builder: (context, child) => BlocBuilder<KeyboardPrefsCubit, KeyboardPrefs>(
-      builder: (context, keys) => KeyboardShortcuts(prefs: keys, child: EnterKeyNavigation(
+      builder: (context, keys) => KeyboardShortcuts(prefs: keys, child: KeyboardScope(
+        name: 'App',
+        // The shortcut list works on every screen and dialog, signed in or not.
+        commands: {
+          AppCommand.shortcutHelp: () {
+            final scopes = activeKeyboardScopes();
+            final ctx = rootNavigatorKey.currentContext;
+            if (ctx != null) showShortcutOverlay(ctx, scopes);
+          },
+        },
+        child: EnterKeyNavigation(
         enabled: keys.enter != EnterBehavior.off,
         action: switch (keys.enter) {
           EnterBehavior.nextField => EnterKeyAction.next,
@@ -445,7 +462,7 @@ class _BillingAppState extends State<BillingApp> {
         // The master admin has no business, so there is no business licence to check.
         return (auth.user?.master ?? false) ? locked : LicenseGate(child: locked);
       },
-    )))),
+    ))))),
   ));
 }
 

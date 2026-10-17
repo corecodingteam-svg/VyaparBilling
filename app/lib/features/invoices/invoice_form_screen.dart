@@ -183,7 +183,7 @@ class _InvoiceFormView extends StatelessWidget {
         return KeyboardScope(name: kind.singular, commands: commands, child: OrderedFocus(child: Scaffold(
           appBar: PreferredSize(preferredSize: const Size.fromHeight(kToolbarHeight), child: FocusSection(order: 7, child: AppBar(
             shape: const Border(bottom: BorderSide(color: AppColors.border)),
-            leading: IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: () => _close(context, kind)),
+            leading: IconButton(tooltip: 'Close (${context.read<KeyboardPrefsCubit?>()?.state.keyOf(AppCommand.cancel)?.label ?? 'Esc'})', icon: const Icon(Icons.close), onPressed: () => _close(context, kind)),
             titleSpacing: 0,
             title: Row(
               children: [
@@ -228,7 +228,7 @@ class _InvoiceFormView extends StatelessWidget {
                             style: FilledButton.styleFrom(minimumSize: const Size(120, 44)),
                             child: busy
                                 ? const InlineSpinner()
-                                : Text(cubit.editing ? 'Update' : 'Save'),
+                                : ShortcutLabel(cubit.editing ? 'Update' : 'Save', AppCommand.submit, main: true),
                           ),
                         ],
                       ),
@@ -625,7 +625,7 @@ class _LinesCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(onPressed: cubit.addLine, icon: const Icon(Icons.add), label: const Text('ADD ROW')),
+                OutlinedButton.icon(onPressed: () => context.read<_FormFocus>().addRow(cubit), icon: const Icon(Icons.add), label: const ShortcutLabel('ADD ROW', AppCommand.addRow)),
                 Text.rich(
                   TextSpan(
                     children: [

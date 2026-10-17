@@ -10,3 +10,4 @@ export 'keyboard_prefs.dart';
 export 'keyboard_scope.dart';
 export 'reserved_keys.dart';
 export 'row_navigation.dart';
+export 'shortcut_label.dart';
