@@ -23,6 +23,7 @@ services:
       dockerfile: Dockerfile.web
       args:
         API_BASE_URL: https://${BILLING_DOMAIN}/api/v1
+        LICENSE_PUBLIC_KEY: ${BILLING_LICENSE_PUBLIC_KEY:-}
     restart: unless-stopped
 
   billing-backend:

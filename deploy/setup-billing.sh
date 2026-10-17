@@ -20,6 +20,21 @@ grep -q '^BILLING_DOMAIN=' .env || echo 'BILLING_DOMAIN=billing.advaitamaa.com' 
 grep -q '^BILLING_JWT_SECRET=' .env || echo "BILLING_JWT_SECRET=$(openssl rand -hex 32)" >> .env
 DOMAIN=$(grep '^BILLING_DOMAIN=' .env | cut -d= -f2)
 
+# 1b. Licence signing key. Made once if missing (the private half never leaves this server's .env); the public half is
+#     always derived from it, because the web app is built with it and only accepts licences signed by the matching key.
+command -v node >/dev/null || { red "Node.js is needed on this server once, to make the licence key (apt install nodejs)."; exit 1; }
+if ! grep -q '^BILLING_LICENSE_SIGNING_PRIVATE_KEY=.\+' .env; then
+  sed -i '/^BILLING_LICENSE_SIGNING_PRIVATE_KEY=/d' .env
+  node "$HERE/../backend/scripts/license-keygen.js" | grep '^LICENSE_SIGNING_PRIVATE_KEY=' | sed 's/^/BILLING_/' >> .env
+  grn "Made a new licence signing key (kept in .env, back it up: licences already issued need the same key)."
+fi
+PUB=$(node -e "
+const c=require('crypto');const k=c.createPrivateKey({key:Buffer.from(process.argv[1],'base64'),format:'der',type:'pkcs8'});
+console.log(c.createPublicKey(k).export({format:'der',type:'spki'}).subarray(-32).toString('base64'))" "$(grep '^BILLING_LICENSE_SIGNING_PRIVATE_KEY=' .env | cut -d= -f2-)")
+sed -i '/^BILLING_LICENSE_PUBLIC_KEY=/d' .env
+echo "BILLING_LICENSE_PUBLIC_KEY=$PUB" >> .env
+echo "Licence public key (also set it as the GitHub variable LICENSE_PUBLIC_KEY for the Android/Windows builds): $PUB"
+
 # 2. DNS must already point at this server, or the certificate cannot be issued.
 SERVER_IP=$(curl -fsS https://api.ipify.org || true)
 [ -n "$SERVER_IP" ] || { red "Could not detect this server's public IP."; exit 1; }
