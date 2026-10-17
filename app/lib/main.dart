@@ -74,6 +74,7 @@ import 'features/printing/invoice_print.dart';
 import 'features/printing/pdf_documents.dart';
 import 'features/reports/report_cubit.dart';
 import 'features/reports/reports_screen.dart';
+import 'features/settings/keyboard/keyboard_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/utilities/import_spec.dart';
 import 'features/utilities/utilities_screens.dart';
@@ -388,6 +389,7 @@ GoRouter buildRouter(AuthBloc auth) {
           ),
           GoRoute(path: '/company', builder: (_, _) => const CompanyScreen()),
           GoRoute(path: '/settings', builder: (_, state) => SettingsScreen(group: state.uri.queryParameters['tab'] ?? 'general')),
+          GoRoute(path: '/keyboard', builder: (_, _) => const KeyboardSettingsScreen()),
         ],
       ),
     ],

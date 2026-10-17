@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/keyboard/keyboard.dart';
 import '../../core/license/license_info.dart';
 import '../../core/status.dart';
 import '../../data/models/firm.dart';
@@ -650,17 +649,8 @@ class _SettingsView extends StatelessWidget {
                       link(Icons.business_outlined, 'Companies', 'Switch company, add another one or restore a backup.', '/companies'),
                       link(Icons.backup_outlined, 'Backup', 'Backups on the server, Google Drive, download and restore.', '/backup'),
                     ]),
-                  _Section('Keyboard Navigation', 'keyboard', [
-                    BlocBuilder<KeyboardPrefsCubit, KeyboardPrefs>(
-                      builder: (context, keys) => SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: const Icon(Icons.keyboard_return),
-                        title: const Text('Enter Key Navigation'),
-                        subtitle: const Text('Press Enter to move to the next input field, like Tab. Multiline boxes, search boxes and fields that submit a form keep their own Enter. Saved for your login on this device.'),
-                        value: keys.enter != EnterBehavior.off,
-                        onChanged: (on) => context.read<KeyboardPrefsCubit>().setEnter(on ? EnterBehavior.contextAware : EnterBehavior.off),
-                      ),
-                    ),
+                  _Section('Keyboard', 'keyboard', [
+                    link(Icons.keyboard_outlined, 'Keyboard & Shortcuts', 'Keyboard mode, what Enter does, the barcode box, and every shortcut. Saved for your login on this device.', '/keyboard'),
                   ]),
                   const _Section('Theme', 'theme', [_ThemeManager()]),
                   _Section('Account', 'general', [

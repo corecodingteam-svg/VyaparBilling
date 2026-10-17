@@ -181,6 +181,7 @@ String? posOnlyRedirect(String location, {required bool admin, bool platformAdmi
   final path = Uri.parse(location).path;
   final allowed = path == '/pos' ||
       path == '/sync' ||
+      path.startsWith('/keyboard') || // each operator's own keyboard settings and the Playbook
       RegExp(r'^/sale-invoices/[^/]+/preview$').hasMatch(path) ||
       (admin && (path == '/items' || path == '/settings')) ||
       (platformAdmin && path == '/platform');
