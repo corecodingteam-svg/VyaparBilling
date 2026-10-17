@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/license/license_info.dart';
 import '../../core/status.dart';
 import '../../data/models/firm.dart';
 import '../../shared/theme.dart';
@@ -660,6 +661,7 @@ class _SettingsView extends StatelessWidget {
                     ),
                   ]),
                   const _Section('Theme', 'theme', [_ThemeManager()]),
+                  _Section('License', 'general', [const LicenseInfo()]),
                   _Section('Account', 'general', [
                     BlocBuilder<LockCubit, AppLockState>(
                       builder: (context, lock) => ListTile(

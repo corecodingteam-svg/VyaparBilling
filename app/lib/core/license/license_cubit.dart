@@ -11,7 +11,17 @@ import 'license_vault.dart';
 import 'trusted_clock.dart';
 
 class LicenseState extends Equatable {
-  const LicenseState({this.status = LicenseStatus.checking, this.certificate, this.message = '', this.warning, this.busy = false, this.notice});
+  const LicenseState({
+    this.status = LicenseStatus.checking,
+    this.certificate,
+    this.message = '',
+    this.warning,
+    this.busy = false,
+    this.notice,
+    this.installationId,
+    this.lastServerSync,
+    this.trustedNow,
+  });
   final LicenseStatus status;
   final LicenseCertificate? certificate;
 
@@ -27,10 +37,19 @@ class LicenseState extends Equatable {
   /// The result of the last "check again" (e.g. no connection).
   final String? notice;
 
+  /// This installation's id (what the certificate is bound to).
+  final String? installationId;
+
+  /// When the server last confirmed the time to this device.
+  final DateTime? lastServerSync;
+
+  /// The time the licence was judged by (device clock corrected, never earlier than anything already seen).
+  final DateTime? trustedNow;
+
   bool get allowed => status == LicenseStatus.valid;
 
   @override
-  List<Object?> get props => [status, certificate, message, warning, busy, notice];
+  List<Object?> get props => [status, certificate, message, warning, busy, notice, installationId, lastServerSync, trustedNow];
 }
 
 /// Decides, on every start and every minute, whether this device may run, **without a connection**: it verifies the signed
@@ -110,7 +129,20 @@ class LicenseCubit extends Cubit<LicenseState> {
     );
     if (decision.clock != null) await _vault.saveClock(decision.clock!);
     if (isClosed) return;
-    emit(LicenseState(status: decision.status, certificate: decision.certificate, message: decision.message, warning: decision.warning, busy: state.busy, notice: state.notice));
+    final clockState = decision.clock ?? await _vault.clock();
+    emit(
+      LicenseState(
+        status: decision.status,
+        certificate: decision.certificate,
+        message: decision.message,
+        warning: decision.warning,
+        busy: state.busy,
+        notice: state.notice,
+        installationId: installation,
+        lastServerSync: clockState.lastSuccessfulServerSync,
+        trustedNow: clockState.lastKnownTrustedTime,
+      ),
+    );
   }
 
   /// Gets a fresh certificate (or the first one) from the server, learns the real time from it, and re-checks.
@@ -120,7 +152,7 @@ class LicenseCubit extends Cubit<LicenseState> {
     if (customer == null || _validating) return;
     _validating = true;
     _lastOnlineTry = _now();
-    if (!silent && !isClosed) emit(LicenseState(status: state.status, certificate: state.certificate, message: state.message, warning: state.warning, busy: true));
+    if (!silent && !isClosed) emit(_with(busy: true));
     try {
       final installation = await _vault.installationId();
       final hasCert = await _vault.certificate(customer) != null;
@@ -152,9 +184,21 @@ class LicenseCubit extends Cubit<LicenseState> {
       // Anything unexpected: the offline decision stands.
     } finally {
       _validating = false;
-      if (!isClosed && state.busy) emit(LicenseState(status: state.status, certificate: state.certificate, message: state.message, warning: state.warning, notice: state.notice));
+      if (!isClosed && state.busy) emit(_with(notice: state.notice));
     }
   }
+
+  LicenseState _with({bool busy = false, String? notice}) => LicenseState(
+    status: state.status,
+    certificate: state.certificate,
+    message: state.message,
+    warning: state.warning,
+    busy: busy,
+    notice: notice,
+    installationId: state.installationId,
+    lastServerSync: state.lastServerSync,
+    trustedNow: state.trustedNow,
+  );
 
   Future<void> _handleServerAnswer(String customer, ApiException e, bool silent) async {
     switch (e.code) {
@@ -168,7 +212,7 @@ class LicenseCubit extends Cubit<LicenseState> {
         if (!isClosed) emit(LicenseState(status: LicenseStatus.deviceLimit, message: e.message));
       default:
         // No connection, or a server problem: the offline decision stands. Only an explicit "check again" says so.
-        if (!silent && !isClosed) emit(LicenseState(status: state.status, certificate: state.certificate, message: state.message, warning: state.warning, notice: e.offline ? 'No internet connection. Connect and try again.' : e.message));
+        if (!silent && !isClosed) emit(_with(notice: e.offline ? 'No internet connection. Connect and try again.' : e.message));
     }
   }
 

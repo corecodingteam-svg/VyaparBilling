@@ -4,6 +4,7 @@ import 'package:billing_app/core/api_client.dart';
 import 'package:billing_app/core/license/license_certificate.dart';
 import 'package:billing_app/core/license/license_checker.dart';
 import 'package:billing_app/core/license/license_cubit.dart';
+import 'package:billing_app/core/license/license_info.dart';
 import 'package:billing_app/core/license/license_vault.dart';
 import 'package:billing_app/core/license/trusted_clock.dart';
 import 'package:billing_app/data/repositories/license_repository.dart';
@@ -249,6 +250,15 @@ void main() {
     });
   });
 
+  test('Settings shows days left from the trusted time', () {
+    final end = utc(20, 18, 30);
+    expect(licenseTimeLeft(end, utc(15, 8)), '5 days left');
+    expect(licenseTimeLeft(end, utc(20, 10)), 'Ends today');
+    expect(licenseTimeLeft(end, utc(21, 9)), 'Expired today');
+    expect(licenseTimeLeft(end, utc(23, 9)), 'Expired 2 days ago');
+    expect(licenseTimeLeft(null, utc(1)), 'No end date');
+  });
+
   group('LicenseCubit', () {
     late MemorySecureStore secure;
     late FakeLicenseRepository repo;
@@ -271,6 +281,10 @@ void main() {
       await pumpEventQueue();
       expect(c.state.status, LicenseStatus.valid);
       expect(repo.activations, 1);
+      // What Settings → License shows
+      expect(c.state.installationId, await installation());
+      expect(c.state.lastServerSync, utc(15, 8));
+      expect(c.state.certificate!.expiresOn, '2026-10-20');
       await c.close();
 
       repo.offline = true; // the server is gone
