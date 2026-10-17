@@ -250,13 +250,17 @@ GoRouter buildRouter(AuthBloc auth) {
     refreshListenable: _StreamListenable([auth.stream]),
     redirect: (context, state) {
       final loc = state.matchedLocation;
+      // The splash screen keeps the page that was opened, so a link such as /master still lands there once the session is known.
+      final from = loc == '/splash' ? state.uri.queryParameters['from'] : null;
       switch (auth.state.status) {
         case AuthStatus.unknown:
-          return loc == '/splash' ? null : '/splash';
+          return loc == '/splash' ? null : Uri(path: '/splash', queryParameters: {'from': state.uri.toString()}).toString();
         case AuthStatus.signedOut:
+          if (from != null && authPages.contains(Uri.parse(from).path)) return from;
           return authPages.contains(loc) ? null : '/login';
         case AuthStatus.signedIn:
-          if (authPages.contains(loc) || loc == '/splash') return '/';
+          if (loc == '/splash') return from == null || authPages.contains(Uri.parse(from).path) ? '/' : from;
+          if (authPages.contains(loc)) return '/';
           // A POS-only business only gets the counter and the pages that serve it.
           final user = auth.state.user;
           if (user != null && user.master) return masterRedirect(loc);
