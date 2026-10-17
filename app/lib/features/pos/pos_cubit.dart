@@ -49,6 +49,7 @@ class PosState extends Equatable {
     this.submitStatus = SubmitStatus.idle,
     this.savedId,
     this.printAfterSave = false,
+    this.queued = false,
     this.error,
   });
 
@@ -70,6 +71,9 @@ class PosState extends Equatable {
   final SubmitStatus submitStatus;
   final String? savedId;
   final bool printAfterSave;
+
+  /// The last bill could not be sent (no connection) and is kept on this device until the next sync.
+  final bool queued;
   final String? error;
 
   List<Item> get visibleItems {
@@ -97,6 +101,7 @@ class PosState extends Equatable {
     SubmitStatus? submitStatus,
     String? savedId,
     bool? printAfterSave,
+    bool? queued,
     String? error,
   }) => PosState(
     loadStatus: loadStatus ?? this.loadStatus,
@@ -112,6 +117,7 @@ class PosState extends Equatable {
     submitStatus: submitStatus ?? this.submitStatus,
     savedId: savedId ?? this.savedId,
     printAfterSave: printAfterSave ?? this.printAfterSave,
+    queued: queued ?? this.queued,
     error: error,
   );
 
@@ -130,6 +136,7 @@ class PosState extends Equatable {
     submitStatus,
     savedId,
     printAfterSave,
+    queued,
     error,
   ];
 }
@@ -148,11 +155,20 @@ class PosCubit extends Cubit<PosState> {
 
   Future<void> load() async {
     try {
-      final (items, accounts) = await (_items.list('all'), _accounts.accounts()).wait;
+      final (items, accounts, _) = await (_items.list('all'), _accounts.accounts(), _warmNumber()).wait;
       if (isClosed) return;
       emit(state.copyWith(loadStatus: LoadStatus.success, items: items, bankAccounts: accounts));
     } catch (e) {
       if (!isClosed && state.items.isEmpty) emit(state.copyWith(loadStatus: LoadStatus.failure, error: ApiException.from(e).message));
+    }
+  }
+
+  /// Reading the next bill number now keeps a copy on the device, so billing can start while offline.
+  Future<void> _warmNumber() async {
+    try {
+      await _invoices.nextNumber('sale');
+    } catch (_) {
+      // Only a head start; saving asks again.
     }
   }
 
@@ -231,7 +247,7 @@ class PosCubit extends Cubit<PosState> {
     final s = state;
     try {
       final number = await _invoices.nextNumber('sale');
-      final saved = await _invoices.save(null, {
+      final saved = await _invoices.saveQueued(label: 'POS bill $number · ${s.cart.length} ${s.cart.length == 1 ? 'item' : 'items'} · ${money(s.total)}', {
         'type': 'sale',
         'number': number,
         'invoiceDate': isoDate(DateTime.now()),
@@ -270,6 +286,19 @@ class PosCubit extends Cubit<PosState> {
           submitStatus: SubmitStatus.success,
           savedId: saved.id,
           printAfterSave: print,
+          queued: false,
+        ),
+      );
+    } on QueuedOffline {
+      emit(
+        state.copyWith(
+          cart: const [],
+          customerName: '',
+          billRev: s.billRev + 1,
+          extraParts: const [],
+          submitStatus: SubmitStatus.success,
+          printAfterSave: false,
+          queued: true,
         ),
       );
     } catch (e) {

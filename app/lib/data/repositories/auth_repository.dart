@@ -1,16 +1,39 @@
+import 'dart:convert';
+
 import '../../core/api_client.dart';
+import '../../core/offline.dart';
 import '../models/app_user.dart';
 
 class AuthRepository {
-  AuthRepository(this._api);
+  AuthRepository(this._api, [this._store]);
   final ApiClient _api;
 
+  /// Keeps the last signed-in user so the app can open without a connection.
+  final KeyValueStore? _store;
+  static const _userKey = 'last-user';
+
   /// Returns the signed-in user if a saved token is still valid; clears it otherwise.
+  /// With no connection the saved token is kept and the user last seen is returned, so a counter can open offline.
   Future<AppUser?> restore() async {
-    if (await _api.tokens.read() == null) return null;
+    final token = await _api.tokens.read();
+    if (token == null) return null;
     try {
-      return AppUser.fromJson(await _api.get<Map<String, dynamic>>('/auth/me'));
-    } catch (_) {
+      final json = await _api.get<Map<String, dynamic>>('/auth/me');
+      await _store?.write(_userKey, jsonEncode(json));
+      return AppUser.fromJson(json);
+    } catch (e) {
+      if (ApiException.from(e).offline) {
+        final saved = _store?.read(_userKey);
+        if (saved != null) {
+          try {
+            final user = AppUser.fromJson(jsonDecode(saved) as Map<String, dynamic>);
+            if (user.firmId == scopeOfToken(token)) return user;
+          } catch (_) {
+            // Fall through: nothing usable was saved.
+          }
+        }
+        return null; // not signed out: the token stays for the next start
+      }
       await _api.tokens.clear();
       return null;
     }
@@ -37,13 +60,17 @@ class AuthRepository {
   Future<AppUser> _authenticate(String path, Map<String, dynamic> body) async {
     final res = await _api.post<Map<String, dynamic>>(path, body);
     await _api.tokens.write(res['accessToken'] as String);
+    await _store?.write(_userKey, jsonEncode(res['user']));
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 
   Future<void> changePassword({required String current, required String next}) =>
       _api.post<dynamic>('/auth/change-password', {'currentPassword': current, 'newPassword': next});
 
-  Future<void> logout() => _api.tokens.clear();
+  Future<void> logout() async {
+    await _store?.remove(_userKey);
+    await _api.tokens.clear();
+  }
 
   // ---- companies under this login
 

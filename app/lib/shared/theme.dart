@@ -83,7 +83,8 @@ ThemeData buildTheme() {
     headlineMedium: AppText.headline,
     headlineSmall: AppText.headline,
     titleLarge: AppText.title,
-    titleMedium: AppText.subtitle,
+    // Dropdowns draw their selected value in titleMedium; keep it the same size as the text in a text field.
+    titleMedium: AppText.bodyLarge,
     titleSmall: AppText.bodyStrong,
     bodyLarge: AppText.bodyLarge,
     bodyMedium: AppText.body,

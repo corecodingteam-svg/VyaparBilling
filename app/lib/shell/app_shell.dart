@@ -9,6 +9,7 @@ import '../data/models/report.dart';
 import '../features/lock/lock_cubit.dart';
 import '../features/reports/report_cubit.dart';
 import '../features/search/quick_search.dart';
+import '../features/sync/sync_screen.dart';
 import '../features/team/tracking_cubit.dart';
 import '../shared/theme.dart';
 import '../shared/widgets.dart';
@@ -29,6 +30,14 @@ class AppShell extends StatelessWidget {
     final firmName = context.select((AuthBloc b) => b.state.user?.firmName ?? '');
     final isSalesman = context.select((AuthBloc b) => b.state.user?.isSalesman ?? false);
     final collapsed = wide && context.watch<SidebarCubit>().state;
+    final posOnly = context.select((AuthBloc b) => b.state.user?.posOnly ?? false);
+    // Bills kept on the device, or a daily sync not yet done, are shown above every page.
+    final body = Column(
+      children: [
+        SyncBanner(onOpen: () => context.go('/sync')),
+        Expanded(child: child),
+      ],
+    );
     final sidebar = _Sidebar(location: location, closeOnNavigate: !wide, collapsed: collapsed);
 
     final topBar = AppBar(
@@ -64,7 +73,7 @@ class AppShell extends StatelessWidget {
         else
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search), onPressed: () => showQuickSearch(context)),
         const SizedBox(width: AppSpace.sm),
-        if (MediaQuery.sizeOf(context).width >= AppSize.phone) ...[
+        if (!posOnly && MediaQuery.sizeOf(context).width >= AppSize.phone) ...[
           FilledButton.icon(onPressed: () => context.push('/sale-invoices/new'), icon: const Icon(Icons.add), label: const Text('Add Sale')),
           const SizedBox(width: AppSpace.sm),
           if (!isSalesman)
@@ -74,27 +83,28 @@ class AppShell extends StatelessWidget {
       ],
     );
 
+    Widget wrap(Widget w) => posOnly ? SyncPrompt(child: w) : w;
     if (!wide) {
-      return QuickSearchShortcut(
+      return wrap(QuickSearchShortcut(
         child: Scaffold(
           appBar: topBar,
           drawer: Drawer(child: sidebar),
-          body: child,
+          body: body,
         ),
-      );
+      ));
     }
-    return QuickSearchShortcut(
+    return wrap(QuickSearchShortcut(
       child: Scaffold(
         body: Row(
           children: [
             AnimatedContainer(duration: AppMotion.fast, curve: Curves.easeOutCubic, width: collapsed ? AppSize.sidebarRail : AppSize.sidebar, child: sidebar),
             Expanded(
-              child: Scaffold(appBar: topBar, body: child),
+              child: Scaffold(appBar: topBar, body: body),
             ),
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

@@ -31,6 +31,21 @@ class InvoicesRepository {
     return Invoice.fromJson(json);
   }
 
+  /// A new sale that can wait for a connection: with none, it is kept on this device and [QueuedOffline] is thrown.
+  Future<Invoice> saveQueued(Map<String, dynamic> body, {required String label}) async {
+    final type = body['type'] as String;
+    final json = await _api.postQueueable<Map<String, dynamic>>(
+      '/invoices',
+      body,
+      label: label,
+      numberPath: '/invoices/next-number',
+      numberQuery: {'type': type},
+      number: body['number'] as String?,
+    );
+    _changed();
+    return Invoice.fromJson(json);
+  }
+
   Future<void> delete(String id) async {
     await _api.delete('/invoices/$id');
     _changed();

@@ -1,7 +1,17 @@
 import 'package:equatable/equatable.dart';
 
 class AppUser extends Equatable {
-  const AppUser({required this.id, required this.email, required this.fullName, required this.firmId, required this.firmName, this.role = 'owner'});
+  const AppUser({
+    required this.id,
+    required this.email,
+    required this.fullName,
+    required this.firmId,
+    required this.firmName,
+    this.role = 'owner',
+    this.features = const {},
+    this.plan = 'full',
+    this.platformAdmin = false,
+  });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
         id: json['id'] as String,
@@ -10,6 +20,9 @@ class AppUser extends Equatable {
         firmId: ((json['firm'] as Map)['id'] as String?) ?? '',
         firmName: (json['firm'] as Map)['name'] as String,
         role: (json['role'] as String?) ?? 'owner',
+        features: {for (final e in ((json['features'] as Map?) ?? const {}).entries) '${e.key}': e.value == true},
+        plan: (json['plan'] as String?) ?? 'full',
+        platformAdmin: (json['platformAdmin'] as bool?) ?? false,
       );
 
   final String id;
@@ -27,11 +40,34 @@ class AppUser extends Equatable {
   bool get isSalesman => role == 'salesman';
   bool get isAdmin => role == 'owner' || role == 'admin';
 
+  /// What the provider allows this business (switched from the provider's screen; the server enforces it too).
+  final Map<String, bool> features;
+  final String plan;
+
+  /// Provider staff: may manage every business on this server.
+  final bool platformAdmin;
+
+  /// Whether [name] is on for this business; every feature but `posOnly` is on unless the provider turned it off.
+  bool feature(String name) => features[name] ?? name != 'posOnly';
+
+  /// The business only uses the POS counter.
+  bool get posOnly => feature('posOnly');
+
   AppUser copyWith({String? firmName}) =>
-      AppUser(id: id, email: email, fullName: fullName, firmId: firmId, firmName: firmName ?? this.firmName, role: role);
+      AppUser(
+        id: id,
+        email: email,
+        fullName: fullName,
+        firmId: firmId,
+        firmName: firmName ?? this.firmName,
+        role: role,
+        features: features,
+        plan: plan,
+        platformAdmin: platformAdmin,
+      );
 
   @override
-  List<Object?> get props => [id, email, fullName, firmId, firmName, role];
+  List<Object?> get props => [id, email, fullName, firmId, firmName, role, features, plan, platformAdmin];
 }
 
 const roleLabels = {'owner': 'Owner', 'admin': 'Admin', 'accountant': 'Accountant', 'salesman': 'Salesman'};

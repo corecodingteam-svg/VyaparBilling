@@ -10,6 +10,7 @@ import '../../shared/format.dart';
 import '../../shared/theme.dart';
 import '../../shared/widgets.dart';
 import '../payments/split_parts_editor.dart';
+import '../../core/sync_cubit.dart';
 import 'pos_cubit.dart';
 
 /// Counter billing: item tiles on one side, the running bill on the other.
@@ -31,6 +32,11 @@ class _PosView extends StatelessWidget {
       listener: (context, s) {
         if (s.submitStatus == SubmitStatus.failure) {
           showError(context, s.error!);
+          return;
+        }
+        if (s.queued) {
+          context.read<SyncCubit>().noteQueued();
+          showSuccess(context, 'No connection: the bill is kept on this device and goes to the server at the next sync.');
           return;
         }
         showSuccess(context, 'Bill saved');

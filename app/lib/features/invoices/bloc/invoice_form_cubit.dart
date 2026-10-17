@@ -755,6 +755,24 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
     }
   }
 
+  Set<String> _partyIdsBeforeAdd = const {};
+
+  /// Called when the "Add Party" dialog opens, so the party it creates can be told apart.
+  void addPartyStarted() => _partyIdsBeforeAdd = {for (final p in state.parties) p.id};
+
+  /// Called when the "Add Party" dialog closes: refreshes the list and selects the party that was just added.
+  Future<void> addPartyFinished() async {
+    try {
+      final parties = await _parties.list();
+      if (isClosed) return;
+      emit(state.copyWith(parties: parties));
+      final added = parties.where((p) => !_partyIdsBeforeAdd.contains(p.id)).lastOrNull;
+      if (added != null) partySelected(added);
+    } catch (_) {
+      // The bus-driven reload still refreshes the list.
+    }
+  }
+
   Future<void> _reloadLookups() async {
     try {
       final (parties, items, units, bankAccounts) = await (_parties.list(), _items.list('all'), _items.units(), _accounts.accounts()).wait;
@@ -814,7 +832,16 @@ class InvoiceFormCubit extends Cubit<InvoiceFormState> {
   void _updateLine(int uid, LineDraft Function(LineDraft) change) =>
       emit(state.copyWith(lines: [for (final l in state.lines) l.uid == uid ? change(l) : l]));
 
-  void addLine() => emit(state.copyWith(lines: [...state.lines, _blank()]));
+  /// A new row is only offered once the first row's item has been filled in.
+  void addLine() {
+    final first = state.lines.first;
+    if (first.name.trim().isEmpty) {
+      final issue = FormIssue('row:${first.uid}', 'Enter the item details in row 1 before adding another row.');
+      emit(state.copyWith(submitStatus: SubmitStatus.failure, result: InvoiceFormResult.none, error: issue.message, issue: issue));
+      return;
+    }
+    emit(state.copyWith(lines: [...state.lines, _blank()]));
+  }
 
   void removeLine(int uid) {
     final rest = state.lines.where((l) => l.uid != uid).toList();

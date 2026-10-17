@@ -11,6 +11,9 @@ import { Db, KYSELY } from '../database/database.module';
 import { Database } from '../database/schema';
 import { AddMemberDto, ChangePasswordDto, CreateFirmDto, LoginDto, RegisterDto, UpdateMemberDto } from './dto/auth.dto';
 import { JwtPayload } from './jwt.strategy';
+import { effectiveFeatures } from './tenant-access';
+import { isPlatformAdmin } from './platform-admin';
+import { lastDayOf } from '../licensing/license-token';
 
 // Compared against when the email is unknown, so response time doesn't reveal which emails exist.
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
@@ -83,7 +86,8 @@ export class AuthService {
       .selectFrom('firm_members as m')
       .innerJoin('users as u', 'u.id', 'm.user_id')
       .innerJoin('firms as f', 'f.id', 'm.firm_id')
-      .select(['u.id', 'u.email', 'u.full_name', 'm.role', 'f.id as firm_id', 'f.name as firm_name', 'f.state_code', 'f.gstin'])
+      .leftJoin('licenses as l', 'l.firm_id', 'f.id')
+      .select(['u.id', 'u.email', 'u.full_name', 'm.role', 'f.id as firm_id', 'f.name as firm_name', 'f.state_code', 'f.gstin', 'f.features', 'f.plan', 'l.status as license_status', 'l.expires_at'])
       .where('m.user_id', '=', userId)
       .where('m.firm_id', '=', firmId)
       .executeTakeFirst();
@@ -94,6 +98,12 @@ export class AuthService {
       fullName: row.full_name,
       role: row.role,
       firm: { id: row.firm_id, name: row.firm_name, stateCode: row.state_code, gstin: row.gstin },
+      // What the provider allows this business; the server enforces it on every request.
+      features: effectiveFeatures(row.features),
+      plan: row.plan,
+      licenceExpiresOn: lastDayOf(row.expires_at),
+      licenceStatus: row.license_status ?? 'active',
+      platformAdmin: isPlatformAdmin(row.email),
     };
   }
 

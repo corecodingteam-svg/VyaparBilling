@@ -22,6 +22,8 @@ import { GoogleProfileModule } from './google-profile/google-profile.module';
 import { TaxStatementsModule } from './tax-statements/tax-statements.module';
 import { ManufacturingModule } from './manufacturing/manufacturing.module';
 import { StoreModule } from './store/store.module';
+import { PlatformModule } from './platform/platform.module';
+import { LicensingModule } from './licensing/licensing.module';
 import { InvoicesModule } from './invoices/invoices.module';
 import { ItemsModule } from './items/items.module';
 import { LoansModule } from './loans/loans.module';
@@ -65,6 +67,8 @@ import { UtilitiesModule } from './utilities/utilities.module';
     TaxStatementsModule,
     ManufacturingModule,
     StoreModule,
+    PlatformModule,
+    LicensingModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor }],

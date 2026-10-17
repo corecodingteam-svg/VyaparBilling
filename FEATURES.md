@@ -217,13 +217,69 @@ App:
 - **Android:** a release APK now builds (`flutter build apk --release`, 72 MB) — the Bluetooth plugin needed a newer
   compile SDK, fixed in `android/build.gradle.kts`. It is **not run on any phone or emulator**, and is signed with the debug
   key unless `android/key.properties` points to a keystore (the CI workflow can take one from repository secrets).
-- **Windows:** the Windows project is added, and `.github/workflows/build-apps.yml` builds the Windows app and the Android
-  APK/bundle on GitHub. **Never run**, since a Windows build needs Windows.
-- **Offline groundwork:** the cache, the queue of saves made without a connection, and the server's de-duplication exist and
-  are tested in part, but are **not switched on in the app**: nothing yet shows a banner, queues invoices, or retries.
+- **Windows:** the Windows project is added, and `.github/workflows/build-apps.yml` builds the Windows app, a zip, and a
+  **`Billing-Setup.exe` installer** (Inno Setup script `app/windows/installer/billing.iss`: Start-menu and desktop shortcuts,
+  optional start-at-sign-in for a counter PC, installs the Visual C++ runtime, upgrades in place). **Never run**, since a
+  Windows build needs Windows; the installer script has not been compiled either. It is unsigned, so Windows SmartScreen will warn.
+- **Provider control of businesses (Businesses page, provider staff only):** the emails in `PLATFORM_ADMIN_EMAILS` get a
+  "Businesses" page to **sign up a new business** (company, owner login and first password, plan, licence end date), and per
+  business to change the plan, switch features (POS only, accounting, reports, manufacturing, integrations, online store,
+  location tracking, several companies), set a licence end date, and suspend or resume. These live apart from the business's
+  own settings, so its owner cannot change them. Plans are **Full billing** and **POS only** (a starting set of switches).
+- **Server-side enforcement:** on every request the server reads the business's switches. **POS only** is deny-by-default:
+  only items, bank accounts, sale bills and their receipts, the company profile, files and users are reachable; purchases,
+  parties, reports, payments, expenses, backup, new companies etc. get 403. A suspended business, or one whose licence has
+  ended, gets 403 on everything except signing in. A switched-off feature closes its own API paths (and its menu in the app).
+  The app hides what the server would refuse. Tested by unit tests and a run against a live server.
+  Limits: there is **no billing, payment or invoicing of the businesses**; the licence date is set by hand. A change reaches a
+  business's app when it is next opened (the server enforces it at once). The dashboard is not gated by "Reports".
+  The first provider account must be created normally (sign-up) before its email can be listed.
+- **Offline POS and daily sync (now switched on):** the answers the POS reads (items, accounts, next bill number, company
+  settings) are kept on the device, the app opens offline with the last signed-in user (you must have signed in online once),
+  and a POS bill saved with no connection is kept on the device and the cart restarts. The **Sync** page (and a banner above
+  every page) lists the bills waiting, sends them in order (each with its own key, so a bill is never created twice), then
+  refreshes the kept data. A POS-only counter is asked to sync **once per calendar day**; "Later" asks again after an hour.
+  Nothing is sent automatically. If another device took the same bill number meanwhile, the bill is sent under the next
+  free number; any other refusal stays on the Sync page with the reason until discarded.
+  Limits: only **POS bills** are queued (other screens still need a connection); stock counts shown offline are not reduced
+  by offline bills, so they can be stale until the next sync; an offline bill cannot be printed from the server copy (no
+  receipt is opened); each device numbers its own offline bills from the last number it saw. Unit tested; **not tried on a real
+  device or with the network actually unplugged**.
 
 Not started in this batch: **printing invoices in regional languages** (needs Indian-script fonts in the PDF, translated
 labels and a reader to check the result).
+
+## Licensing (offline-first, signed) — built
+
+The server (`backend/src/licensing`) is the only authority: it creates licences, activates devices, renews, suspends, revokes,
+changes plans and device limits (provider's Businesses page), and **signs a certificate with an Ed25519 private key**
+(`LICENSE_SIGNING_PRIVATE_KEY`, server only; make a pair with `backend/scripts/license-keygen.js`). The app has only the public key
+(`--dart-define=LICENSE_PUBLIC_KEY`). A certificate carries licence id, customer (company) id, installation id, product, plan,
+issue / start / expiry times, the last working day, device limit, licence version, the server's time when issued, features, and
+a "must reach the server by" time. It is stored in the platform keychain/keystore.
+
+- **Offline decision:** on every start and every minute the app verifies the signature, the binding (this installation, this
+  company, this product), that the version is not older than one already seen, the start date, and the expiry — with no network.
+  At or after `expires_at` it shows **License Expired** with the date and renewal instructions and does not let the person in.
+  "Until 20 Oct" means it stops working at the start of 21 Oct, India time.
+- **Clock:** the device clock is not trusted. Online, the app stores the gap to the server's clock; offline, "now" is the device
+  clock plus that gap, and can never be earlier than the latest time already trusted or the server time inside the certificate
+  (so deleting the stored state does not reset it). Winding the clock back therefore never gives more days. Rollbacks over 5 minutes
+  are detected; the policy (`--dart-define=LICENSE_CLOCK_POLICY=warn|block|requireOnline`, default **requireOnline**) either warns,
+  blocks while the clock is behind, or blocks until the server confirms the date, with "Unable to verify the license because the
+  device date/time appears to have changed…".
+- **Devices:** a device activates once online (the licence's device limit applies; the same installation can activate again);
+  the provider can free a device slot. Suspended / revoked: the server refuses new certificates and the app blocks, and remembers
+  that offline. **Check-in:** a device that has not reached the server for `LICENSE_CHECKIN_DAYS` (default 30; 0 = never) asks for
+  online validation — without this a revoked licence would keep working offline until it expires.
+- **Not covered / honest limits:** a certificate can only be revoked on a device once that device reaches the server (or its
+  check-in date passes); the stored verdict and clock live in secure storage, which a determined person with control of the
+  device can erase (the certificate's own server time still stops a rollback past it); the server does not check the
+  installation id on ordinary API calls, so a licence limit is enforced by the app, not the API; **every existing install must
+  activate online once after this update**; there is no "deactivate this device" button yet (the server call exists). I could not
+  see the part of your request after the clock-tampering section (the message was cut off), so anything asked there is not built.
+  Unit tested (certificates made by the server's Node code verify in Dart; the 20 Oct / 21 Oct case; clock rollback under each
+  policy) and run against a live server (device limit, version, revoke, remove device); **not tried on a real device**.
 
 ## Still not built
 

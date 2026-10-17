@@ -42,8 +42,36 @@ export interface FirmsTable {
   tan: string | null;
   pan: string | null;
   store_slug: string | null;
+  /** Provider-controlled switches that differ from the defaults (see auth/tenant-access.ts). */
+  features: ColumnType<Record<string, boolean>, string | undefined, string>;
+  plan: Generated<string>;
   created_at: Timestamp;
   updated_at: Timestamp;
+}
+
+export interface LicensesTable {
+  id: Generated<string>;
+  firm_id: string;
+  product_id: Generated<string>;
+  status: Generated<'active' | 'suspended' | 'revoked'>;
+  status_reason: string | null;
+  valid_from: Timestamp;
+  /** The first instant the licence no longer works; null = no end. */
+  expires_at: Date | null;
+  max_devices: Generated<number>;
+  version: Generated<number>;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface LicenseDevicesTable {
+  id: Generated<string>;
+  license_id: string;
+  installation_id: string;
+  device_name: string | null;
+  platform: string | null;
+  activated_at: Timestamp;
+  last_seen_at: Timestamp;
 }
 
 export interface UsersTable {
@@ -716,6 +744,8 @@ export interface Database {
   attachments: AttachmentsTable;
   expense_item_defs: ExpenseItemDefsTable;
   firm_members: FirmMembersTable;
+  licenses: LicensesTable;
+  license_devices: LicenseDevicesTable;
   ledger_accounts: LedgerAccountsTable;
   journal_entries: JournalEntriesTable;
   journal_lines: JournalLinesTable;

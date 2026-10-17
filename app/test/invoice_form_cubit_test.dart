@@ -35,6 +35,29 @@ void main() {
     expect(c.state.lines.single.isBlank, isTrue);
   });
 
+  test('add row is refused until the first row has an item', () async {
+    final c = await build();
+    c.addLine();
+    expect(c.state.lines, hasLength(1));
+    expect(c.state.submitStatus, SubmitStatus.failure);
+    expect(c.state.error, contains('row 1'));
+    expect(c.state.issue?.field, 'row:${c.state.lines.first.uid}');
+
+    c.lineNameChanged(c.state.lines.first.uid, 'Widget');
+    c.addLine();
+    expect(c.state.lines, hasLength(2));
+  });
+
+  test('a party added from the form is selected once the dialog closes', () async {
+    final c = await build();
+    c.addPartyStarted();
+    await parties.save(null, {'name': 'Brand New Party', 'openingBalance': 0});
+    await c.addPartyFinished();
+    expect(c.state.partyName, 'Brand New Party');
+    expect(c.state.partyId, isNotNull);
+    expect(c.state.parties.map((p) => p.name), contains('Brand New Party'));
+  });
+
   test('picking an item fills price, unit and qty and opens a new row', () async {
     final c = await build();
     c.itemSelected(c.state.lines.first.uid, c.state.items.first);

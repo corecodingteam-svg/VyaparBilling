@@ -13,8 +13,11 @@ const apiBaseUrl = String.fromEnvironment(
 
 /// Error with a user-facing message extracted from the API's `{success:false, error:{message}}` body.
 class ApiException implements Exception {
-  ApiException(this.message, {this.offline = false});
+  ApiException(this.message, {this.offline = false, this.code});
   final String message;
+
+  /// The server's error code, e.g. LICENSE_REVOKED, when it sent one.
+  final String? code;
 
   /// The server could not be reached at all (no connection, timeout), as opposed to answering with an error.
   final bool offline;
@@ -29,8 +32,9 @@ class ApiException implements Exception {
       final data = error.response?.data;
       if (data is Map && data['error'] is Map) {
         final msg = data['error']['message'];
-        if (msg is List && msg.isNotEmpty) return ApiException(msg.first.toString());
-        if (msg != null && msg.toString().isNotEmpty) return ApiException(msg.toString());
+        final code = data['error']['code']?.toString();
+        if (msg is List && msg.isNotEmpty) return ApiException(msg.first.toString(), code: code);
+        if (msg != null && msg.toString().isNotEmpty) return ApiException(msg.toString(), code: code);
       }
       if (error.type == DioExceptionType.connectionError || error.type == DioExceptionType.connectionTimeout || error.type == DioExceptionType.sendTimeout ||
           (error.type == DioExceptionType.unknown && error.response == null)) {

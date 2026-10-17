@@ -231,6 +231,15 @@ class FakeInvoicesRepository extends InvoicesRepository {
     return Invoice.fromJson(invoiceJson(id ?? 'v${invoices.length + 1}', body['number'] as String, 'Test Customer', 1000, 0));
   }
 
+  /// When set, [saveQueued] behaves as if the connection were down.
+  var offline = false;
+
+  @override
+  Future<Invoice> saveQueued(Map<String, dynamic> body, {required String label}) async {
+    if (offline) throw QueuedOffline(label);
+    return save(null, body);
+  }
+
   @override
   Future<void> delete(String id) async {
     invoices = invoices.where((i) => i.id != id).toList();

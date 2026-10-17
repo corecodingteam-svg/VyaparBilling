@@ -253,6 +253,7 @@ class _PartySection extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Autocomplete<Party>(
+                    key: ValueKey('party-${state.partyRev}'),
                     initialValue: TextEditingValue(text: state.partyName),
                     displayStringForOption: (p) => p.name,
                     optionsBuilder: (v) {
@@ -312,7 +313,15 @@ class _PartySection extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Phone No.'),
               ),
             ),
-            TextButton.icon(onPressed: () => showPartyForm(context), icon: const Icon(Icons.add), label: const Text('Add Party')),
+            TextButton.icon(
+              onPressed: () async {
+                cubit.addPartyStarted();
+                await showPartyForm(context);
+                await cubit.addPartyFinished();
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Add Party'),
+            ),
           ],
         ),
         if (state.kind.showBillingAddress || state.showShipping) const SizedBox(height: AppSpace.md),

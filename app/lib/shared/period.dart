@@ -70,7 +70,7 @@ class PeriodFilterBar extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg, vertical: AppSpace.md),
         child: Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 10, runSpacing: 8, children: [
-          const Text('Filter by:', style: TextStyle(fontWeight: FontWeight.w500)),
+          const Text('Filter by:', style: TextStyle(fontSize: AppFont.body, fontWeight: FontWeight.w500)),
           DecoratedBox(
             decoration: BoxDecoration(color: chipColor, borderRadius: AppRadius.pillAll),
             child: Padding(
@@ -79,6 +79,7 @@ class PeriodFilterBar extends StatelessWidget {
                 child: DropdownButton<Period>(
                   value: range.period,
                   isDense: true,
+                  style: const TextStyle(fontSize: AppFont.body, fontWeight: FontWeight.w500, color: AppColors.text),
                   borderRadius: AppRadius.mdAll,
                   items: [for (final e in periodLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
                   onChanged: (p) {
@@ -97,7 +98,7 @@ class PeriodFilterBar extends StatelessWidget {
             backgroundColor: chipColor,
             side: BorderSide.none,
             shape: const StadiumBorder(),
-            label: Text('${displayDate(range.from)}  To  ${displayDate(range.to)}'),
+            label: Text('${displayDate(range.from)}  To  ${displayDate(range.to)}', style: const TextStyle(fontSize: AppFont.body, fontWeight: FontWeight.w500)),
             onPressed: () => _pickCustom(context),
           ),
         ]),

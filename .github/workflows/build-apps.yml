@@ -1,3 +1,5 @@
+# The apps only accept licences signed by the licence server's key: set the repository variable LICENSE_PUBLIC_KEY to the
+# public key printed by backend/scripts/license-keygen.js (a build without it accepts no licence at all).
 # Builds the Android and Windows apps and runs the tests. A Windows app can only be built on Windows, so this is
 # where the Windows download comes from. Run it from the Actions tab ("Run workflow"), or it runs on every push.
 name: Build apps
@@ -45,8 +47,8 @@ jobs:
             printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > android/key.properties
           fi
       - run: flutter pub get
-      - run: flutter build apk --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
-      - run: flutter build appbundle --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
+      - run: flutter build apk --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1 --dart-define=LICENSE_PUBLIC_KEY=${{ vars.LICENSE_PUBLIC_KEY }}
+      - run: flutter build appbundle --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1 --dart-define=LICENSE_PUBLIC_KEY=${{ vars.LICENSE_PUBLIC_KEY }}
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -63,9 +65,23 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: { flutter-version: '${{ env.FLUTTER_VERSION }}', channel: stable, cache: true }
       - run: flutter pub get
-      - run: flutter build windows --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1
+      - run: flutter build windows --release --dart-define=API_BASE_URL=https://billing.advaitamaa.com/api/v1 --dart-define=LICENSE_PUBLIC_KEY=${{ vars.LICENSE_PUBLIC_KEY }}
       - name: Zip the app
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath ../Billing-windows.zip
+      # The installer: one Billing-Setup.exe that installs the app, adds shortcuts and the Visual C++ runtime it needs.
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile windows/installer/vc_redist.x64.exe
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          $version = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value)
+          & $iscc "/DAppVersion=$version" windows/installer/billing.iss
       - uses: actions/upload-artifact@v4
-        with: { name: windows, path: Billing-windows.zip }
+        with:
+          name: windows
+          path: |
+            Billing-windows.zip
+            app/build/installer/Billing-Setup.exe

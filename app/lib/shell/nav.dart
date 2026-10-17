@@ -59,6 +59,18 @@ class NavSection {
 List<NavSection> navFor(AppUser? user, FirmSettings settings) {
   final salesman = user?.isSalesman ?? false;
   final admin = user?.isAdmin ?? false;
+  bool on(String feature) => user?.feature(feature) ?? true;
+  if (user?.posOnly ?? false) {
+    // A POS-only business sees the counter and the sync page; owners and admins also keep the item list and settings,
+    // so they can stock the counter and switch this mode off.
+    return [
+      const NavSection('POS', Icons.point_of_sale_outlined, path: '/pos'),
+      const NavSection('Sync', Icons.sync, path: '/sync'),
+      if (admin) const NavSection('Items', Icons.inventory_2_outlined, path: '/items'),
+      if (admin) const NavSection('Settings', Icons.settings_outlined, path: '/settings'),
+      if (user?.platformAdmin ?? false) const NavSection('Businesses', Icons.apartment_outlined, path: '/platform'),
+    ];
+  }
   return [
     const NavSection('Home', Icons.home_outlined, path: '/'),
     const NavSection('Parties', Icons.people_outline, path: '/parties'),
@@ -101,7 +113,7 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
           NavLeaf('Loan Accounts', '/loan-accounts'),
         ],
       ),
-    if (!salesman && settings.accountingEnabled)
+    if (!salesman && settings.accountingEnabled && on('accounting'))
       const NavSection(
         'Accounting',
         Icons.menu_book_outlined,
@@ -115,7 +127,7 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
         if (settings.serviceRemindersEnabled) const NavLeaf('Service Reminders', '/service-reminders'),
       ],
     ),
-    if (!salesman) const NavSection('Reports', Icons.bar_chart_outlined, path: '/reports'),
+    if (!salesman && on('reports')) const NavSection('Reports', Icons.bar_chart_outlined, path: '/reports'),
     if (!salesman)
       NavSection(
         'Utilities',
@@ -126,15 +138,15 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
           const NavLeaf('Import Parties', '/import-parties'),
           if (settings.godownsEnabled) const NavLeaf('Godowns', '/godowns'),
           if (settings.partyGroupsEnabled) const NavLeaf('Party Groups', '/party-groups'),
-          if (settings.locationTrackingEnabled && admin) const NavLeaf('Team Locations', '/team-locations'),
+          if (settings.locationTrackingEnabled && admin && on('locationTracking')) const NavLeaf('Team Locations', '/team-locations'),
           const NavLeaf('Barcode Generator', '/barcode'),
           const NavLeaf('Bulk Update Items', '/bulk-update-items'),
           const NavLeaf('Export Items', '/export-items'),
           const NavLeaf('Verify My Data', '/verify-data'),
           const NavLeaf('Close Financial Year', '/close-year'),
           if (settings.tdsEnabled || settings.tcsEnabled) const NavLeaf('TDS / TCS Statements', '/tax-statements'),
-          if (admin) const NavLeaf('Integrations', '/integrations'),
-          if (admin) const NavLeaf('Google Business Profile', '/google-profile'),
+          if (admin && on('integrations')) const NavLeaf('Integrations', '/integrations'),
+          if (admin && on('integrations')) const NavLeaf('Google Business Profile', '/google-profile'),
           if (admin) const NavLeaf('Backup & Restore', '/backup'),
         ],
       ),
@@ -143,6 +155,7 @@ List<NavSection> navFor(AppUser? user, FirmSettings settings) {
         // Salesmen cannot change business settings: only their account and theme.
         if (!salesman || g.$1 == 'general' || g.$1 == 'keyboard' || g.$1 == 'theme') NavLeaf(g.$2, '/settings?tab=${g.$1}'),
     ]),
+    if (user?.platformAdmin ?? false) const NavSection('Businesses', Icons.apartment_outlined, path: '/platform'),
   ];
 }
 
@@ -151,3 +164,15 @@ final navSections = navFor(
   const AppUser(id: '', email: '', fullName: '', firmId: '', firmName: ''),
   const FirmSettings(accountingEnabled: true, serviceRemindersEnabled: true),
 );
+
+/// Where a POS-only business sends a signed-in person who opened [location]: null if that page is allowed there.
+/// Everyone may use the counter, the receipt of a bill and the sync page; owners and admins also the item list and settings.
+String? posOnlyRedirect(String location, {required bool admin, bool platformAdmin = false}) {
+  final path = Uri.parse(location).path;
+  final allowed = path == '/pos' ||
+      path == '/sync' ||
+      RegExp(r'^/sale-invoices/[^/]+/preview$').hasMatch(path) ||
+      (admin && (path == '/items' || path == '/settings')) ||
+      (platformAdmin && path == '/platform');
+  return allowed ? null : '/pos';
+}

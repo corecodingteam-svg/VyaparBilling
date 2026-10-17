@@ -23,6 +23,7 @@ import 'data/repositories/location_repository.dart';
 import 'data/repositories/parties_repository.dart';
 import 'data/repositories/payments_repository.dart';
 import 'data/repositories/reports_repository.dart';
+import 'data/repositories/platform_repository.dart';
 import 'data/repositories/tax_statements_repository.dart';
 import 'features/tax/tax_statements_screen.dart';
 import 'data/repositories/integrations_repository.dart';
@@ -57,7 +58,16 @@ import 'features/parties/party_groups_screen.dart';
 import 'features/stock/godowns_screen.dart';
 import 'features/payments/payments_screen.dart';
 import 'features/pos/pos_screen.dart';
+import 'features/platform/platform_screen.dart';
+import 'features/sync/sync_screen.dart';
 import 'data/models/firm.dart';
+import 'core/offline.dart';
+import 'core/license/license_cubit.dart';
+import 'core/license/license_gate.dart';
+import 'core/license/license_vault.dart';
+import 'core/license/trusted_clock.dart';
+import 'core/sync_cubit.dart';
+import 'data/repositories/license_repository.dart';
 import 'features/printing/invoice_print.dart';
 import 'features/printing/pdf_documents.dart';
 import 'features/reports/report_cubit.dart';
@@ -69,17 +79,22 @@ import 'features/printing/pdf_preview_screen.dart';
 import 'shell/sidebar_cubit.dart';
 import 'shared/theme.dart';
 import 'shell/app_shell.dart';
+import 'shell/nav.dart';
 import 'shell/nav_cubit.dart';
 
-void main() {
-  final api = ApiClient(TokenStore());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // What lets the counter work without a connection: the last answers, the saves waiting to be sent, the last user.
+  final store = await PrefsStore.open();
+  final api = ApiClient(TokenStore(), cache: ResponseCache(store, maxEntryBytes: 1500000), queue: SyncQueue(store));
   final bus = ChangeBus();
   runApp(
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider.value(value: bus),
         RepositoryProvider.value(value: api),
-        RepositoryProvider(create: (_) => AuthRepository(api)),
+        RepositoryProvider.value(value: store),
+        RepositoryProvider(create: (_) => AuthRepository(api, store)),
         RepositoryProvider(create: (_) => FirmRepository(api, bus)),
         RepositoryProvider(create: (_) => PartiesRepository(api, bus)),
         RepositoryProvider(create: (_) => ItemsRepository(api, bus)),
@@ -96,6 +111,8 @@ void main() {
         RepositoryProvider(create: (_) => UtilitiesRepository(api, bus)),
         RepositoryProvider(create: (_) => IntegrationsRepository(api, bus)),
         RepositoryProvider(create: (_) => TaxStatementsRepository(api, bus)),
+        RepositoryProvider(create: (_) => PlatformRepository(api)),
+        RepositoryProvider(create: (_) => LicenseRepository(api)),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -112,6 +129,41 @@ void main() {
           // Not lazy: it must hear the sign-in that happens before any screen asks for it.
           BlocProvider(lazy: false, create: (_) => LockCubit(PasscodeStore())..load()),
           BlocProvider(lazy: false, create: (ctx) => FirmCubit(ctx.read(), ctx.read(), ctx.read<AuthBloc>())),
+          // Decides offline, from the signed certificate kept on the device, whether the app may run at all.
+          BlocProvider(
+            lazy: false,
+            create: (ctx) {
+              final auth = ctx.read<AuthBloc>();
+              final cubit = LicenseCubit(
+                ctx.read(),
+                LicenseVault(PlatformSecureStore()),
+                policy: ClockTamperPolicy.parse(clockTamperPolicy),
+                onlineChanges: api.onlineChanges,
+              );
+              // The certificate belongs to the business signed in; start again when that changes.
+              auth.stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.firmId : null).distinct().listen(cubit.start);
+              if (auth.state.user != null) cubit.start(auth.state.user!.firmId);
+              return cubit;
+            },
+          ),
+          BlocProvider(
+            lazy: false,
+            create: (ctx) => SyncCubit(
+              api,
+              store,
+              bus,
+              // What the counter reads while offline: the company settings, items, accounts and the next bill number.
+              refresh: () async {
+                final (firm, items, accounts, invoices) =
+                    (ctx.read<FirmRepository>(), ctx.read<ItemsRepository>(), ctx.read<CashBankRepository>(), ctx.read<InvoicesRepository>());
+                await firm.get();
+                await items.list('all');
+                await accounts.accounts();
+                await invoices.nextNumber('sale');
+              },
+              firmIds: ctx.read<AuthBloc>().stream.map((a) => a.status == AuthStatus.signedIn ? a.user?.firmId : null).distinct(),
+            )..load(),
+          ),
           BlocProvider(lazy: false, create: (ctx) => TrackingCubit(ctx.read(), ctx.read<FirmCubit>().stream, initial: ctx.read<FirmCubit>().state, background: !kIsWeb)),
         ],
         child: const BillingApp(),
@@ -122,14 +174,16 @@ void main() {
 
 /// Lets GoRouter re-run redirects when the auth state changes.
 class _StreamListenable extends ChangeNotifier {
-  _StreamListenable(Stream<dynamic> stream) {
-    _sub = stream.listen((_) => notifyListeners());
+  _StreamListenable(List<Stream<dynamic>> streams) {
+    _subs = [for (final s in streams) s.listen((_) => notifyListeners())];
   }
-  late final StreamSubscription<dynamic> _sub;
+  late final List<StreamSubscription<dynamic>> _subs;
 
   @override
   void dispose() {
-    _sub.cancel();
+    for (final s in _subs) {
+      s.cancel();
+    }
     super.dispose();
   }
 }
@@ -192,7 +246,7 @@ GoRouter buildRouter(AuthBloc auth) {
   const authPages = {'/login', '/register'};
   return GoRouter(
     initialLocation: '/',
-    refreshListenable: _StreamListenable(auth.stream),
+    refreshListenable: _StreamListenable([auth.stream]),
     redirect: (context, state) {
       final loc = state.matchedLocation;
       switch (auth.state.status) {
@@ -201,7 +255,11 @@ GoRouter buildRouter(AuthBloc auth) {
         case AuthStatus.signedOut:
           return authPages.contains(loc) ? null : '/login';
         case AuthStatus.signedIn:
-          return (authPages.contains(loc) || loc == '/splash') ? '/' : null;
+          if (authPages.contains(loc) || loc == '/splash') return '/';
+          // A POS-only business only gets the counter and the pages that serve it.
+          final user = auth.state.user;
+          if (user != null && user.posOnly) return posOnlyRedirect(loc, admin: user.isAdmin, platformAdmin: user.platformAdmin);
+          return null;
       }
     },
     routes: [
@@ -294,6 +352,8 @@ GoRouter buildRouter(AuthBloc auth) {
           GoRoute(path: '/companies', builder: (_, _) => const CompaniesScreen()),
           GoRoute(path: '/users', builder: (_, _) => const UsersScreen()),
           GoRoute(path: '/pos', builder: (_, _) => const PosScreen()),
+          GoRoute(path: '/sync', builder: (_, _) => const SyncScreen()),
+          GoRoute(path: '/platform', builder: (_, _) => const PlatformScreen()),
           GoRoute(path: '/bank-accounts', builder: (_, _) => const BankAccountsScreen()),
           GoRoute(path: '/cash-in-hand', builder: (_, _) => const CashInHandScreen()),
           GoRoute(path: '/cheques', builder: (_, _) => const ChequesScreen()),
@@ -352,13 +412,15 @@ class _BillingAppState extends State<BillingApp> {
     builder: (context, child) => BlocBuilder<KeyboardNavCubit, bool>(
       builder: (context, enterNav) => EnterKeyNavigation(enabled: enterNav, child: BlocBuilder<AuthBloc, AuthState>(
       builder: (context, auth) => auth.status == AuthStatus.signedIn
-          ? AppLock(
-              onForgot: () {
-                // Signing in again with the password proves it is the owner, so the PIN is cleared.
-                context.read<LockCubit>().forgot();
-                context.read<AuthBloc>().add(const AuthLogoutRequested());
-              },
-              child: child!,
+          ? LicenseGate(
+              child: AppLock(
+                onForgot: () {
+                  // Signing in again with the password proves it is the owner, so the PIN is cleared.
+                  context.read<LockCubit>().forgot();
+                  context.read<AuthBloc>().add(const AuthLogoutRequested());
+                },
+                child: child!,
+              ),
             )
           : child!,
     ))),
